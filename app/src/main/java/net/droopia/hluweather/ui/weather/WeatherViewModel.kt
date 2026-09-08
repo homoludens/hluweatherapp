@@ -1,7 +1,10 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -9,6 +12,7 @@ import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 
@@ -83,6 +87,14 @@ class WeatherViewModel(
                         error = error.message ?: "Weather request failed"
                     )
                 }
+            }
+        }
+    }
+
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                WeatherViewModel(MockWeatherRepository())
             }
         }
     }

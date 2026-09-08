@@ -1,8 +1,11 @@
-package net.droopia.hluweather.ui.app
+package net.droopia.hluweather.navigation
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -23,7 +26,7 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class HluWeatherAppTest {
+class HluNavHostTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
@@ -31,6 +34,7 @@ class HluWeatherAppTest {
     @Before
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     }
 
     @After
@@ -39,12 +43,17 @@ class HluWeatherAppTest {
     }
 
     @Test
-    fun displays_app_title() {
+    fun navigates_from_weather_to_settings_and_back() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluWeatherApp()
+                HluNavHost()
             }
         }
+
+        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
     }
 }
