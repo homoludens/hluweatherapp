@@ -2150,11 +2150,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import java.util.TimeZone
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -2163,12 +2165,17 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zz-UTC")
+@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class HourlyForecastTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
+
+    @Before
+    fun setDefaultTimeZoneToUtc() {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+    }
 
     @Test
     fun renders_hourly_table_header_and_rows() {
@@ -2286,13 +2293,13 @@ fun HourlyForecast(
             Text(
                 text = "Hourly Forecast",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
+                fontWeight = FontWeight.Bold
             )
             DaySelector(
                 forecast = forecast,
                 selectedDayIndex = selectedDayIndex,
-                onDaySelected = onDaySelected
+                onDaySelected = onDaySelected,
+                modifier = Modifier.weight(1f)
             )
         }
 
@@ -2319,9 +2326,11 @@ fun HourlyForecast(
 private fun DaySelector(
     forecast: WeatherForecast,
     selectedDayIndex: Int,
-    onDaySelected: (Int) -> Unit
+    onDaySelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
@@ -2521,11 +2530,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import java.util.TimeZone
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -2534,12 +2545,17 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zz-UTC")
+@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class DailyForecastListTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
+
+    @Before
+    fun setDefaultTimeZoneToUtc() {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+    }
 
     @Test
     fun renders_daily_rows() {
@@ -2866,6 +2882,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -2886,7 +2903,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zz-UTC")
+@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WeatherScreenTest {
 
@@ -2896,6 +2913,7 @@ class WeatherScreenTest {
     @Before
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     }
 
     @After
@@ -3236,6 +3254,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -3254,7 +3273,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zz-UTC")
+@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class HluNavHostTest {
 
@@ -3264,6 +3283,7 @@ class HluNavHostTest {
     @Before
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     }
 
     @After
@@ -3316,7 +3336,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "zz-UTC")
+@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class HluWeatherAppTest {
 
