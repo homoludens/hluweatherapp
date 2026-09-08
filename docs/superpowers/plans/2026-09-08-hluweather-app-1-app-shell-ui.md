@@ -1149,9 +1149,11 @@ interface WeatherRepository {
 ```kotlin
 package net.droopia.hluweather.data.repository
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.CurrentWeather
@@ -1179,7 +1181,7 @@ fun buildMockForecast(
 
     val daily = (0 until 7).map { offset ->
         DayForecast(
-            date = startDate.plus(offset),
+            date = startDate.plus(offset, DateTimeUnit.DAY),
             condition = WeatherCondition.CLEAR,
             temperatureMin = 16.0,
             temperatureMax = 30.0,
@@ -1240,7 +1242,7 @@ fun buildMockForecast(
 ```kotlin
 package net.droopia.hluweather.data.repository
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -1268,7 +1270,6 @@ import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 
