@@ -6,7 +6,7 @@
 
 **Architecture:** Single Gradle `app` module with a Compose UI layer, a small data layer containing mock forecast logic, and `StateFlow`-based ViewModels. This plan produces a working app shell, theme, mocked Hourly and Daily UI, Map placeholder, and Settings navigation.
 
-**Tech Stack:** Kotlin 2.4.20, AGP 8.13.2, Gradle 8.14.3, Compose BOM 2026.08.00, Material 3, Navigation Compose 2.10.0, Lifecycle 2.11.0, kotlinx-datetime 0.8.0, JUnit 4, Robolectric 4.16.1.
+**Tech Stack:** Kotlin 2.4.20, AGP 8.13.2, Gradle 8.14.3, Compose BOM 2026.06.01, Material 3, Navigation Compose 2.9.8, Lifecycle 2.10.0, kotlinx-datetime 0.8.0, JUnit 4, Robolectric 4.16.1.
 
 **Spec:** `/home/homoludens/projekti/hluweatherapp/docs/superpowers/specs/2026-09-08-hluweather-app-design.md`
 
@@ -128,11 +128,11 @@ kotlin.code.style=official
 [versions]
 agp = "8.13.2"
 kotlin = "2.4.20"
-composeBom = "2026.08.00"
+composeBom = "2026.06.01"
 activityCompose = "1.13.0"
-coreKtx = "1.19.0"
-lifecycle = "2.11.0"
-navigationCompose = "2.10.0"
+coreKtx = "1.18.0"
+lifecycle = "2.10.0"
+navigationCompose = "2.9.8"
 coroutines = "1.11.0"
 kotlinxDateTime = "0.8.0"
 junit = "4.13.2"
@@ -344,6 +344,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
@@ -363,8 +364,9 @@ fun HluWeatherApp() {
 package net.droopia.hluweather.ui.app
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -379,16 +381,10 @@ import org.robolectric.annotation.GraphicsMode
 class HluWeatherAppTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun displays_app_title() {
-        composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
-                HluWeatherApp()
-            }
-        }
-
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
     }
 }
@@ -450,7 +446,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -465,7 +461,7 @@ import org.robolectric.annotation.GraphicsMode
 class ThemeTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     private var capturedHluColors: HluColors? = null
     private var capturedScheme: ColorScheme? = null
@@ -1363,11 +1359,12 @@ Create `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherHeroTest.kt`:
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -1383,7 +1380,7 @@ import org.robolectric.annotation.GraphicsMode
 class WeatherHeroTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun renders_title_and_tabs() {
@@ -1682,11 +1679,12 @@ Create `app/src/test/java/net/droopia/hluweather/ui/weather/CurrentWeatherCardTe
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -1701,7 +1699,7 @@ import org.robolectric.annotation.GraphicsMode
 class CurrentWeatherCardTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun renders_current_conditions() {
@@ -2122,12 +2120,13 @@ Create `app/src/test/java/net/droopia/hluweather/ui/weather/HourlyForecastTest.k
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -2142,7 +2141,7 @@ import org.robolectric.annotation.GraphicsMode
 class HourlyForecastTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun renders_hourly_table_header_and_rows() {
@@ -2492,12 +2491,13 @@ Create `app/src/test/java/net/droopia/hluweather/ui/weather/DailyForecastListTes
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -2512,7 +2512,7 @@ import org.robolectric.annotation.GraphicsMode
 class DailyForecastListTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun renders_daily_rows() {
@@ -2707,9 +2707,10 @@ Create `app/src/test/java/net/droopia/hluweather/ui/map/MapPlaceholderTest.kt`:
 package net.droopia.hluweather.ui.map
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -2724,7 +2725,7 @@ import org.robolectric.annotation.GraphicsMode
 class MapPlaceholderTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
     fun renders_map_placeholder() {
@@ -2833,7 +2834,7 @@ Create `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -2844,6 +2845,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.After
 import org.junit.Assert.assertTrue
@@ -2862,7 +2864,7 @@ import org.robolectric.annotation.GraphicsMode
 class WeatherScreenTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Before
     fun setup() {
@@ -3185,6 +3187,7 @@ package net.droopia.hluweather.ui.app
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import net.droopia.hluweather.navigation.HluNavHost
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
@@ -3203,7 +3206,7 @@ fun HluWeatherApp() {
 package net.droopia.hluweather.navigation
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -3212,6 +3215,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.After
 import org.junit.Before
@@ -3229,7 +3233,7 @@ import org.robolectric.annotation.GraphicsMode
 class HluNavHostTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Before
     fun setup() {
@@ -3266,13 +3270,14 @@ Replace `app/src/test/java/net/droopia/hluweather/ui/app/HluWeatherAppTest.kt` w
 package net.droopia.hluweather.ui.app
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.After
 import org.junit.Before
@@ -3290,7 +3295,7 @@ import org.robolectric.annotation.GraphicsMode
 class HluWeatherAppTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Before
     fun setup() {
@@ -3304,12 +3309,6 @@ class HluWeatherAppTest {
 
     @Test
     fun displays_app_title() {
-        composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
-                HluWeatherApp()
-            }
-        }
-
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
     }
 }
@@ -3357,6 +3356,7 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
+import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import net.droopia.hluweather.ui.weather.CurrentWeatherCard
 import net.droopia.hluweather.ui.weather.DailyForecastList
