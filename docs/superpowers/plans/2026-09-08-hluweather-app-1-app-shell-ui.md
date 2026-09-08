@@ -2904,7 +2904,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WeatherScreenTest {
 
@@ -3012,6 +3012,7 @@ Add these imports:
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import net.droopia.hluweather.data.repository.MockWeatherRepository
 ```
 
 Add this companion object inside `WeatherViewModel`:
