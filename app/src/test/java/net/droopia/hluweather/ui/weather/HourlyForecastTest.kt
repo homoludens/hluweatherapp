@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import java.util.TimeZone
@@ -11,6 +12,7 @@ import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Before
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,7 +50,11 @@ class HourlyForecastTest {
             }
         }
 
-        composeRule.onNodeWithText("Hourly Forecast").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithText("Hourly Forecast")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
         composeRule.onNodeWithText("Time").assertIsDisplayed()
         composeRule.onNodeWithText("Weather").assertIsDisplayed()
         composeRule.onNodeWithText("Temp.").assertIsDisplayed()

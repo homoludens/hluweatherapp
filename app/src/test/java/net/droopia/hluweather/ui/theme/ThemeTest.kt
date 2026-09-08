@@ -3,8 +3,11 @@ package net.droopia.hluweather.ui.theme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.unit.Density
 import net.droopia.hluweather.ComposeTestActivity
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -55,6 +58,23 @@ class ThemeTest {
         assertEquals(Color(0xFF9AA7FF), capturedScheme?.primary)
         assertEquals(Color(0xFF071225), capturedHluColors?.heroTop)
         assertEquals(Color(0xFF10264B), capturedHluColors?.heroBottom)
+    }
+
+    @Test
+    fun theme_caps_large_system_font_scale() {
+        var capturedFontScale = 0f
+
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalDensity provides Density(density = 1f, fontScale = 1.5f)
+            ) {
+                HluWeatherTheme(darkTheme = false) {
+                    capturedFontScale = LocalDensity.current.fontScale
+                }
+            }
+        }
+
+        assertEquals(1f, capturedFontScale, 0f)
     }
 
     @Composable

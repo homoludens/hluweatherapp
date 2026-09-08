@@ -2,9 +2,9 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -42,72 +43,61 @@ import net.droopia.hluweather.ui.components.HluWeatherIcon
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun HourlyForecast(
     forecast: WeatherForecast,
     selectedDayIndex: Int,
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selectedDate = forecast.daily[selectedDayIndex].date
     val dayHours = remember(forecast, selectedDayIndex) {
-        forecast.hourly.filter { it.time.toAppLocalDate() == selectedDate }
+        forecast.hoursForDay(selectedDayIndex)
     }
+    val listState = rememberLazyListState()
 
-    Column(
-        modifier = modifier.fillMaxSize()
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("hourly_table"),
+        state = listState
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 20.dp,
-                    end = 20.dp,
-                    top = 16.dp,
-                    bottom = 10.dp
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Hourly Forecast",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            DaySelector(
+        stickyHeader {
+            HourlyDaySelector(
                 forecast = forecast,
                 selectedDayIndex = selectedDayIndex,
-                onDaySelected = onDaySelected,
-                modifier = Modifier.weight(1f)
+                onDaySelected = onDaySelected
             )
         }
-
-        ForecastColumnHeader(
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .testTag("hourly_table")
-        ) {
-            items(dayHours) { hour ->
-                ForecastRow(
-                    weather = hour,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
+        item {
+            ForecastColumnHeader(
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+        items(dayHours) { hour ->
+            ForecastRow(
+                weather = hour,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
         }
     }
 }
 
+internal fun WeatherForecast.hoursForDay(selectedDayIndex: Int): List<HourForecast> {
+    val selectedDate = daily[selectedDayIndex].date
+    return hourly.filter { it.time.toAppLocalDate() == selectedDate }
+}
+
 @Composable
-private fun DaySelector(
+internal fun HourlyDaySelector(
     forecast: WeatherForecast,
     selectedDayIndex: Int,
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("hourly_day_strip"),
         shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
@@ -158,7 +148,7 @@ private fun DayChip(
 }
 
 @Composable
-private fun ForecastColumnHeader(
+internal fun ForecastColumnHeader(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -198,7 +188,7 @@ private fun RowScope.ForecastCell(
 }
 
 @Composable
-private fun ForecastRow(
+internal fun ForecastRow(
     weather: HourForecast,
     modifier: Modifier = Modifier
 ) {
