@@ -2528,8 +2528,9 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import java.util.TimeZone
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -2574,8 +2575,8 @@ class DailyForecastListTest {
         }
 
         composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
-        composeRule.onNodeWithText("Clear sky").assertIsDisplayed()
-        composeRule.onNodeWithText("16° – 30°").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Clear sky").onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("16° – 30°").onFirst().assertIsDisplayed()
     }
 }
 ```
@@ -2645,7 +2646,7 @@ fun DailyForecastList(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(forecast.daily.indices) { index ->
+        items(forecast.daily.size) { index ->
             DailyRow(
                 day = forecast.daily[index],
                 onClick = { onDaySelected(index) }
