@@ -9,7 +9,6 @@ import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 
