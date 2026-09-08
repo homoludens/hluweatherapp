@@ -5,7 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import net.droopia.hluweather.MainActivity
+import net.droopia.hluweather.ComposeTestActivity
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -20,7 +20,7 @@ import org.robolectric.annotation.GraphicsMode
 class ThemeTest {
 
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     private var capturedHluColors: HluColors? = null
     private var capturedScheme: ColorScheme? = null

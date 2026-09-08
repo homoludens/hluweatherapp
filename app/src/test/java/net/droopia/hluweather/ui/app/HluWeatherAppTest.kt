@@ -3,7 +3,7 @@ package net.droopia.hluweather.ui.app
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import net.droopia.hluweather.MainActivity
+import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 class HluWeatherAppTest {
 
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
     fun displays_app_title() {
