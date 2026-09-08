@@ -1480,6 +1480,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -1553,6 +1554,7 @@ fun WeatherHero(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
@@ -2864,6 +2866,7 @@ git commit -m "feat: add map placeholder"
 - Modify: `app/src/main/java/net/droopia/hluweather/ui/weather/WeatherViewModel.kt`
 - Modify: `app/src/main/java/net/droopia/hluweather/ui/app/HluWeatherApp.kt`
 - Create: `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt`
+- Create: `app/src/test/java/net/droopia/hluweather/ui/weather/MainActivityInsetsTest.kt`
 - Create: `app/src/test/java/net/droopia/hluweather/navigation/HluNavHostTest.kt`
 
 **Interfaces:**
@@ -3038,6 +3041,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -3116,19 +3120,25 @@ fun WeatherScreen(
                         forecast = forecast,
                         selectedDayIndex = state.selectedDayIndex,
                         onDaySelected = viewModel::onDaySelected,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .navigationBarsPadding()
                     )
                 }
                 ForecastMode.DAILY -> {
                     DailyForecastList(
                         forecast = forecast,
                         onDaySelected = viewModel::onDaySelected,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .navigationBarsPadding()
                     )
                 }
                 ForecastMode.MAP -> {
                     MapPlaceholder(
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .navigationBarsPadding()
                     )
                 }
             }
