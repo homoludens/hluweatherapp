@@ -344,7 +344,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
@@ -447,6 +446,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import net.droopia.hluweather.MainActivity
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -3187,7 +3187,6 @@ package net.droopia.hluweather.ui.app
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import net.droopia.hluweather.navigation.HluNavHost
-import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
@@ -3356,7 +3355,6 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
-import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import net.droopia.hluweather.ui.weather.CurrentWeatherCard
 import net.droopia.hluweather.ui.weather.DailyForecastList
