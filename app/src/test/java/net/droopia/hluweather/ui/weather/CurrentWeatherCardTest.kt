@@ -2,6 +2,8 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -40,7 +42,7 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
-        composeRule.onNodeWithText("21°").assertIsDisplayed()
+        composeRule.onAllNodesWithText("21°").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("Clear sky").assertIsDisplayed()
         composeRule.onNodeWithText("51%").assertIsDisplayed()
         composeRule.onNodeWithText("0 mm").assertIsDisplayed()

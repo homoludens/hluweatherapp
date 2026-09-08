@@ -74,7 +74,7 @@ fun buildMockForecast(
         fetchedAt = baseTime,
         current = CurrentWeather(
             temperature = 21.0,
-            apparentTemperature = 23.0,
+            apparentTemperature = 21.0,
             humidity = 51,
             dewPoint = 10.0,
             precipitation = 0.0,
