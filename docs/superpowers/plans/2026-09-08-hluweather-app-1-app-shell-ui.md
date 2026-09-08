@@ -1603,9 +1603,9 @@ private fun NavigationTabs(
     onSelected: (ForecastMode) -> Unit
 ) {
     val items = listOf(
-        ForecastMode.HOURLY to "Hourly" to Icons.Outlined.Schedule,
-        ForecastMode.DAILY to "Daily" to Icons.Outlined.BarChart,
-        ForecastMode.MAP to "Map" to Icons.Outlined.LocationOn
+        Triple(ForecastMode.HOURLY, "Hourly", Icons.Outlined.Schedule),
+        Triple(ForecastMode.DAILY, "Daily", Icons.Outlined.BarChart),
+        Triple(ForecastMode.MAP, "Map", Icons.Outlined.LocationOn)
     )
 
     Row(
