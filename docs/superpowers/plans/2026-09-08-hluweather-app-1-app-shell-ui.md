@@ -1710,6 +1710,8 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -1748,7 +1750,7 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
-        composeRule.onNodeWithText("21°").assertIsDisplayed()
+        composeRule.onAllNodesWithText("21°").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("Clear sky").assertIsDisplayed()
         composeRule.onNodeWithText("51%").assertIsDisplayed()
         composeRule.onNodeWithText("0 mm").assertIsDisplayed()
@@ -1851,13 +1853,12 @@ package net.droopia.hluweather.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Foggy
-import androidx.compose.material.icons.filled.PartlyCloudyDay
-import androidx.compose.material.icons.filled.PartlyCloudyNight
-import androidx.compose.material.icons.filled.Rainy
+import androidx.compose.material.icons.filled.Shower
 import androidx.compose.material.icons.filled.Thunderstorm
+import androidx.compose.material.icons.filled.WbCloudy
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -1893,11 +1894,7 @@ fun HluWeatherIcon(
             tint = if (isDay == false) nightColor else sunColor
         }
         WeatherCondition.PARTLY_CLOUDY -> {
-            imageVector = if (isDay == false) {
-                Icons.Default.PartlyCloudyNight
-            } else {
-                Icons.Default.PartlyCloudyDay
-            }
+            imageVector = Icons.Default.WbCloudy
             tint = cloudColor
         }
         WeatherCondition.CLOUDY -> {
@@ -1905,12 +1902,12 @@ fun HluWeatherIcon(
             tint = cloudColor
         }
         WeatherCondition.FOG -> {
-            imageVector = Icons.Default.Foggy
+            imageVector = Icons.Default.Air
             tint = cloudColor
         }
         WeatherCondition.DRIZZLE,
         WeatherCondition.RAIN -> {
-            imageVector = Icons.Default.Rainy
+            imageVector = Icons.Default.Shower
             tint = rainColor
         }
         WeatherCondition.SNOW -> {
@@ -1971,7 +1968,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.dateTimeText
-import net.droopia.hluweather.data.label
+import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.percentText
@@ -2249,7 +2246,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.hourText
-import net.droopia.hluweather.data.label
+import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.percentText
@@ -2606,7 +2603,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import net.droopia.hluweather.data.dayText
-import net.droopia.hluweather.data.label
+import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.precipitationText
