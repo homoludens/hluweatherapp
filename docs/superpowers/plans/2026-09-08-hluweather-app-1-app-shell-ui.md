@@ -739,7 +739,7 @@ class MoonPhaseCalculatorTest {
         val start = Instant.fromEpochSeconds(0L)
 
         repeat(100) { index ->
-            val instant = Instant.fromEpochSeconds(start.toEpochSeconds() + index * 86_400L)
+            val instant = Instant.fromEpochSeconds(start.epochSeconds + index * 86_400L)
             val phase = MoonPhaseCalculator.phase(instant)
             assertTrue(phase >= 0.0)
             assertTrue(phase < 1.0)
@@ -797,7 +797,7 @@ class FormatTest {
     fun day_formats_in_english() {
         val date = LocalDate(2026, 9, 7)
 
-        assertEquals("Tue, Sep 7", date.dayText(ZoneId.of("UTC")))
+        assertEquals("Mon, Sep 7", date.dayText(ZoneId.of("UTC")))
     }
 }
 ```
@@ -1199,7 +1199,7 @@ fun buildMockForecast(
             else -> 22.0
         }
         HourForecast(
-            time = Instant.fromEpochSeconds(baseTime.toEpochSeconds() + index * 3600L),
+            time = Instant.fromEpochSeconds(baseTime.epochSeconds + index * 3600L),
             temperature = temperature,
             apparentTemperature = temperature,
             humidity = 50,
