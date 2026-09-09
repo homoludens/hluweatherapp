@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.ZoneId
 import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
@@ -52,6 +53,7 @@ fun HourlyForecast(
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val displayZone = ZoneId.of(forecast.timezone)
     val tableData = remember(forecast) {
         forecast.toHourlyTableData()
     }
@@ -68,6 +70,7 @@ fun HourlyForecast(
             HourlyDaySelector(
                 tableData = tableData,
                 selectedDayDate = selectedDayDate,
+                displayZone = displayZone,
                 onDaySelected = onDaySelected
             )
         }
@@ -84,6 +87,7 @@ fun HourlyForecast(
                 is HourlyTableBoundary -> {
                     HourlyDateBoundary(
                         item = item,
+                        displayZone = displayZone,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
@@ -91,6 +95,7 @@ fun HourlyForecast(
                     val isFirstHour = tableData.firstHourIndexForDay(item.dayIndex) == itemIndex
                     ForecastRow(
                         weather = item.hour,
+                        displayZone = displayZone,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .then(
@@ -116,6 +121,7 @@ fun HourlyForecast(
 internal fun HourlyDaySelector(
     tableData: HourlyTableData,
     selectedDayDate: LocalDate?,
+    displayZone: ZoneId,
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -135,7 +141,7 @@ internal fun HourlyDaySelector(
             tableData.days.forEach { day ->
                 DayChip(
                     dayIndex = day.dayIndex,
-                    text = day.date.dayText(),
+                    text = day.date.dayText(displayZone),
                     selected = day.date == selectedDayDate,
                     onClick = { onDaySelected(day.dayIndex) }
                 )
@@ -183,10 +189,11 @@ private fun DayChip(
 @Composable
 internal fun HourlyDateBoundary(
     item: HourlyTableBoundary,
+    displayZone: ZoneId,
     modifier: Modifier = Modifier
 ) {
     Text(
-        text = item.date.dayText(),
+        text = item.date.dayText(displayZone),
         modifier = modifier
             .fillMaxWidth()
             .testTag("hourly_day_boundary_${item.dayIndex}")
@@ -240,6 +247,7 @@ private fun RowScope.ForecastCell(
 @Composable
 internal fun ForecastRow(
     weather: HourForecast,
+    displayZone: ZoneId,
     timeTestTag: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -260,7 +268,7 @@ internal fun ForecastRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = weather.time.hourText(),
+            text = weather.time.hourText(displayZone),
             modifier = Modifier
                 .weight(0.72f)
                 .then(timeTestTag?.let(Modifier::testTag) ?: Modifier),

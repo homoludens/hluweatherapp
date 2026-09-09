@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.ZoneId
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.DayForecast
@@ -37,6 +38,7 @@ fun DailyForecastList(
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val displayZone = ZoneId.of(forecast.timezone)
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -52,6 +54,7 @@ fun DailyForecastList(
         items(forecast.daily.size) { index ->
             DailyRow(
                 day = forecast.daily[index],
+                displayZone = displayZone,
                 onClick = { onDaySelected(index) }
             )
         }
@@ -61,6 +64,7 @@ fun DailyForecastList(
 @Composable
 private fun DailyRow(
     day: DayForecast,
+    displayZone: ZoneId,
     onClick: () -> Unit
 ) {
     ElevatedCard(
@@ -82,7 +86,7 @@ private fun DailyRow(
                     .padding(end = 12.dp)
             ) {
                 Text(
-                    text = day.date.dayText(),
+                    text = day.date.dayText(displayZone),
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(

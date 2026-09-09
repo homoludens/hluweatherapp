@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.time.ZoneId
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -152,6 +153,7 @@ private fun HourlyWeatherContent(
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val displayZone = ZoneId.of(forecast.timezone)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val isCollapsed by remember {
@@ -261,6 +263,7 @@ private fun HourlyWeatherContent(
                     HourlyDaySelector(
                         tableData = tableData,
                         selectedDayDate = selectedTableDay?.date,
+                        displayZone = displayZone,
                         onDaySelected = ::onDayChipSelected
                     )
                 }
@@ -279,12 +282,14 @@ private fun HourlyWeatherContent(
                 when (item) {
                     is HourlyTableBoundary -> HourlyDateBoundary(
                         item = item,
+                        displayZone = displayZone,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     is HourlyTableHour -> {
                         val isFirstHour = tableData.firstHourIndexForDay(item.dayIndex) == itemIndex
                         ForecastRow(
                             weather = item.hour,
+                            displayZone = displayZone,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
                                 .then(
@@ -318,6 +323,7 @@ private fun HourlyWeatherContent(
                 HourlyDaySelector(
                     tableData = tableData,
                     selectedDayDate = selectedTableDay?.date,
+                    displayZone = displayZone,
                     onDaySelected = ::onDayChipSelected
                 )
             }

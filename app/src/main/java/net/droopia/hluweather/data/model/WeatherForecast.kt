@@ -2,6 +2,7 @@ package net.droopia.hluweather.data.model
 
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 data class CurrentWeather(
     val temperature: Double,
@@ -42,5 +43,6 @@ data class WeatherForecast(
     val current: CurrentWeather,
     val hourly: List<HourForecast>,
     val daily: List<DayForecast>,
-    val moonPhase: Double
+    val moonPhase: Double,
+    val timezone: String = TimeZone.currentSystemDefault().id
 )

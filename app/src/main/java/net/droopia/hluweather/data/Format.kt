@@ -35,8 +35,8 @@ fun Instant.dateTimeText(zone: ZoneId = ZoneId.systemDefault()): String =
 fun LocalDate.dayText(zone: ZoneId = ZoneId.systemDefault()): String =
     toJavaDate().atStartOfDay(zone).format(dayFormatter)
 
-fun Instant.toAppLocalDate(): LocalDate =
-    toLocalDateTime(TimeZone.currentSystemDefault()).date
+fun Instant.toAppLocalDate(zone: ZoneId = ZoneId.systemDefault()): LocalDate =
+    toLocalDateTime(TimeZone.of(zone.id)).date
 
 private fun Instant.toJavaInstant(): java.time.Instant =
     java.time.Instant.ofEpochMilli(toEpochMilliseconds())

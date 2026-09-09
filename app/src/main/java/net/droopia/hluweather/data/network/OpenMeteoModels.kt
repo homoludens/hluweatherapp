@@ -27,13 +27,13 @@ data class CurrentDto(
 data class HourlyDto(
     val time: List<String?> = emptyList(),
     @SerialName("temperature_2m") val temperature: List<Double?> = emptyList(),
-    @SerialName("relative_humidity_2m") val humidity: List<Int?> = emptyList(),
-    @SerialName("dew_point_2m") val dewPoint: List<Double?> = emptyList(),
-    @SerialName("apparent_temperature") val apparentTemperature: List<Double?> = emptyList(),
+    @SerialName("relative_humidity_2m") val humidity: List<Int?>? = null,
+    @SerialName("dew_point_2m") val dewPoint: List<Double?>? = null,
+    @SerialName("apparent_temperature") val apparentTemperature: List<Double?>? = null,
     val precipitation: List<Double?> = emptyList(),
-    @SerialName("precipitation_probability") val precipitationProbability: List<Int?> = emptyList(),
+    @SerialName("precipitation_probability") val precipitationProbability: List<Int?>? = null,
     @SerialName("weather_code") val weatherCode: List<Int?> = emptyList(),
-    @SerialName("is_day") val isDay: List<Int?> = emptyList()
+    @SerialName("is_day") val isDay: List<Int?>? = null
 )
 
 @Serializable
@@ -42,8 +42,8 @@ data class DailyDto(
     @SerialName("weather_code") val weatherCode: List<Int?> = emptyList(),
     @SerialName("temperature_2m_max") val temperatureMax: List<Double?> = emptyList(),
     @SerialName("temperature_2m_min") val temperatureMin: List<Double?> = emptyList(),
-    @SerialName("precipitation_sum") val precipitation: List<Double?> = emptyList(),
-    val sunrise: List<String?> = emptyList(),
-    val sunset: List<String?> = emptyList(),
+    @SerialName("precipitation_sum") val precipitation: List<Double?>? = null,
+    val sunrise: List<String?>? = null,
+    val sunset: List<String?>? = null,
     @SerialName("moon_phase") val moonPhase: List<Double?> = emptyList()
 )

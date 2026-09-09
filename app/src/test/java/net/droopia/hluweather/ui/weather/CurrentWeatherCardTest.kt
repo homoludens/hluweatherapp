@@ -47,4 +47,23 @@ class CurrentWeatherCardTest {
         composeRule.onNodeWithText("51%").assertIsDisplayed()
         composeRule.onNodeWithText("0 mm").assertIsDisplayed()
     }
+
+    @Test
+    fun formats_fetched_time_in_the_forecast_timezone() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.parse("2026-09-02T00:00:00Z")
+        ).copy(timezone = "America/New_York")
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Tue, Sep 1, 2026 • 20:00").assertIsDisplayed()
+    }
 }

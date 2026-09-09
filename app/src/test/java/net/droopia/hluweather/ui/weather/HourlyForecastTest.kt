@@ -3,6 +3,7 @@ package net.droopia.hluweather.ui.weather
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
@@ -86,5 +87,26 @@ class HourlyForecastTest {
         composeRule.onNodeWithTag("hourly_table").performScrollToIndex(20)
 
         composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
+    }
+
+    @Test
+    fun uses_forecast_timezone_for_hourly_day_and_time_display() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.parse("2026-09-02T00:00:00Z")
+        ).copy(timezone = "America/New_York")
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast,
+                    selectedDayIndex = 0,
+                    onDaySelected = {}
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithText("Tue, Sep 1").onFirst().assertIsDisplayed()
+        composeRule.onNodeWithText("20h").assertIsDisplayed()
     }
 }

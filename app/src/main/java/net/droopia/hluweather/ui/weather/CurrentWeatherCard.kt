@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.ZoneId
 import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -72,7 +73,7 @@ fun CurrentWeatherCard(
             }
 
             Text(
-                text = forecast.fetchedAt.dateTimeText(),
+                text = forecast.fetchedAt.dateTimeText(ZoneId.of(forecast.timezone)),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 

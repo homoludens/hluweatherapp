@@ -7,6 +7,7 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlin.time.Clock
+import kotlin.coroutines.cancellation.CancellationException
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.HourForecast
@@ -27,6 +28,8 @@ class OpenMeteoWeatherRepository(
     override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
         val response = try {
             api.forecast(location)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: WeatherRepositoryException) {
             throw error
         } catch (error: Throwable) {
@@ -35,6 +38,8 @@ class OpenMeteoWeatherRepository(
 
         return try {
             response.toWeatherForecast(location, clock.now())
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: WeatherRepositoryException) {
             throw error
         } catch (error: Throwable) {
@@ -56,6 +61,7 @@ private fun OpenMeteoResponse.toWeatherForecast(
         location = location,
         provider = WeatherProvider.OPEN_METEO,
         fetchedAt = fetchedAt,
+        timezone = timezone.id,
         current = current.toCurrentWeather(timezone),
         hourly = hourly.toHourlyForecasts(timezone),
         daily = daily.toDailyForecasts(timezone),
@@ -88,26 +94,26 @@ private fun net.droopia.hluweather.data.network.HourlyDto.toHourlyForecasts(
         "hourly",
         time,
         temperature,
-        humidity,
-        dewPoint,
-        apparentTemperature,
         precipitation,
-        precipitationProbability,
-        weatherCode,
-        isDay
+        weatherCode
     )
+    validateOptionalLength("hourly", time, "relative_humidity_2m", humidity)
+    validateOptionalLength("hourly", time, "dew_point_2m", dewPoint)
+    validateOptionalLength("hourly", time, "apparent_temperature", apparentTemperature)
+    validateOptionalLength("hourly", time, "precipitation_probability", precipitationProbability)
+    validateOptionalLength("hourly", time, "is_day", isDay)
 
     return time.indices.map { index ->
         HourForecast(
             time = parseTimestamp(time[index].required("hourly.time[$index]"), timezone),
             temperature = temperature[index].required("hourly.temperature_2m[$index]"),
-            apparentTemperature = apparentTemperature[index],
-            humidity = humidity[index],
-            dewPoint = dewPoint[index],
+            apparentTemperature = apparentTemperature?.get(index),
+            humidity = humidity?.get(index),
+            dewPoint = dewPoint?.get(index),
             precipitation = precipitation[index].required("hourly.precipitation[$index]"),
-            precipitationProbability = precipitationProbability[index],
+            precipitationProbability = precipitationProbability?.get(index),
             condition = weatherCode[index].required("hourly.weather_code[$index]").toWeatherCondition(),
-            isDay = isDay[index].toDayFlag("hourly.is_day[$index]")
+            isDay = isDay?.get(index).toDayFlag("hourly.is_day[$index]")
         )
     }
 }
@@ -124,11 +130,11 @@ private fun net.droopia.hluweather.data.network.DailyDto.toDailyForecasts(
         weatherCode,
         temperatureMax,
         temperatureMin,
-        precipitation,
-        sunrise,
-        sunset,
         moonPhase
     )
+    validateOptionalLength("daily", time, "precipitation_sum", precipitation)
+    validateOptionalLength("daily", time, "sunrise", sunrise)
+    validateOptionalLength("daily", time, "sunset", sunset)
 
     return time.indices.map { index ->
         DayForecast(
@@ -136,9 +142,9 @@ private fun net.droopia.hluweather.data.network.DailyDto.toDailyForecasts(
             condition = weatherCode[index].required("daily.weather_code[$index]").toWeatherCondition(),
             temperatureMin = temperatureMin[index].required("daily.temperature_2m_min[$index]"),
             temperatureMax = temperatureMax[index].required("daily.temperature_2m_max[$index]"),
-            precipitation = precipitation[index],
-            sunrise = sunrise[index]?.let { parseTimestamp(it, timezone) },
-            sunset = sunset[index]?.let { parseTimestamp(it, timezone) }
+            precipitation = precipitation?.get(index),
+            sunrise = sunrise?.get(index)?.let { parseTimestamp(it, timezone) },
+            sunset = sunset?.get(index)?.let { parseTimestamp(it, timezone) }
         )
     }
 }
@@ -146,6 +152,17 @@ private fun net.droopia.hluweather.data.network.DailyDto.toDailyForecasts(
 private fun validateLengths(name: String, time: List<*>, vararg fields: List<*>) {
     if (fields.any { it.size != time.size }) {
         throw WeatherRepositoryException("Mismatched $name array lengths")
+    }
+}
+
+private fun validateOptionalLength(
+    name: String,
+    time: List<*>,
+    field: String,
+    values: List<*>?
+) {
+    if (values != null && values.size != time.size) {
+        throw WeatherRepositoryException("Mismatched $name array lengths: $field")
     }
 }
 

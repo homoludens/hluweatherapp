@@ -3,7 +3,9 @@ package net.droopia.hluweather.data.repository
 import kotlinx.datetime.Instant
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlin.time.Clock
+import kotlin.coroutines.cancellation.CancellationException
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -31,6 +33,7 @@ class OpenMeteoWeatherRepositoryTest {
         assertEquals(location, forecast.location)
         assertEquals(WeatherProvider.OPEN_METEO, forecast.provider)
         assertEquals(fetchedAt, forecast.fetchedAt)
+        assertEquals("Europe/Belgrade", forecast.timezone)
         assertEquals(0.5, forecast.moonPhase, 0.0)
 
         assertEquals(21.0, forecast.current.temperature, 0.0)
@@ -92,6 +95,51 @@ class OpenMeteoWeatherRepositoryTest {
         assertNull(forecast.current.humidity)
         assertNull(forecast.current.dewPoint)
         assertNull(forecast.current.precipitation)
+        assertNull(forecast.current.isDay)
+        assertNull(forecast.hourly.single().apparentTemperature)
+        assertNull(forecast.hourly.single().humidity)
+        assertNull(forecast.hourly.single().dewPoint)
+        assertNull(forecast.hourly.single().precipitationProbability)
+        assertNull(forecast.hourly.single().isDay)
+        assertNull(forecast.daily.single().precipitation)
+        assertNull(forecast.daily.single().sunrise)
+        assertNull(forecast.daily.single().sunset)
+    }
+
+    @Test
+    fun getForecast_maps_omitted_optional_series_to_null() = runTest {
+        val response = Json.decodeFromString<OpenMeteoResponse>(
+            """
+            {
+              "timezone": "Europe/Belgrade",
+              "current": {
+                "time": "2026-09-09T12:00",
+                "temperature_2m": 21.0,
+                "precipitation": 0.0,
+                "weather_code": 0
+              },
+              "hourly": {
+                "time": ["2026-09-09T12:00"],
+                "temperature_2m": [21.0],
+                "precipitation": [0.0],
+                "weather_code": [0]
+              },
+              "daily": {
+                "time": ["2026-09-09"],
+                "weather_code": [0],
+                "temperature_2m_max": [30.0],
+                "temperature_2m_min": [16.0],
+                "moon_phase": [0.5]
+              }
+            }
+            """.trimIndent()
+        )
+
+        val forecast = repository(response).getForecast(location)
+
+        assertNull(forecast.current.apparentTemperature)
+        assertNull(forecast.current.humidity)
+        assertNull(forecast.current.dewPoint)
         assertNull(forecast.current.isDay)
         assertNull(forecast.hourly.single().apparentTemperature)
         assertNull(forecast.hourly.single().humidity)
@@ -180,6 +228,23 @@ class OpenMeteoWeatherRepositoryTest {
     fun getForecast_rejects_an_invalid_timestamp() = runTest {
         val current = validResponse.current!!.copy(time = "not-a-timestamp")
         assertRepositoryFailure(validResponse.copy(current = current))
+    }
+
+    @Test
+    fun getForecast_rethrows_cancellation_from_the_api() {
+        val repository = OpenMeteoWeatherRepository(
+            api = object : OpenMeteoApi {
+                override suspend fun forecast(location: WeatherLocation): OpenMeteoResponse {
+                    throw CancellationException("cancelled")
+                }
+            }
+        )
+
+        val exception = assertThrows(CancellationException::class.java, ThrowingRunnable {
+            runBlocking { repository.getForecast(location) }
+        })
+
+        assertEquals("cancelled", exception.message)
     }
 
     private fun assertRepositoryFailure(response: OpenMeteoResponse) {

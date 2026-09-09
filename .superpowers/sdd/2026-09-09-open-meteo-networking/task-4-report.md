@@ -2,7 +2,7 @@
 
 Date: 2026-09-09
 Baseline: `b16e96e`
-Task scope: full verification and review; no production files changed.
+Task scope: initial full verification and review before the final-review fix wave.
 
 ## Verification
 
@@ -66,4 +66,4 @@ The review found:
 
 ## Status
 
-PASS. Task 4 verification is complete.
+PASS. Initial Task 4 verification is complete. The final-review fix wave and its updated verification are recorded in `final-fix-report.md`.

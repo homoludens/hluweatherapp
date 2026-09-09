@@ -34,3 +34,5 @@ Task 3: fix round 1/5 (2 addressed, 0 open; moved injected ViewModel constructio
 Task 3: complete (commits fbea802..b16e96e, review clean)
 
 Task 4: complete (82 tests passing; assembleDebug, lintDebug, and git diff --check passing; 0 lint errors, 14 non-blocking warnings; review clean; report: task-4-report.md)
+
+Final review fix wave: complete (86 tests passing; optional-series validation, cancellation propagation, and provider-timezone display fixes; report: final-fix-report.md)
