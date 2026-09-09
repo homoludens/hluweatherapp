@@ -28,8 +28,6 @@ class SettingsRepositoryTest {
         val repository = DataStoreSettingsRepository(dataStore)
         val expected = PersistedSettings(
             provider = WeatherProvider.MET_NO,
-            selectedLocationId = "trieste",
-            trackMeEnabled = true,
             themeMode = ThemeMode.DARK,
             temperatureUnit = TemperatureUnit.FAHRENHEIT,
             windUnit = WindUnit.MPH,
@@ -43,6 +41,32 @@ class SettingsRepositoryTest {
         repository.save(expected)
 
         assertEquals(expected, repository.settings.first())
+    }
+
+    @Test
+    fun generic_save_preserves_location_owned_fields() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.selected_location_id")] = "trieste"
+            it[booleanPreferencesKey("settings.track_me_enabled")] = true
+        }
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        repository.save(
+            PersistedSettings(
+                selectedLocationId = "belgrade",
+                trackMeEnabled = false,
+                themeMode = ThemeMode.DARK
+            )
+        )
+
+        assertEquals("trieste", repository.settings.first().selectedLocationId)
+        assertEquals(true, repository.settings.first().trackMeEnabled)
+        assertEquals(ThemeMode.DARK, repository.settings.first().themeMode)
     }
 
     @Test

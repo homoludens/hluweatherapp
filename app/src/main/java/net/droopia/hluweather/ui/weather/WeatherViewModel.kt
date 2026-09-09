@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -186,6 +187,7 @@ private class FixedLocationRepository(
 ) : LocationRepository {
     override val locations = flowOf(listOf(location))
     override val activeLocation = flowOf<ActiveLocation?>(ActiveLocation.Saved(location))
+    override val locationMode = flowOf(LocationMode.SAVED_LOCATION)
 
     override suspend fun add(location: WeatherLocation) = Unit
     override suspend fun update(location: WeatherLocation) = Unit

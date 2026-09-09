@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -261,6 +262,23 @@ class WeatherViewModelTest {
         assertNull(viewModel.state.value.error)
     }
 
+    @Test
+    fun cancellation_swallowing_stale_request_cannot_restore_weather_after_active_location_is_cleared() = runTest {
+        val staleForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val firstRequest = PendingRequest(onCancellation = Result.success(staleForecast))
+        val repository = CancellationAwareWeatherRepository(firstRequest)
+        val locations = TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        val viewModel = WeatherViewModel(repository, TestSettingsRepository(), locations)
+        advanceUntilIdle()
+
+        locations.emitActive(null)
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.activeLocation)
+        assertNull(viewModel.state.value.forecast)
+        assertFalse(viewModel.state.value.isLoading)
+    }
+
     private class RecordingWeatherRepository : WeatherRepository {
         val requests = mutableListOf<Request>()
 
@@ -337,6 +355,9 @@ class WeatherViewModelTest {
             (initialActive as? ActiveLocation.Saved)?.let { listOf(it.location) } ?: emptyList()
         )
         override val activeLocation: StateFlow<ActiveLocation?> = active
+        override val locationMode: StateFlow<LocationMode> = MutableStateFlow(
+            LocationMode.SAVED_LOCATION
+        )
 
         suspend fun emitActive(value: ActiveLocation?) {
             active.emit(value)

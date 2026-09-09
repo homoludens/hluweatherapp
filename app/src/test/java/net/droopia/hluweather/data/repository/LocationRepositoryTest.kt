@@ -7,7 +7,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.ui.settings.DataStoreSettingsRepository
+import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -107,6 +110,35 @@ class LocationRepositoryTest {
     }
 
     @Test
+    fun interleaved_settings_and_location_writes_keep_canonical_state() = runTest {
+        val file = temporaryFolder.newFile("locations.preferences_pb")
+        val dataStore = dataStore(backgroundScope, file)
+        val locationRepository = DataStoreLocationRepository(dataStore)
+        val settingsRepository = DataStoreSettingsRepository(dataStore)
+        locationRepository.add(belgrade)
+        locationRepository.add(trieste)
+        locationRepository.selectSaved("trieste")
+
+        settingsRepository.save(
+            PersistedSettings(selectedLocationId = "belgrade", trackMeEnabled = true)
+        )
+
+        assertEquals("trieste", savedLocation(locationRepository).id)
+        assertEquals(LocationMode.SAVED_LOCATION, locationRepository.locationMode.first())
+
+        locationRepository.setTrackMe(true)
+        settingsRepository.save(
+            PersistedSettings(selectedLocationId = "belgrade", trackMeEnabled = false)
+        )
+
+        assertNull(locationRepository.activeLocation.first())
+        assertEquals(LocationMode.TRACK_ME, locationRepository.locationMode.first())
+        val recreatedRepository = DataStoreLocationRepository(dataStore)
+        assertNull(recreatedRepository.activeLocation.first())
+        assertEquals(LocationMode.TRACK_ME, recreatedRepository.locationMode.first())
+    }
+
+    @Test
     fun selecting_saved_location_disables_track_me() = runTest {
         val repository = repository(backgroundScope)
         repository.add(belgrade)
@@ -129,6 +161,9 @@ class LocationRepositoryTest {
             scope = scope,
             produceFile = { file }
         )
+
+    private suspend fun savedLocation(repository: LocationRepository): WeatherLocation =
+        (repository.activeLocation.first() as ActiveLocation.Saved).location
 
     private companion object {
         val belgrade = WeatherLocation(

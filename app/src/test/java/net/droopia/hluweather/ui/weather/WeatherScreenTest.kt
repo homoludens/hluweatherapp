@@ -28,6 +28,7 @@ import kotlinx.datetime.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -447,6 +448,7 @@ class WeatherScreenTest {
     private class EmptyLocationRepository : LocationRepository {
         override val locations = MutableStateFlow(emptyList<WeatherLocation>())
         override val activeLocation = MutableStateFlow<ActiveLocation?>(null)
+        override val locationMode = MutableStateFlow(LocationMode.SAVED_LOCATION)
 
         override suspend fun add(location: WeatherLocation) = Unit
 

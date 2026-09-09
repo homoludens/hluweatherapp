@@ -66,12 +66,6 @@ class DataStoreSettingsRepository(
     override suspend fun save(settings: PersistedSettings) {
         dataStore.edit { preferences ->
             preferences[providerKey] = settings.provider.name
-            if (settings.selectedLocationId == null) {
-                preferences.remove(selectedLocationIdKey)
-            } else {
-                preferences[selectedLocationIdKey] = settings.selectedLocationId
-            }
-            preferences[trackMeEnabledKey] = settings.trackMeEnabled
             preferences[themeModeKey] = settings.themeMode.name
             preferences[temperatureUnitKey] = settings.temperatureUnit.name
             preferences[windUnitKey] = settings.windUnit.name

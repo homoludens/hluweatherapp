@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
@@ -34,14 +35,21 @@ class SettingsViewModel(
                 combine(
                     repository.settings,
                     locationRepository.locations,
-                    locationRepository.activeLocation
-                ) { persisted, locations, activeLocation ->
-                    Triple(persisted, locations, activeLocation)
-                }.collect { (persisted, locations, activeLocation) ->
+                    locationRepository.activeLocation,
+                    locationRepository.locationMode
+                ) { persisted, locations, activeLocation, locationMode ->
+                    SettingsSnapshot(persisted, locations, activeLocation, locationMode)
+                }.collect { snapshot ->
+                    val persisted = snapshot.persisted
+                    val locations = snapshot.locations
+                    val activeLocation = snapshot.activeLocation
+                    val locationMode = snapshot.locationMode
                     _state.value = if (hasUserMutation) {
                         val activeSavedId = (activeLocation as? ActiveLocation.Saved)?.location?.id
                         val requestedTrackMe = pendingTrackMe
-                        if (activeSavedId == null) {
+                        if (activeSavedId != null) {
+                            pendingTrackMe = null
+                        } else if (requestedTrackMe == (locationMode == LocationMode.TRACK_ME)) {
                             pendingTrackMe = null
                         }
                         _state.value.copy(
@@ -52,13 +60,13 @@ class SettingsViewModel(
                                 }
                                 ?: locations.firstOrNull()?.id,
                             trackMeEnabled = if (activeSavedId == null) {
-                                requestedTrackMe ?: _state.value.trackMeEnabled
+                                requestedTrackMe ?: locationMode == LocationMode.TRACK_ME
                             } else {
                                 false
                             }
                         )
                     } else {
-                        persisted.toUiState(locations, activeLocation)
+                        persisted.toUiState(locations, activeLocation, locationMode)
                     }
                 }
             }
@@ -78,6 +86,7 @@ class SettingsViewModel(
     }
 
     fun selectLocation(location: WeatherLocation) {
+        pendingTrackMe = false
         updateSettings {
             it.copy(
                 selectedLocationId = location.id,
@@ -155,7 +164,8 @@ class SettingsViewModel(
 
 private fun PersistedSettings.toUiState(
     locations: List<WeatherLocation>,
-    activeLocation: ActiveLocation?
+    activeLocation: ActiveLocation?,
+    locationMode: LocationMode
 ): SettingsUiState =
     SettingsUiState(
         provider = provider,
@@ -163,7 +173,11 @@ private fun PersistedSettings.toUiState(
         selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id
             ?: selectedLocationId?.takeIf { id -> locations.any { location -> location.id == id } }
             ?: locations.firstOrNull()?.id,
-        trackMeEnabled = if (activeLocation is ActiveLocation.Saved) false else trackMeEnabled,
+        trackMeEnabled = if (activeLocation is ActiveLocation.Saved) {
+            false
+        } else {
+            locationMode == LocationMode.TRACK_ME
+        },
         themeMode = themeMode,
         temperatureUnit = temperatureUnit,
         windUnit = windUnit,
@@ -186,4 +200,11 @@ private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     weatherAlerts = weatherAlerts,
     dailySummary = dailySummary,
     tripAlerts = tripAlerts
+)
+
+private data class SettingsSnapshot(
+    val persisted: PersistedSettings,
+    val locations: List<WeatherLocation>,
+    val activeLocation: ActiveLocation?,
+    val locationMode: LocationMode
 )

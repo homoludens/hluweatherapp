@@ -3,6 +3,7 @@ package net.droopia.hluweather.data.repository
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -21,6 +22,7 @@ import java.io.IOException
 interface LocationRepository {
     val locations: Flow<List<WeatherLocation>>
     val activeLocation: Flow<ActiveLocation?>
+    val locationMode: Flow<LocationMode>
     suspend fun add(location: WeatherLocation)
     suspend fun update(location: WeatherLocation)
     suspend fun delete(id: String)
@@ -54,7 +56,11 @@ class DataStoreLocationRepository(
                 selectedId = preferences[selectedLocationIdKey],
                 mode = preferences[locationModeKey]
                     ?.let { value -> LocationMode.entries.firstOrNull { it.name == value } }
-                    ?: LocationMode.SAVED_LOCATION
+                    ?: if (preferences[legacyTrackMeEnabledKey] == true) {
+                        LocationMode.TRACK_ME
+                    } else {
+                        LocationMode.SAVED_LOCATION
+                    }
             )
         }
         .distinctUntilChanged()
@@ -73,6 +79,10 @@ class DataStoreLocationRepository(
                 ?: state.locations.firstOrNull()?.let(ActiveLocation::Saved)
         }
     }.distinctUntilChanged()
+
+    override val locationMode: Flow<LocationMode> = snapshot
+        .map { it.mode }
+        .distinctUntilChanged()
 
     override suspend fun add(location: WeatherLocation) {
         dataStore.edit { preferences ->
@@ -177,3 +187,4 @@ private val json = Json { ignoreUnknownKeys = true }
 private val locationsKey = stringPreferencesKey("locations.saved")
 private val selectedLocationIdKey = stringPreferencesKey("settings.selected_location_id")
 private val locationModeKey = stringPreferencesKey("settings.location_mode")
+private val legacyTrackMeEnabledKey = booleanPreferencesKey("settings.track_me_enabled")

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -132,7 +133,7 @@ class SettingsViewModelTest {
         viewModel.setDailySummary(true)
 
         assertTrue(viewModel.state.value.dailySummary)
-        assertEquals(initial.copy(dailySummary = true), repository.saved)
+        assertEquals(initial.copy(trackMeEnabled = false, dailySummary = true), repository.saved)
     }
 
     @Test
@@ -232,6 +233,19 @@ class SettingsViewModelTest {
         assertFalse(viewModel.state.value.trackMeEnabled)
     }
 
+    @Test
+    fun hydration_uses_canonical_location_mode_for_track_me() {
+        val locationRepository = InMemoryLocationRepository(initialActiveLocation = null)
+        locationRepository.mode.value = LocationMode.TRACK_ME
+
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(PersistedSettings(trackMeEnabled = false)),
+            locationRepository
+        )
+
+        assertTrue(viewModel.state.value.trackMeEnabled)
+    }
+
     private class InMemorySettingsRepository(
         initial: PersistedSettings = PersistedSettings()
     ) : SettingsRepository {
@@ -264,6 +278,8 @@ class SettingsViewModelTest {
         override val activeLocation = MutableStateFlow<ActiveLocation?>(
             initialActiveLocation?.let(ActiveLocation::Saved)
         )
+        val mode = MutableStateFlow(LocationMode.SAVED_LOCATION)
+        override val locationMode: StateFlow<LocationMode> = mode
         val selectedIds = mutableListOf<String>()
         val trackMeValues = mutableListOf<Boolean>()
 
@@ -282,6 +298,7 @@ class SettingsViewModelTest {
 
         override suspend fun setTrackMe(enabled: Boolean) {
             trackMeValues += enabled
+            mode.value = if (enabled) LocationMode.TRACK_ME else LocationMode.SAVED_LOCATION
             if (!enabled && activeLocation.value == null) {
                 activeLocation.value = locations.value.firstOrNull()?.let(ActiveLocation::Saved)
             } else if (enabled) {
