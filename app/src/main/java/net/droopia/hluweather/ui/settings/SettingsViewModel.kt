@@ -1,29 +1,45 @@
 package net.droopia.hluweather.ui.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 
-class SettingsViewModel : ViewModel() {
+class SettingsViewModel(
+    private val repository: SettingsRepository = DefaultSettingsRepository
+) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            runCatching { repository.settings.first() }
+                .getOrNull()
+                ?.let { persisted ->
+                    _state.value = persisted.toUiState(_state.value)
+                }
+        }
+    }
+
     fun setProvider(provider: WeatherProvider) {
-        _state.update { it.copy(provider = provider) }
+        updateSettings { it.copy(provider = provider) }
     }
 
     fun setTrackMe(enabled: Boolean) {
-        _state.update { it.copy(trackMeEnabled = enabled) }
+        updateSettings { it.copy(trackMeEnabled = enabled) }
     }
 
     fun selectLocation(location: WeatherLocation) {
-        _state.update {
+        updateSettings {
             it.copy(
                 selectedLocationId = location.id,
                 trackMeEnabled = false
@@ -38,36 +54,81 @@ class SettingsViewModel : ViewModel() {
     fun onProviderInfoClick(provider: WeatherProvider) = Unit
 
     fun setTheme(themeMode: ThemeMode) {
-        _state.update { it.copy(themeMode = themeMode) }
+        updateSettings { it.copy(themeMode = themeMode) }
     }
 
     fun setTemperatureUnit(unit: TemperatureUnit) {
-        _state.update { it.copy(temperatureUnit = unit) }
+        updateSettings { it.copy(temperatureUnit = unit) }
     }
 
     fun setWindUnit(unit: WindUnit) {
-        _state.update { it.copy(windUnit = unit) }
+        updateSettings { it.copy(windUnit = unit) }
     }
 
     fun setDistanceUnit(unit: DistanceUnit) {
-        _state.update { it.copy(distanceUnit = unit) }
+        updateSettings { it.copy(distanceUnit = unit) }
     }
 
     fun setPrecipitationUnit(unit: PrecipitationUnit) {
-        _state.update { it.copy(precipitationUnit = unit) }
+        updateSettings { it.copy(precipitationUnit = unit) }
     }
 
     fun setWeatherAlerts(enabled: Boolean) {
-        _state.update { it.copy(weatherAlerts = enabled) }
+        updateSettings { it.copy(weatherAlerts = enabled) }
     }
 
     fun setDailySummary(enabled: Boolean) {
-        _state.update { it.copy(dailySummary = enabled) }
+        updateSettings { it.copy(dailySummary = enabled) }
     }
 
     fun setTripAlerts(enabled: Boolean) {
-        _state.update { it.copy(tripAlerts = enabled) }
+        updateSettings { it.copy(tripAlerts = enabled) }
     }
 
     fun clearCache() = Unit
+
+    private fun updateSettings(transform: (SettingsUiState) -> SettingsUiState) {
+        val next = transform(_state.value)
+        _state.value = next
+        viewModelScope.launch {
+            runCatching { repository.save(next.toPersistedSettings()) }
+        }
+    }
+}
+
+private fun PersistedSettings.toUiState(current: SettingsUiState): SettingsUiState =
+    current.copy(
+        provider = provider,
+        selectedLocationId = selectedLocationId
+            ?.takeIf { id -> current.locations.any { location -> location.id == id } }
+            ?: current.selectedLocationId,
+        trackMeEnabled = trackMeEnabled,
+        themeMode = themeMode,
+        temperatureUnit = temperatureUnit,
+        windUnit = windUnit,
+        distanceUnit = distanceUnit,
+        precipitationUnit = precipitationUnit,
+        weatherAlerts = weatherAlerts,
+        dailySummary = dailySummary,
+        tripAlerts = tripAlerts
+    )
+
+private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
+    provider = provider,
+    selectedLocationId = selectedLocationId,
+    trackMeEnabled = trackMeEnabled,
+    themeMode = themeMode,
+    temperatureUnit = temperatureUnit,
+    windUnit = windUnit,
+    distanceUnit = distanceUnit,
+    precipitationUnit = precipitationUnit,
+    weatherAlerts = weatherAlerts,
+    dailySummary = dailySummary,
+    tripAlerts = tripAlerts
+)
+
+private object DefaultSettingsRepository : SettingsRepository {
+    override val settings: Flow<PersistedSettings> = flowOf(PersistedSettings())
+
+    override suspend fun save(settings: PersistedSettings) = Unit
 }
