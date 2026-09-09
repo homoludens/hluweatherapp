@@ -1,8 +1,13 @@
 package net.droopia.hluweather.ui.app
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -46,5 +51,18 @@ class HluWeatherAppTest {
             }
         }
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+    }
+
+    @Test
+    fun selecting_theme_updates_app_state() {
+        composeRule.setContent {
+            HluWeatherApp()
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(3)
+        composeRule.onNodeWithText("Light").performClick()
+        composeRule.onNodeWithText("Dark").performClick()
+        composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
     }
 }

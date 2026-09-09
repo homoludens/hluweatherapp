@@ -5,8 +5,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.Svilajnac
+import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.buildMockForecast
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -53,6 +58,22 @@ class WeatherViewModelTest {
         viewModel.onDaySelected(2)
 
         assertEquals(ForecastMode.HOURLY, viewModel.state.value.forecastMode)
+        assertEquals(2, viewModel.state.value.selectedDayIndex)
+    }
+
+    @Test
+    fun day_selection_is_limited_by_available_daily_forecast() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        ).let { it.copy(daily = it.daily.take(3)) }
+        val repository = object : WeatherRepository {
+            override suspend fun getForecast(location: WeatherLocation) = forecast
+        }
+        val viewModel = WeatherViewModel(repository)
+
+        viewModel.onDaySelected(6)
+
         assertEquals(2, viewModel.state.value.selectedDayIndex)
     }
 }

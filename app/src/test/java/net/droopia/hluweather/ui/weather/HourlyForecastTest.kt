@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
 import java.util.TimeZone
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -61,7 +62,29 @@ class HourlyForecastTest {
         composeRule.onNodeWithText("Dew point").assertIsDisplayed()
         composeRule.onNodeWithText("Hum.").assertIsDisplayed()
         composeRule.onNodeWithText("Precip.").assertIsDisplayed()
-        composeRule.onNodeWithText("00h").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_day_start_0").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_table").assertIsDisplayed()
+    }
+
+    @Test
+    fun column_header_remains_sticky_after_scrolling_past_day_strip() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast,
+                    selectedDayIndex = 0,
+                    onDaySelected = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("hourly_table").performScrollToIndex(20)
+
+        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
     }
 }
