@@ -21,8 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,8 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -165,17 +167,28 @@ private fun HourlyWeatherContent(
             }
         }.toMap()
     }
+    var selectedDateOverride by remember(tableData) { mutableStateOf<LocalDate?>(null) }
+    val selectedTableDay = selectedDateOverride?.let { date ->
+        tableData.days.firstOrNull { it.date == date }
+    } ?: tableData.nearestDayForIndex(selectedDayIndex)
+
+    LaunchedEffect(selectedDayIndex) {
+        selectedDateOverride = null
+    }
 
     fun visibleDayIndex(): Int? = listState.layoutInfo.visibleItemsInfo
         .asSequence()
         .map { it.index - tableItemStartIndex }
         .filter { it in tableData.items.indices }
-        .mapNotNull { tableData.items[it].dayIndex.takeIf { dayIndex -> dayIndex >= 0 } }
+        .map { tableData.items[it].dayIndex }
         .firstOrNull()
 
     fun onDayChipSelected(dayIndex: Int) {
         if (dayIndex >= 0) {
+            selectedDateOverride = null
             onDaySelected(dayIndex)
+        } else {
+            selectedDateOverride = tableData.days.firstOrNull { it.dayIndex == dayIndex }?.date
         }
         scope.launch {
             firstListItemIndexByDay[dayIndex]?.let { target ->
@@ -185,12 +198,11 @@ private fun HourlyWeatherContent(
     }
 
     LaunchedEffect(tableData) {
-        val firstVisibleDay = snapshotFlow { visibleDayIndex() }
-            .filterNotNull()
-            .first()
-        firstListItemIndexByDay[selectedDayIndex]?.let { target ->
-            if (firstVisibleDay != selectedDayIndex) {
-                listState.animateScrollToItem(target)
+        selectedTableDay?.let { day ->
+            firstListItemIndexByDay[day.dayIndex]?.let { target ->
+                if (visibleDayIndex() != day.dayIndex) {
+                    listState.animateScrollToItem(target)
+                }
             }
         }
     }
@@ -201,7 +213,12 @@ private fun HourlyWeatherContent(
             .filterNotNull()
             .distinctUntilChanged()
             .collect { dayIndex ->
-                if (previousDayIndex != null && dayIndex != previousDayIndex) {
+                if (dayIndex < 0) {
+                    selectedDateOverride = tableData.days
+                        .firstOrNull { it.dayIndex == dayIndex }
+                        ?.date
+                } else if (previousDayIndex != null && dayIndex != previousDayIndex) {
+                    selectedDateOverride = null
                     onDaySelected(dayIndex)
                 }
                 previousDayIndex = dayIndex
@@ -239,7 +256,7 @@ private fun HourlyWeatherContent(
                 ) {
                     HourlyDaySelector(
                         tableData = tableData,
-                        selectedDayIndex = selectedDayIndex,
+                        selectedDayDate = selectedTableDay?.date,
                         onDaySelected = ::onDayChipSelected
                     )
                 }
@@ -273,7 +290,7 @@ private fun HourlyWeatherContent(
                                         Modifier
                                     }
                                 ),
-                            timeTestTag = if (isFirstHour && selectedDayIndex == item.dayIndex) {
+                            timeTestTag = if (isFirstHour && selectedTableDay?.dayIndex == item.dayIndex) {
                                 "hourly_selected_day_${item.dayIndex}"
                             } else {
                                 null
@@ -296,7 +313,7 @@ private fun HourlyWeatherContent(
             ) {
                 HourlyDaySelector(
                     tableData = tableData,
-                    selectedDayIndex = selectedDayIndex,
+                    selectedDayDate = selectedTableDay?.date,
                     onDaySelected = ::onDayChipSelected
                 )
             }

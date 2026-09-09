@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.HourForecast
@@ -54,6 +55,7 @@ fun HourlyForecast(
     val tableData = remember(forecast) {
         forecast.toHourlyTableData()
     }
+    val selectedDayDate = tableData.nearestDayForIndex(selectedDayIndex)?.date
     val listState = rememberLazyListState()
 
     LazyColumn(
@@ -65,7 +67,7 @@ fun HourlyForecast(
         stickyHeader {
             HourlyDaySelector(
                 tableData = tableData,
-                selectedDayIndex = selectedDayIndex,
+                selectedDayDate = selectedDayDate,
                 onDaySelected = onDaySelected
             )
         }
@@ -98,7 +100,7 @@ fun HourlyForecast(
                                     Modifier
                                 }
                             ),
-                        timeTestTag = if (isFirstHour && selectedDayIndex == item.dayIndex) {
+                        timeTestTag = if (isFirstHour && selectedDayDate == item.date) {
                             "hourly_selected_day_${item.dayIndex}"
                         } else {
                             null
@@ -113,7 +115,7 @@ fun HourlyForecast(
 @Composable
 internal fun HourlyDaySelector(
     tableData: HourlyTableData,
-    selectedDayIndex: Int,
+    selectedDayDate: LocalDate?,
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -134,7 +136,7 @@ internal fun HourlyDaySelector(
                 DayChip(
                     dayIndex = day.dayIndex,
                     text = day.date.dayText(),
-                    selected = day.dayIndex == selectedDayIndex,
+                    selected = day.date == selectedDayDate,
                     onClick = { onDaySelected(day.dayIndex) }
                 )
             }

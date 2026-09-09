@@ -4,6 +4,7 @@ import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.toAppLocalDate
+import kotlin.math.abs
 
 data class HourlyTableData(
     val items: List<HourlyTableItem>,
@@ -85,3 +86,6 @@ fun HourlyTableData.firstHourIndexForDay(dayIndex: Int): Int? =
 
 fun HourlyTableData.dayIndexForDate(date: LocalDate): Int? =
     days.firstOrNull { it.date == date }?.dayIndex
+
+fun HourlyTableData.nearestDayForIndex(dayIndex: Int): HourlyTableDay? =
+    days.minByOrNull { abs(it.dayIndex.toLong() - dayIndex.toLong()) }

@@ -71,4 +71,16 @@ class HourlyTableDataTest {
         assertNull(table.dayIndexForDate(missingDate))
         assertTrue(table.hourItems.zipWithNext().all { (a, b) -> a.hour.time <= b.hour.time })
     }
+
+    @Test
+    fun finds_nearest_available_day_for_missing_daily_index() {
+        val missingDate = forecast.daily[2].date
+        val incompleteForecast = forecast.copy(
+            hourly = forecast.hourly.filter { it.time.toAppLocalDate() != missingDate }
+        )
+
+        val table = incompleteForecast.toHourlyTableData()
+
+        assertEquals(1, table.nearestDayForIndex(2)?.dayIndex)
+    }
 }

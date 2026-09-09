@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -110,11 +111,12 @@ class WeatherScreenTest {
         composeRule.onNodeWithText(selectedDayText).performClick()
         composeRule.waitForIdle()
 
+        assertEquals(2, viewModel.state.value.selectedDayIndex)
         composeRule.onNodeWithTag("hourly_selected_day_2").assertIsDisplayed()
     }
 
     @Test
-    fun scrolling_to_an_hourly_date_without_a_daily_entry_does_not_change_selected_day() {
+    fun scrolling_to_an_hourly_date_without_a_daily_entry_keeps_that_date_selected() {
         val baseForecast = buildMockForecast(
             location = Svilajnac,
             baseTime = Instant.fromEpochSeconds(0L)
@@ -142,7 +144,39 @@ class WeatherScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("hourly_day_start_$syntheticDayIndex").assertIsDisplayed()
-        composeRule.onNodeWithTag("hourly_day_chip_1").assertIsSelected()
+        composeRule.onNodeWithTag("hourly_day_chip_$syntheticDayIndex").assertIsSelected()
+        composeRule.onNodeWithTag("hourly_day_chip_1").assertIsNotSelected()
+
+        viewModel.onDaySelected(0)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_chip_0").assertIsSelected()
+        composeRule.onNodeWithTag("hourly_day_chip_$syntheticDayIndex").assertIsNotSelected()
+    }
+
+    @Test
+    fun selecting_a_daily_date_without_hourly_entries_uses_nearest_hourly_date() {
+        val baseForecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val missingDate = baseForecast.daily[2].date
+        val forecast = baseForecast.copy(
+            hourly = baseForecast.hourly.filter { it.time.toAppLocalDate() != missingDate }
+        )
+        val tableData = forecast.toHourlyTableData()
+        val nearestDay = tableData.nearestDayForIndex(2)!!
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+        })
+        renderWeather(viewModel)
+
+        composeRule.onNodeWithText("Daily").performClick()
+        composeRule.onNodeWithText(missingDate.dayText()).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_chip_${nearestDay.dayIndex}").assertIsSelected()
+        composeRule.onNodeWithTag("hourly_selected_day_${nearestDay.dayIndex}").assertIsDisplayed()
     }
 
     @Test
