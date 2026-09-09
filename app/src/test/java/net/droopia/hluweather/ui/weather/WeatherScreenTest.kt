@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -26,6 +27,7 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
@@ -139,8 +141,64 @@ class WeatherScreenTest {
             .performScrollToIndex(tableData.firstItemIndexForDay(syntheticDayIndex)!! + 3)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("hourly_day_boundary_$syntheticDayIndex").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_day_start_$syntheticDayIndex").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_day_chip_1").assertIsSelected()
+    }
+
+    @Test
+    fun day_strip_contains_only_jumpable_hourly_dates() {
+        val baseForecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val forecast = baseForecast.copy(
+            hourly = baseForecast.hourly
+                .filter { it.time.toAppLocalDate() == baseForecast.daily[0].date }
+                .plus(
+                    baseForecast.hourly.take(24).mapIndexed { index, hour ->
+                        hour.copy(
+                            time = Instant.fromEpochSeconds(
+                                7L * 24L * 60L * 60L + index * 60L * 60L
+                            )
+                        )
+                    }
+                )
+        )
+        val tableData = forecast.toHourlyTableData()
+        val syntheticDayIndex = tableData.days.last().dayIndex
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+        })
+        renderWeather(viewModel)
+
+        assertTrue(
+            composeRule.onAllNodesWithTag("hourly_day_chip_2")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+        composeRule.onNodeWithTag("hourly_day_chip_$syntheticDayIndex").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_day_chip_$syntheticDayIndex").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_start_$syntheticDayIndex").assertIsDisplayed()
+        assertEquals(0, viewModel.state.value.selectedDayIndex)
+    }
+
+    @Test
+    fun sticky_day_strip_precedes_sticky_column_header() {
+        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+
+        val initialDayStrip = composeRule.onNodeWithTag("hourly_day_strip")
+            .fetchSemanticsNode().boundsInRoot
+        val initialColumnHeader = composeRule.onNodeWithTag("hourly_column_header")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(initialDayStrip.top <= initialColumnHeader.top)
+
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(20)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
     }
 
     @Test

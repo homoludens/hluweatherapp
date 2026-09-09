@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -65,12 +64,12 @@ fun HourlyForecast(
     ) {
         stickyHeader {
             HourlyDaySelector(
-                forecast = forecast,
+                tableData = tableData,
                 selectedDayIndex = selectedDayIndex,
                 onDaySelected = onDaySelected
             )
         }
-        item {
+        stickyHeader {
             ForecastColumnHeader(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -87,19 +86,23 @@ fun HourlyForecast(
                     )
                 }
                 is HourlyTableHour -> {
+                    val isFirstHour = tableData.firstHourIndexForDay(item.dayIndex) == itemIndex
                     ForecastRow(
                         weather = item.hour,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .then(
-                                if (tableData.firstHourIndexForDay(item.dayIndex) == itemIndex &&
-                                    selectedDayIndex == item.dayIndex
-                                ) {
-                                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
+                                if (isFirstHour) {
+                                    Modifier.testTag("hourly_day_start_${item.dayIndex}")
                                 } else {
                                     Modifier
                                 }
-                            )
+                            ),
+                        timeTestTag = if (isFirstHour && selectedDayIndex == item.dayIndex) {
+                            "hourly_selected_day_${item.dayIndex}"
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -109,7 +112,7 @@ fun HourlyForecast(
 
 @Composable
 internal fun HourlyDaySelector(
-    forecast: WeatherForecast,
+    tableData: HourlyTableData,
     selectedDayIndex: Int,
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -127,12 +130,12 @@ internal fun HourlyDaySelector(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            forecast.daily.forEachIndexed { index, day ->
+            tableData.days.forEach { day ->
                 DayChip(
-                    dayIndex = index,
+                    dayIndex = day.dayIndex,
                     text = day.date.dayText(),
-                    selected = index == selectedDayIndex,
-                    onClick = { onDaySelected(index) }
+                    selected = day.dayIndex == selectedDayIndex,
+                    onClick = { onDaySelected(day.dayIndex) }
                 )
             }
         }
@@ -200,6 +203,7 @@ internal fun ForecastColumnHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .testTag("hourly_column_header")
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             .background(colors.tableHeader)
             .padding(
@@ -234,6 +238,7 @@ private fun RowScope.ForecastCell(
 @Composable
 internal fun ForecastRow(
     weather: HourForecast,
+    timeTestTag: String? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -254,7 +259,9 @@ internal fun ForecastRow(
     ) {
         Text(
             text = weather.time.hourText(),
-            modifier = Modifier.weight(0.72f),
+            modifier = Modifier
+                .weight(0.72f)
+                .then(timeTestTag?.let(Modifier::testTag) ?: Modifier),
             fontWeight = FontWeight.SemiBold
         )
 

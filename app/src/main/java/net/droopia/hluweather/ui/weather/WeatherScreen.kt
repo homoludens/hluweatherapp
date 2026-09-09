@@ -44,8 +44,8 @@ private const val HOURLY_HEADER_KEY = "hourly_header"
 private const val HOURLY_DAYS_KEY = "hourly_days"
 private val hourlyListPrefixKeys = listOf(
     WEATHER_HEADER_KEY,
-    HOURLY_HEADER_KEY,
-    HOURLY_DAYS_KEY
+    HOURLY_DAYS_KEY,
+    HOURLY_HEADER_KEY
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -173,6 +173,17 @@ private fun HourlyWeatherContent(
         .mapNotNull { tableData.items[it].dayIndex.takeIf { dayIndex -> dayIndex >= 0 } }
         .firstOrNull()
 
+    fun onDayChipSelected(dayIndex: Int) {
+        if (dayIndex >= 0) {
+            onDaySelected(dayIndex)
+        }
+        scope.launch {
+            firstListItemIndexByDay[dayIndex]?.let { target ->
+                listState.animateScrollToItem(target)
+            }
+        }
+    }
+
     LaunchedEffect(tableData) {
         val firstVisibleDay = snapshotFlow { visibleDayIndex() }
             .filterNotNull()
@@ -219,12 +230,6 @@ private fun HourlyWeatherContent(
                 )
             }
 
-            stickyHeader(key = HOURLY_HEADER_KEY) {
-                ForecastColumnHeader(
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-
             stickyHeader(key = HOURLY_DAYS_KEY) {
                 Box(
                     modifier = Modifier
@@ -233,18 +238,17 @@ private fun HourlyWeatherContent(
                         .padding(top = if (isCollapsed) 96.dp else 0.dp)
                 ) {
                     HourlyDaySelector(
-                        forecast = forecast,
+                        tableData = tableData,
                         selectedDayIndex = selectedDayIndex,
-                        onDaySelected = { dayIndex ->
-                            onDaySelected(dayIndex)
-                            scope.launch {
-                                firstListItemIndexByDay[dayIndex]?.let { target ->
-                                    listState.animateScrollToItem(target)
-                                }
-                            }
-                        }
+                        onDaySelected = ::onDayChipSelected
                     )
                 }
+            }
+
+            stickyHeader(key = HOURLY_HEADER_KEY) {
+                ForecastColumnHeader(
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
 
             itemsIndexed(
@@ -256,21 +260,45 @@ private fun HourlyWeatherContent(
                         item = item,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                    is HourlyTableHour -> ForecastRow(
-                        weather = item.hour,
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .then(
-                                if (tableData.firstHourIndexForDay(item.dayIndex) ==
-                                    itemIndex && selectedDayIndex == item.dayIndex
-                                ) {
-                                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    )
+                    is HourlyTableHour -> {
+                        val isFirstHour = tableData.firstHourIndexForDay(item.dayIndex) == itemIndex
+                        ForecastRow(
+                            weather = item.hour,
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .then(
+                                    if (isFirstHour) {
+                                        Modifier.testTag("hourly_day_start_${item.dayIndex}")
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
+                            timeTestTag = if (isFirstHour && selectedDayIndex == item.dayIndex) {
+                                "hourly_selected_day_${item.dayIndex}"
+                            } else {
+                                null
+                            }
+                        )
+                    }
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isCollapsed,
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(top = 96.dp)
+            ) {
+                HourlyDaySelector(
+                    tableData = tableData,
+                    selectedDayIndex = selectedDayIndex,
+                    onDaySelected = ::onDayChipSelected
+                )
             }
         }
 
