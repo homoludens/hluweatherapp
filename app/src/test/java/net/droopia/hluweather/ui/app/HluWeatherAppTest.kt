@@ -3,6 +3,9 @@ package net.droopia.hluweather.ui.app
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -72,7 +75,27 @@ class HluWeatherAppTest {
             HluWeatherApp()
         }
 
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("weather_scroll")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(0)
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithContentDescription("Settings")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
         composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Settings")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(3)
+        composeRule.onNodeWithText("Light").performClick()
+        composeRule.onNodeWithTag("settings_theme_light").assertIsSelected()
     }
 }
