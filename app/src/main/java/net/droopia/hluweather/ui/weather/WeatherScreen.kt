@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +38,15 @@ import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.map.MapPlaceholder
+
+private const val WEATHER_HEADER_KEY = "weather_header"
+private const val HOURLY_HEADER_KEY = "hourly_header"
+private const val HOURLY_DAYS_KEY = "hourly_days"
+private val hourlyListPrefixKeys = listOf(
+    WEATHER_HEADER_KEY,
+    HOURLY_HEADER_KEY,
+    HOURLY_DAYS_KEY
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -148,18 +157,20 @@ private fun HourlyWeatherContent(
     val tableData = remember(forecast) {
         forecast.toHourlyTableData()
     }
-    val tableItemStartIndex = 3
+    val tableItemStartIndex = hourlyListPrefixKeys.size
     val firstListItemIndexByDay = remember(tableData) {
-        tableData.days.associate { day ->
-            day.dayIndex to tableItemStartIndex + day.firstItemIndex
-        }
+        tableData.days.mapNotNull { day ->
+            tableData.firstHourIndexForDay(day.dayIndex)?.let { firstHourIndex ->
+                day.dayIndex to tableItemStartIndex + firstHourIndex
+            }
+        }.toMap()
     }
 
     fun visibleDayIndex(): Int? = listState.layoutInfo.visibleItemsInfo
         .asSequence()
         .map { it.index - tableItemStartIndex }
         .filter { it in tableData.items.indices }
-        .map { tableData.items[it].dayIndex }
+        .mapNotNull { tableData.items[it].dayIndex.takeIf { dayIndex -> dayIndex >= 0 } }
         .firstOrNull()
 
     LaunchedEffect(tableData) {
@@ -171,16 +182,18 @@ private fun HourlyWeatherContent(
                 listState.animateScrollToItem(target)
             }
         }
+    }
 
-        var previousDayIndex = firstVisibleDay
+    LaunchedEffect(tableData) {
+        var previousDayIndex: Int? = null
         snapshotFlow { visibleDayIndex() }
             .filterNotNull()
             .distinctUntilChanged()
             .collect { dayIndex ->
-                if (dayIndex != previousDayIndex) {
-                    previousDayIndex = dayIndex
+                if (previousDayIndex != null && dayIndex != previousDayIndex) {
                     onDaySelected(dayIndex)
                 }
+                previousDayIndex = dayIndex
             }
     }
 
@@ -191,7 +204,7 @@ private fun HourlyWeatherContent(
                 .testTag("weather_scroll"),
             state = listState
         ) {
-            item(key = "weather_header") {
+            item(key = WEATHER_HEADER_KEY) {
                 WeatherHero(
                     selected = ForecastMode.HOURLY,
                     onSelected = onForecastModeSelected,
@@ -206,13 +219,13 @@ private fun HourlyWeatherContent(
                 )
             }
 
-            stickyHeader(key = "hourly_header") {
+            stickyHeader(key = HOURLY_HEADER_KEY) {
                 ForecastColumnHeader(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
-            stickyHeader(key = "hourly_days") {
+            stickyHeader(key = HOURLY_DAYS_KEY) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -234,19 +247,28 @@ private fun HourlyWeatherContent(
                 }
             }
 
-            items(
+            itemsIndexed(
                 items = tableData.items,
-                key = { it.key }
-            ) { item ->
+                key = { _, item -> item.key }
+            ) { itemIndex, item ->
                 when (item) {
                     is HourlyTableBoundary -> HourlyDateBoundary(
                         item = item,
-                        selectedDayIndex = selectedDayIndex,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     is HourlyTableHour -> ForecastRow(
                         weather = item.hour,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .then(
+                                if (tableData.firstHourIndexForDay(item.dayIndex) ==
+                                    itemIndex && selectedDayIndex == item.dayIndex
+                                ) {
+                                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                 }
             }

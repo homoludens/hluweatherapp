@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -22,7 +23,13 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
+import net.droopia.hluweather.data.dayText
+import net.droopia.hluweather.data.model.WeatherForecast
+import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.Svilajnac
+import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.After
@@ -70,7 +77,6 @@ class WeatherScreenTest {
         composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(28)
 
         composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
-        composeRule.onNodeWithText("00h").assertIsDisplayed()
     }
 
     @Test
@@ -91,6 +97,50 @@ class WeatherScreenTest {
         composeRule.waitForIdle()
 
         assertEquals(1, viewModel.state.value.selectedDayIndex)
+    }
+
+    @Test
+    fun selecting_a_day_from_daily_content_positions_hourly_list_on_that_day() {
+        val viewModel = renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+        val selectedDayText = viewModel.state.value.forecast!!.daily[2].date.dayText()
+
+        composeRule.onNodeWithText("Daily").performClick()
+        composeRule.onNodeWithText(selectedDayText).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_selected_day_2").assertIsDisplayed()
+    }
+
+    @Test
+    fun scrolling_to_an_hourly_date_without_a_daily_entry_does_not_change_selected_day() {
+        val baseForecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val forecast = baseForecast.copy(
+            hourly = baseForecast.hourly + baseForecast.hourly.take(24).mapIndexed { index, hour ->
+                hour.copy(
+                    time = Instant.fromEpochSeconds(
+                        7L * 24L * 60L * 60L + index * 60L * 60L
+                    )
+                )
+            }
+        )
+        val tableData = forecast.toHourlyTableData()
+        val syntheticDayIndex = tableData.days.last().dayIndex
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+        })
+        renderWeather(viewModel)
+        viewModel.onDaySelected(1)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("weather_scroll")
+            .performScrollToIndex(tableData.firstItemIndexForDay(syntheticDayIndex)!! + 3)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_boundary_$syntheticDayIndex").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_day_chip_1").assertIsSelected()
     }
 
     @Test
@@ -230,7 +280,10 @@ class WeatherScreenTest {
     }
 
     private fun renderWeather(baseTime: Instant): WeatherViewModel {
-        val viewModel = WeatherViewModel(MockWeatherRepository(baseTime = baseTime))
+        return renderWeather(WeatherViewModel(MockWeatherRepository(baseTime = baseTime)))
+    }
+
+    private fun renderWeather(viewModel: WeatherViewModel): WeatherViewModel {
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {

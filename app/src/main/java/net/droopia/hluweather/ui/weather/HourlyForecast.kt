@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -75,22 +75,31 @@ fun HourlyForecast(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
-        items(
+        itemsIndexed(
             items = tableData.items,
-            key = { it.key }
-        ) { item ->
+            key = { _, item -> item.key }
+        ) { itemIndex, item ->
             when (item) {
                 is HourlyTableBoundary -> {
                     HourlyDateBoundary(
                         item = item,
-                        selectedDayIndex = selectedDayIndex,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
                 is HourlyTableHour -> {
                     ForecastRow(
                         weather = item.hour,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .then(
+                                if (tableData.firstHourIndexForDay(item.dayIndex) == itemIndex &&
+                                    selectedDayIndex == item.dayIndex
+                                ) {
+                                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                 }
             }
@@ -169,30 +178,17 @@ private fun DayChip(
 @Composable
 internal fun HourlyDateBoundary(
     item: HourlyTableBoundary,
-    selectedDayIndex: Int? = null,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = Modifier
+    Text(
+        text = item.date.dayText(),
+        modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (selectedDayIndex == item.dayIndex) {
-                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
-                } else {
-                    Modifier
-                }
-            )
-    ) {
-        Text(
-            text = item.date.dayText(),
-            modifier = modifier
-                .fillMaxWidth()
-                .testTag("hourly_day_boundary_${item.dayIndex}")
-                .padding(top = 16.dp, bottom = 8.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
+            .testTag("hourly_day_boundary_${item.dayIndex}")
+            .padding(top = 16.dp, bottom = 8.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @Composable
