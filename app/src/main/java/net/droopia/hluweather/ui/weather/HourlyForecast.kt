@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -34,13 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
-import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.HourForecast
+import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureText
-import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.ui.components.HluWeatherIcon
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
@@ -83,6 +83,7 @@ fun HourlyForecast(
                 is HourlyTableBoundary -> {
                     HourlyDateBoundary(
                         item = item,
+                        selectedDayIndex = selectedDayIndex,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
@@ -95,11 +96,6 @@ fun HourlyForecast(
             }
         }
     }
-}
-
-internal fun WeatherForecast.hoursForDay(selectedDayIndex: Int): List<HourForecast> {
-    val selectedDate = daily[selectedDayIndex].date
-    return hourly.filter { it.time.toAppLocalDate() == selectedDate }
 }
 
 @Composable
@@ -171,19 +167,32 @@ private fun DayChip(
 }
 
 @Composable
-private fun HourlyDateBoundary(
+internal fun HourlyDateBoundary(
     item: HourlyTableBoundary,
+    selectedDayIndex: Int? = null,
     modifier: Modifier = Modifier
 ) {
-    Text(
-        text = item.date.dayText(),
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
-            .testTag("hourly_day_boundary_${item.dayIndex}")
-            .padding(top = 16.dp, bottom = 8.dp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold
-    )
+            .then(
+                if (selectedDayIndex == item.dayIndex) {
+                    Modifier.testTag("hourly_selected_day_${item.dayIndex}")
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        Text(
+            text = item.date.dayText(),
+            modifier = modifier
+                .fillMaxWidth()
+                .testTag("hourly_day_boundary_${item.dayIndex}")
+                .padding(top = 16.dp, bottom = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
 }
 
 @Composable

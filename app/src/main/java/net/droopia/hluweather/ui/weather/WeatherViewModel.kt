@@ -52,10 +52,11 @@ class WeatherViewModel(
     }
 
     fun onDaySelected(index: Int) {
+        val maxDayIndex = state.value.forecast?.daily?.lastIndex ?: 0
         _state.update {
             it.copy(
                 forecastMode = ForecastMode.HOURLY,
-                selectedDayIndex = index.coerceIn(0, 6)
+                selectedDayIndex = index.coerceIn(0, maxDayIndex)
             )
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
+import org.junit.Assert.assertEquals
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,19 +57,40 @@ class WeatherScreenTest {
 
     @Test
     fun renders_hourly_content_by_default() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
-
-        composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
-                WeatherScreen(
-                    viewModel = viewModel,
-                    onSettingsClick = {}
-                )
-            }
-        }
+        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
 
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
+    }
+
+    @Test
+    fun hourly_screen_renders_rows_from_the_next_day_without_switching_tables() {
+        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(28)
+
+        composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
+        composeRule.onNodeWithText("00h").assertIsDisplayed()
+    }
+
+    @Test
+    fun selecting_a_day_chip_jumps_to_that_day() {
+        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+
+        composeRule.onNodeWithTag("hourly_day_chip_1").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_selected_day_1").assertIsDisplayed()
+    }
+
+    @Test
+    fun manually_scrolling_to_a_day_updates_the_selected_day() {
+        val viewModel = renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(28)
+        composeRule.waitForIdle()
+
+        assertEquals(1, viewModel.state.value.selectedDayIndex)
     }
 
     @Test
@@ -205,5 +227,20 @@ class WeatherScreenTest {
                     node.boundsInRoot.top >= rootBounds.bottom
             }
         )
+    }
+
+    private fun renderWeather(baseTime: Instant): WeatherViewModel {
+        val viewModel = WeatherViewModel(MockWeatherRepository(baseTime = baseTime))
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onSettingsClick = {}
+                )
+            }
+        }
+
+        return viewModel
     }
 }

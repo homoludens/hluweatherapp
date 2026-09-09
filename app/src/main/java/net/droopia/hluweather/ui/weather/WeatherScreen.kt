@@ -18,15 +18,22 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -134,11 +141,47 @@ private fun HourlyWeatherContent(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val isCollapsed by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
-    val dayHours = remember(forecast, selectedDayIndex) {
-        forecast.hoursForDay(selectedDayIndex)
+    val tableData = remember(forecast) {
+        forecast.toHourlyTableData()
+    }
+    val tableItemStartIndex = 3
+    val firstListItemIndexByDay = remember(tableData) {
+        tableData.days.associate { day ->
+            day.dayIndex to tableItemStartIndex + day.firstItemIndex
+        }
+    }
+
+    fun visibleDayIndex(): Int? = listState.layoutInfo.visibleItemsInfo
+        .asSequence()
+        .map { it.index - tableItemStartIndex }
+        .filter { it in tableData.items.indices }
+        .map { tableData.items[it].dayIndex }
+        .firstOrNull()
+
+    LaunchedEffect(tableData) {
+        val firstVisibleDay = snapshotFlow { visibleDayIndex() }
+            .filterNotNull()
+            .first()
+        firstListItemIndexByDay[selectedDayIndex]?.let { target ->
+            if (firstVisibleDay != selectedDayIndex) {
+                listState.animateScrollToItem(target)
+            }
+        }
+
+        var previousDayIndex = firstVisibleDay
+        snapshotFlow { visibleDayIndex() }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { dayIndex ->
+                if (dayIndex != previousDayIndex) {
+                    previousDayIndex = dayIndex
+                    onDaySelected(dayIndex)
+                }
+            }
     }
 
     Box(modifier = modifier) {
@@ -163,6 +206,12 @@ private fun HourlyWeatherContent(
                 )
             }
 
+            stickyHeader(key = "hourly_header") {
+                ForecastColumnHeader(
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
             stickyHeader(key = "hourly_days") {
                 Box(
                     modifier = Modifier
@@ -173,22 +222,33 @@ private fun HourlyWeatherContent(
                     HourlyDaySelector(
                         forecast = forecast,
                         selectedDayIndex = selectedDayIndex,
-                        onDaySelected = onDaySelected
+                        onDaySelected = { dayIndex ->
+                            onDaySelected(dayIndex)
+                            scope.launch {
+                                firstListItemIndexByDay[dayIndex]?.let { target ->
+                                    listState.animateScrollToItem(target)
+                                }
+                            }
+                        }
                     )
                 }
             }
 
-            item(key = "hourly_header") {
-                ForecastColumnHeader(
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-
-            items(dayHours) { hour ->
-                ForecastRow(
-                    weather = hour,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+            items(
+                items = tableData.items,
+                key = { it.key }
+            ) { item ->
+                when (item) {
+                    is HourlyTableBoundary -> HourlyDateBoundary(
+                        item = item,
+                        selectedDayIndex = selectedDayIndex,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    is HourlyTableHour -> ForecastRow(
+                        weather = item.hour,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
         }
 
