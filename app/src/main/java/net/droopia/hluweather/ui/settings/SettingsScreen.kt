@@ -13,11 +13,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.model.WeatherProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    state: SettingsUiState,
     onBackClick: () -> Unit,
+    onProviderChange: (WeatherProvider) -> Unit,
+    onTrackMeChange: (Boolean) -> Unit,
+    onLocationSelect: (WeatherLocation) -> Unit,
+    onThemeChange: (ThemeMode) -> Unit,
+    onTemperatureUnitChange: (TemperatureUnit) -> Unit,
+    onWindUnitChange: (WindUnit) -> Unit,
+    onDistanceUnitChange: (DistanceUnit) -> Unit,
+    onPrecipitationUnitChange: (PrecipitationUnit) -> Unit,
+    onWeatherAlertsChange: (Boolean) -> Unit,
+    onDailySummaryChange: (Boolean) -> Unit,
+    onTripAlertsChange: (Boolean) -> Unit,
+    onClearCacheClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
