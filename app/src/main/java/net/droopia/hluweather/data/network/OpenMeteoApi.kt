@@ -4,8 +4,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import io.ktor.client.request.url
-import io.ktor.http.appendPathSegments
 import java.io.IOException
 import net.droopia.hluweather.data.model.WeatherLocation
 
@@ -21,20 +19,17 @@ class KtorOpenMeteoApi(
 ) : OpenMeteoApi {
 
     override suspend fun forecast(location: WeatherLocation): OpenMeteoResponse {
-        val response = client.get {
-            url(baseUrl) {
-                appendPathSegments("v1", "forecast")
-                parameter("latitude", location.latitude)
-                parameter("longitude", location.longitude)
-                parameter("timezone", "auto")
-                parameter("forecast_days", 7)
-                parameter("current", CURRENT_VARIABLES)
-                parameter("hourly", HOURLY_VARIABLES)
-                parameter("daily", DAILY_VARIABLES)
-                parameter("temperature_unit", "celsius")
-                parameter("wind_speed_unit", "kmh")
-                parameter("precipitation_unit", "mm")
-            }
+        val response = client.get("$baseUrl/v1/forecast") {
+            parameter("latitude", location.latitude)
+            parameter("longitude", location.longitude)
+            parameter("timezone", "auto")
+            parameter("forecast_days", 7)
+            parameter("current", CURRENT_VARIABLES)
+            parameter("hourly", HOURLY_VARIABLES)
+            parameter("daily", DAILY_VARIABLES)
+            parameter("temperature_unit", "celsius")
+            parameter("wind_speed_unit", "kmh")
+            parameter("precipitation_unit", "mm")
         }
 
         if (response.status.value !in 200..299) {

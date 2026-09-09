@@ -1,5 +1,6 @@
 package net.droopia.hluweather.ui.weather
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -84,6 +85,7 @@ class WeatherViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
+                Log.e("WeatherViewModel", "Weather request failed", error)
                 _state.update {
                     it.copy(
                         isLoading = false,

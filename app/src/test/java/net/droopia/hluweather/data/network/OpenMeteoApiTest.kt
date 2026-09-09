@@ -42,6 +42,7 @@ class OpenMeteoApiTest {
 
         val request = requireNotNull(capturedRequest)
         assertEquals(HttpMethod.Get, request.method)
+        assertEquals("api.open-meteo.test", request.url.host)
         assertEquals("/v1/forecast", request.url.encodedPath)
         assertEquals("44.22", request.url.parameters["latitude"])
         assertEquals("21.2", request.url.parameters["longitude"])
