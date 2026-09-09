@@ -6,6 +6,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -26,13 +28,19 @@ import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class WeatherViewModelTest {
 
     @Before
@@ -160,6 +168,99 @@ class WeatherViewModelTest {
         assertEquals(secondLocation, viewModel.state.value.forecast?.location)
     }
 
+    @Test
+    fun obsolete_same_location_provider_result_cannot_update_state() = runTest {
+        val oldForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val firstRequest = PendingRequest(
+            onCancellation = Result.success(oldForecast)
+        )
+        val secondRequest = PendingRequest()
+        val repository = CancellationAwareWeatherRepository(firstRequest, secondRequest)
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            settings,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        val observed = mutableListOf<WeatherUiState>()
+        val observer = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.state.collect(observed::add) }
+        advanceUntilIdle()
+        observed.clear()
+
+        settings.emit(provider = WeatherProvider.MET_NO)
+        advanceUntilIdle()
+
+        assertFalse(observed.any { it.forecast == oldForecast })
+        secondRequest.result.complete(newForecast)
+        advanceUntilIdle()
+        observer.cancel()
+        assertEquals(newForecast, viewModel.state.value.forecast)
+    }
+
+    @Test
+    fun obsolete_refresh_result_cannot_update_state() = runTest {
+        val oldForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val firstRequest = PendingRequest(
+            onCancellation = Result.success(oldForecast)
+        )
+        val secondRequest = PendingRequest()
+        val repository = CancellationAwareWeatherRepository(firstRequest, secondRequest)
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        val observed = mutableListOf<WeatherUiState>()
+        val observer = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.state.collect(observed::add)
+        }
+        advanceUntilIdle()
+        observed.clear()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertFalse(observed.any { it.forecast == oldForecast })
+        secondRequest.result.complete(newForecast)
+        advanceUntilIdle()
+        observer.cancel()
+        assertEquals(newForecast, viewModel.state.value.forecast)
+    }
+
+    @Test
+    fun obsolete_same_location_failure_cannot_update_state() = runTest {
+        val secondRequest = PendingRequest()
+        val repository = CancellationAwareWeatherRepository(
+            PendingRequest(
+                onCancellation = Result.failure(IllegalStateException("stale failure"))
+            ),
+            secondRequest
+        )
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            settings,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        val observed = mutableListOf<WeatherUiState>()
+        val observer = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.state.collect(observed::add)
+        }
+        advanceUntilIdle()
+        observed.clear()
+
+        settings.emit(provider = WeatherProvider.MET_NO)
+        advanceUntilIdle()
+
+        assertFalse(observed.any { it.error == "stale failure" })
+        secondRequest.result.complete(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L)))
+        advanceUntilIdle()
+        observer.cancel()
+        assertNull(viewModel.state.value.error)
+    }
+
     private class RecordingWeatherRepository : WeatherRepository {
         val requests = mutableListOf<Request>()
 
@@ -181,6 +282,31 @@ class WeatherViewModelTest {
         ): WeatherForecast {
             return responses.first { it.first == location }.second.await()
         }
+    }
+
+    private class CancellationAwareWeatherRepository(
+        private vararg val requests: PendingRequest
+    ) : WeatherRepository {
+        private var requestIndex = 0
+
+        override suspend fun getForecast(
+            provider: WeatherProvider,
+            location: WeatherLocation
+        ): WeatherForecast {
+            val request = requests[requestIndex++]
+            return try {
+                request.result.await()
+            } catch (error: CancellationException) {
+                request.onCancellation?.let { outcome -> return outcome.getOrThrow() }
+                throw error
+            }
+        }
+    }
+
+    private class PendingRequest(
+        val onCancellation: Result<WeatherForecast>? = null
+    ) {
+        val result = CompletableDeferred<WeatherForecast>()
     }
 
     private data class Request(

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +52,7 @@ class WeatherViewModel(
 
     private val refreshes = MutableStateFlow(0)
     private val _state = MutableStateFlow(WeatherUiState(isLoading = true))
+    private var requestGeneration = 0L
 
     val state = _state.asStateFlow()
 
@@ -62,8 +64,14 @@ class WeatherViewModel(
                 refreshes
             ) { settings, activeLocation, _ ->
                 settings.provider to (activeLocation as? ActiveLocation.Saved)?.location
-            }.collectLatest { (provider, activeLocation) ->
-                load(provider, activeLocation)
+            }.map { (provider, activeLocation) ->
+                WeatherLoadRequest(
+                    generation = ++requestGeneration,
+                    provider = provider,
+                    location = activeLocation
+                )
+            }.collectLatest { request ->
+                load(request)
             }
         }
     }
@@ -86,11 +94,10 @@ class WeatherViewModel(
         }
     }
 
-    private suspend fun load(
-        provider: WeatherProvider,
-        currentLocation: WeatherLocation?
-    ) {
+    private suspend fun load(request: WeatherLoadRequest) {
+        val currentLocation = request.location
         if (currentLocation == null) {
+            if (requestGeneration != request.generation) return
             _state.update {
                 it.copy(
                     activeLocation = null,
@@ -113,8 +120,10 @@ class WeatherViewModel(
             )
         }
         try {
-            val forecast = repository.getForecast(provider, currentLocation)
-            if (_state.value.activeLocation == currentLocation) {
+            val forecast = repository.getForecast(request.provider, currentLocation)
+            if (requestGeneration == request.generation &&
+                _state.value.activeLocation == currentLocation
+            ) {
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -126,6 +135,7 @@ class WeatherViewModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
+            if (requestGeneration != request.generation) return
             Log.e("WeatherViewModel", "Weather request failed", error)
             _state.update {
                 it.copy(
@@ -151,6 +161,12 @@ class WeatherViewModel(
         }
     }
 }
+
+private data class WeatherLoadRequest(
+    val generation: Long,
+    val provider: WeatherProvider,
+    val location: WeatherLocation?
+)
 
 private object FixedSettingsRepository : SettingsRepository {
     override val settings = flowOf(PersistedSettings())
