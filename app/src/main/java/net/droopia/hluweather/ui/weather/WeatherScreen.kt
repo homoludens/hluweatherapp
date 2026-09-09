@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.model.ForecastMode
@@ -198,9 +199,12 @@ private fun HourlyWeatherContent(
     }
 
     LaunchedEffect(tableData) {
+        val firstVisibleDay = snapshotFlow { visibleDayIndex() }
+            .filterNotNull()
+            .first()
         selectedTableDay?.let { day ->
             firstListItemIndexByDay[day.dayIndex]?.let { target ->
-                if (visibleDayIndex() != day.dayIndex) {
+                if (firstVisibleDay != day.dayIndex) {
                     listState.animateScrollToItem(target)
                 }
             }
