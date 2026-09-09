@@ -6,6 +6,7 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+.worktrees/
 *.apk
 *.aab
 *.apk.idsig
