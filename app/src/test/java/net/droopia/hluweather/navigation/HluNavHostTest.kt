@@ -46,9 +46,10 @@ class HluNavHostTest {
 
     @Test
     fun navigates_from_weather_to_settings_and_back() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluNavHost(weatherViewModel = WeatherViewModel(MockWeatherRepository()))
+                HluNavHost(weatherViewModel = weatherViewModel)
             }
         }
 

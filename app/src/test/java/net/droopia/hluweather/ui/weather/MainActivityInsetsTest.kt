@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.weather
 
 import android.graphics.Insets
 import android.view.WindowInsets
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -10,7 +11,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import kotlin.math.roundToInt
-import net.droopia.hluweather.MainActivity
+import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.ui.app.HluWeatherApp
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -25,10 +28,16 @@ import org.robolectric.annotation.GraphicsMode
 class MainActivityInsetsTest {
 
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
     fun weather_content_respects_dispatched_system_bar_insets() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        composeRule.activity.enableEdgeToEdge()
+        composeRule.setContent {
+            HluWeatherApp(weatherViewModel)
+        }
+
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("weather_scroll").fetchSemanticsNodes().isNotEmpty()
         }

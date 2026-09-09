@@ -50,9 +50,10 @@ class HluWeatherAppTest {
 
     @Test
     fun displays_app_title() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
+                HluWeatherApp(weatherViewModel)
             }
         }
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
@@ -60,8 +61,9 @@ class HluWeatherAppTest {
 
     @Test
     fun selecting_theme_updates_app_state() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
         composeRule.setContent {
-            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
+            HluWeatherApp(weatherViewModel)
         }
 
         composeRule.onNodeWithContentDescription("Settings").performClick()
@@ -73,8 +75,9 @@ class HluWeatherAppTest {
 
     @Test
     fun app_root_uses_the_factory_backed_settings_view_model() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
         composeRule.setContent {
-            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
+            HluWeatherApp(weatherViewModel)
         }
 
         composeRule.waitUntil(5_000) {
@@ -104,7 +107,7 @@ class HluWeatherAppTest {
         composeRule.activity.viewModelStore.clear()
         composeRule.activity.recreate()
         composeRule.setContent {
-            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
+            HluWeatherApp(weatherViewModel)
         }
 
         composeRule.waitUntil(5_000) {
