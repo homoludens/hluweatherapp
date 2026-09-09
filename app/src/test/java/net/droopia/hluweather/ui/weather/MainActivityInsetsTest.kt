@@ -30,7 +30,7 @@ class MainActivityInsetsTest {
     @Test
     fun weather_content_respects_dispatched_system_bar_insets() {
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodesWithTag("hourly_table").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("weather_scroll").fetchSemanticsNodes().isNotEmpty()
         }
 
         val density = composeRule.activity.resources.displayMetrics.density
@@ -60,7 +60,7 @@ class MainActivityInsetsTest {
             "Settings control must be below the status bar",
             settingsTop >= statusBarInset
         )
-        assertModeAboveNavigationBar("hourly_table", rootBottom, navigationBarInset)
+        assertModeAboveNavigationBar("weather_scroll", rootBottom, navigationBarInset)
 
         composeRule.onNodeWithText("Daily").performClick()
         assertModeAboveNavigationBar("daily_list", rootBottom, navigationBarInset)

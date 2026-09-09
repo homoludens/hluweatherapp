@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +44,7 @@ fun WeatherHero(
     selected: ForecastMode,
     onSelected: (ForecastMode) -> Unit,
     onSettingsClick: () -> Unit,
+    compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -49,7 +52,7 @@ fun WeatherHero(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .height(if (compact) 96.dp else 240.dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -59,14 +62,16 @@ fun WeatherHero(
                 )
             )
     ) {
-        Box(
-            modifier = Modifier
-                .size(82.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = (-65).dp, y = 65.dp)
-                .clip(CircleShape)
-                .background(colors.moon)
-        )
+        if (!compact) {
+            Box(
+                modifier = Modifier
+                    .size(82.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-65).dp, y = 65.dp)
+                    .clip(CircleShape)
+                    .background(colors.moon)
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -90,42 +95,45 @@ fun WeatherHero(
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
-                    top = 24.dp
+                    top = if (compact) 0.dp else 16.dp
                 )
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f)
+            if (!compact) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "HluWeatherApp",
-                        color = colors.heroText,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Simple weather. Clear view.",
-                        color = colors.heroSecondaryText,
-                        fontSize = 17.sp
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "HluWeatherApp",
+                            color = colors.heroText,
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Simple weather. Clear view.",
+                            color = colors.heroSecondaryText,
+                            fontSize = 17.sp
+                        )
+                    }
+
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = colors.heroText
+                        )
+                    }
                 }
 
-                IconButton(onClick = onSettingsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = colors.heroText
-                    )
-                }
+                Spacer(Modifier.height(16.dp))
             }
-
-            Spacer(Modifier.height(28.dp))
 
             NavigationTabs(
                 selected = selected,
-                onSelected = onSelected
+                onSelected = onSelected,
+                compact = compact
             )
         }
     }
@@ -134,7 +142,8 @@ fun WeatherHero(
 @Composable
 private fun NavigationTabs(
     selected: ForecastMode,
-    onSelected: (ForecastMode) -> Unit
+    onSelected: (ForecastMode) -> Unit,
+    compact: Boolean
 ) {
     val items = listOf(
         Triple(ForecastMode.HOURLY, "Hourly", Icons.Outlined.Schedule),
@@ -151,6 +160,7 @@ private fun NavigationTabs(
                 text = title,
                 icon = icon,
                 selected = selected == mode,
+                compact = compact,
                 onClick = { onSelected(mode) }
             )
         }
@@ -162,41 +172,48 @@ private fun WeatherNavButton(
     text: String,
     icon: ImageVector,
     selected: Boolean,
+    compact: Boolean,
     onClick: () -> Unit
 ) {
     val colors = LocalHluColors.current
 
     Surface(
-        onClick = onClick,
+        modifier = Modifier.selectable(
+            selected = selected,
+            role = Role.Tab,
+            onClick = onClick
+        ),
         shape = RoundedCornerShape(28.dp),
         color = if (selected) colors.navSelected else Color.Transparent
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = 20.dp,
-                vertical = 14.dp
+                horizontal = if (compact) 16.dp else 20.dp,
+                vertical = if (compact) 8.dp else 10.dp
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = if (compact) text else null,
                 tint = if (selected) {
                     colors.navSelectedText
                 } else {
                     colors.heroSecondaryText
                 }
             )
-            Text(
-                text = text,
-                fontSize = 18.sp,
-                color = if (selected) {
-                    colors.navSelectedText
-                } else {
-                    colors.heroSecondaryText
-                }
-            )
+            if (!compact) {
+                Text(
+                    text = text,
+                    fontSize = 18.sp,
+                    color = if (selected) {
+                        colors.navSelectedText
+                    } else {
+                        colors.heroSecondaryText
+                    }
+                )
+            }
         }
     }
 }
