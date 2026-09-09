@@ -8,9 +8,10 @@ import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.navigation.HluNavHost
 import net.droopia.hluweather.ui.settings.SettingsViewModel
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+import net.droopia.hluweather.ui.weather.WeatherViewModel
 
 @Composable
-fun HluWeatherApp() {
+fun HluWeatherApp(weatherViewModel: WeatherViewModel? = null) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
     val state = settingsViewModel.state.collectAsStateWithLifecycle().value
     val systemDark = isSystemInDarkTheme()
@@ -21,6 +22,6 @@ fun HluWeatherApp() {
     }
 
     HluWeatherTheme(darkTheme = darkTheme) {
-        HluNavHost(settingsViewModel)
+        HluNavHost(settingsViewModel, weatherViewModel)
     }
 }

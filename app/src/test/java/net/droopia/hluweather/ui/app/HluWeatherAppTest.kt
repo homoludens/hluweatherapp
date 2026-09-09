@@ -17,7 +17,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+import net.droopia.hluweather.ui.weather.WeatherViewModel
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -50,7 +52,7 @@ class HluWeatherAppTest {
     fun displays_app_title() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluWeatherApp()
+                HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
             }
         }
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
@@ -59,7 +61,7 @@ class HluWeatherAppTest {
     @Test
     fun selecting_theme_updates_app_state() {
         composeRule.setContent {
-            HluWeatherApp()
+            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
         }
 
         composeRule.onNodeWithContentDescription("Settings").performClick()
@@ -72,7 +74,7 @@ class HluWeatherAppTest {
     @Test
     fun app_root_uses_the_factory_backed_settings_view_model() {
         composeRule.setContent {
-            HluWeatherApp()
+            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
         }
 
         composeRule.waitUntil(5_000) {
@@ -102,7 +104,7 @@ class HluWeatherAppTest {
         composeRule.activity.viewModelStore.clear()
         composeRule.activity.recreate()
         composeRule.setContent {
-            HluWeatherApp()
+            HluWeatherApp(WeatherViewModel(MockWeatherRepository()))
         }
 
         composeRule.waitUntil(5_000) {

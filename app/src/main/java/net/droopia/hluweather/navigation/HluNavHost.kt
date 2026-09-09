@@ -9,10 +9,12 @@ import androidx.navigation.compose.rememberNavController
 import net.droopia.hluweather.ui.settings.SettingsScreen
 import net.droopia.hluweather.ui.settings.SettingsViewModel
 import net.droopia.hluweather.ui.weather.WeatherScreen
+import net.droopia.hluweather.ui.weather.WeatherViewModel
 
 @Composable
 fun HluNavHost(
-    settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
+    settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
+    weatherViewModel: WeatherViewModel? = null
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
@@ -23,6 +25,8 @@ fun HluNavHost(
     ) {
         composable("weather") {
             WeatherScreen(
+                viewModel = weatherViewModel
+                    ?: viewModel(factory = WeatherViewModel.Factory),
                 onSettingsClick = {
                     navController.navigate("settings")
                 }

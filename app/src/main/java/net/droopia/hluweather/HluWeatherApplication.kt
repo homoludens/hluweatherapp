@@ -1,0 +1,31 @@
+package net.droopia.hluweather
+
+import android.app.Application
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+import net.droopia.hluweather.data.network.KtorOpenMeteoApi
+import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
+import net.droopia.hluweather.data.repository.WeatherRepository
+
+class HluWeatherApplication : Application() {
+
+    private val httpClient: HttpClient by lazy {
+        HttpClient(OkHttp) {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true })
+            }
+            expectSuccess = false
+            install(HttpTimeout) {
+                requestTimeoutMillis = 15_000
+            }
+        }
+    }
+
+    val weatherRepository: WeatherRepository by lazy {
+        OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient))
+    }
+}

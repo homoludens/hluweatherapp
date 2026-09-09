@@ -9,10 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 
@@ -95,7 +95,10 @@ class WeatherViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                WeatherViewModel(MockWeatherRepository())
+                val application = this[
+                    ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY
+                ] as HluWeatherApplication
+                WeatherViewModel(application.weatherRepository)
             }
         }
     }
