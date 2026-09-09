@@ -2,13 +2,18 @@ package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.swipe
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -137,11 +142,45 @@ class WeatherScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithContentDescription("Hourly").assertIsDisplayed()
+        assertTrue(
+            composeRule.onNodeWithContentDescription("Hourly")
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.Selected]
+        )
         composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
         assertTextOutsideViewport("HluWeatherApp")
         assertTextOutsideViewport("Hourly")
         assertTextOutsideViewport("Svilajnac")
+    }
+
+    @Test
+    fun tiny_hourly_scroll_does_not_show_compact_header_early() {
+        val viewModel = WeatherViewModel(MockWeatherRepository())
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onSettingsClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("weather_scroll").performTouchInput {
+            swipe(
+                start = Offset(200f, 300f),
+                end = Offset(200f, 299f),
+                durationMillis = 1
+            )
+        }
+        composeRule.waitForIdle()
+
+        assertTrue(
+            composeRule.onAllNodesWithContentDescription("Hourly")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
     }
 
     private fun assertTextOutsideViewport(text: String) {

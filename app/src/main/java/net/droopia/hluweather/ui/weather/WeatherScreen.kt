@@ -135,7 +135,7 @@ private fun HourlyWeatherContent(
 ) {
     val listState = rememberLazyListState()
     val isCollapsed by remember {
-        derivedStateOf { listState.canScrollBackward }
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     val dayHours = remember(forecast, selectedDayIndex) {
         forecast.hoursForDay(selectedDayIndex)
