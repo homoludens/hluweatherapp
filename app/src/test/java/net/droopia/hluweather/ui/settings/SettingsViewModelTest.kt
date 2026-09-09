@@ -219,6 +219,19 @@ class SettingsViewModelTest {
         assertEquals(selectedLocation.id, viewModel.state.value.selectedLocationId)
     }
 
+    @Test
+    fun returning_from_track_me_to_the_previous_saved_location_disables_track_me() {
+        val locationRepository = InMemoryLocationRepository()
+        val viewModel = SettingsViewModel(InMemorySettingsRepository(), locationRepository)
+        val previousLocation = locationRepository.locations.value.first()
+
+        viewModel.setTrackMe(true)
+        locationRepository.activeLocation.value = ActiveLocation.Saved(previousLocation)
+
+        assertEquals(previousLocation.id, viewModel.state.value.selectedLocationId)
+        assertFalse(viewModel.state.value.trackMeEnabled)
+    }
+
     private class InMemorySettingsRepository(
         initial: PersistedSettings = PersistedSettings()
     ) : SettingsRepository {

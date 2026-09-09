@@ -26,6 +26,7 @@ class SettingsViewModel(
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
     private var hasUserMutation = false
+    private var pendingTrackMe: Boolean? = null
 
     init {
         viewModelScope.launch {
@@ -39,6 +40,10 @@ class SettingsViewModel(
                 }.collect { (persisted, locations, activeLocation) ->
                     _state.value = if (hasUserMutation) {
                         val activeSavedId = (activeLocation as? ActiveLocation.Saved)?.location?.id
+                        val requestedTrackMe = pendingTrackMe
+                        if (activeSavedId == null) {
+                            pendingTrackMe = null
+                        }
                         _state.value.copy(
                             locations = locations,
                             selectedLocationId = activeSavedId
@@ -46,13 +51,10 @@ class SettingsViewModel(
                                     locations.any { it.id == id }
                                 }
                                 ?: locations.firstOrNull()?.id,
-                            trackMeEnabled = if (
-                                activeSavedId != null &&
-                                _state.value.selectedLocationId != activeSavedId
-                            ) {
-                                false
+                            trackMeEnabled = if (activeSavedId == null) {
+                                requestedTrackMe ?: _state.value.trackMeEnabled
                             } else {
-                                _state.value.trackMeEnabled
+                                false
                             }
                         )
                     } else {
@@ -68,6 +70,7 @@ class SettingsViewModel(
     }
 
     fun setTrackMe(enabled: Boolean) {
+        pendingTrackMe = enabled
         updateSettings { it.copy(trackMeEnabled = enabled) }
         viewModelScope.launch {
             runCatching { locationRepository.setTrackMe(enabled) }
@@ -160,7 +163,7 @@ private fun PersistedSettings.toUiState(
         selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id
             ?: selectedLocationId?.takeIf { id -> locations.any { location -> location.id == id } }
             ?: locations.firstOrNull()?.id,
-        trackMeEnabled = trackMeEnabled,
+        trackMeEnabled = if (activeLocation is ActiveLocation.Saved) false else trackMeEnabled,
         themeMode = themeMode,
         temperatureUnit = temperatureUnit,
         windUnit = windUnit,
