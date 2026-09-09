@@ -145,8 +145,29 @@ class OpenMeteoWeatherRepositoryTest {
     }
 
     @Test
+    fun getForecast_rejects_an_empty_hourly_payload() = runTest {
+        assertRepositoryFailure(validResponse.copy(hourly = HourlyDto()))
+    }
+
+    @Test
     fun getForecast_rejects_mismatched_daily_array_lengths() = runTest {
         val daily = validResponse.daily!!.copy(sunset = emptyList())
+        assertRepositoryFailure(validResponse.copy(daily = daily))
+    }
+
+    @Test
+    fun getForecast_rejects_a_null_later_daily_moon_phase() = runTest {
+        val daily = validResponse.daily!!.copy(
+            time = listOf("2026-09-09", "2026-09-10"),
+            weatherCode = listOf(0, 0),
+            temperatureMax = listOf(30.0, 31.0),
+            temperatureMin = listOf(16.0, 17.0),
+            precipitation = listOf(0.0, 0.0),
+            sunrise = listOf("2026-09-09T06:10", "2026-09-10T06:08"),
+            sunset = listOf("2026-09-09T19:00", "2026-09-10T19:01"),
+            moonPhase = listOf(0.5, null)
+        )
+
         assertRepositoryFailure(validResponse.copy(daily = daily))
     }
 

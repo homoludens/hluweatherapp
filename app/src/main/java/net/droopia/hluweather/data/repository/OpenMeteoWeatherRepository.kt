@@ -81,6 +81,9 @@ private fun net.droopia.hluweather.data.network.CurrentDto.toCurrentWeather(
 private fun net.droopia.hluweather.data.network.HourlyDto.toHourlyForecasts(
     timezone: TimeZone
 ): List<HourForecast> {
+    if (time.isEmpty()) {
+        throw WeatherRepositoryException("Missing hourly data")
+    }
     validateLengths(
         "hourly",
         time,
@@ -112,6 +115,9 @@ private fun net.droopia.hluweather.data.network.HourlyDto.toHourlyForecasts(
 private fun net.droopia.hluweather.data.network.DailyDto.toDailyForecasts(
     timezone: TimeZone
 ): List<DayForecast> {
+    moonPhase.forEachIndexed { index, value ->
+        value.required("daily.moon_phase[$index]")
+    }
     validateLengths(
         "daily",
         time,
