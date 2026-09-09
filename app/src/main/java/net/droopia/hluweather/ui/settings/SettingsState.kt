@@ -3,7 +3,6 @@ package net.droopia.hluweather.ui.settings
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
-import net.droopia.hluweather.data.repository.Svilajnac
 
 enum class TemperatureUnit {
     CELSIUS,
@@ -27,8 +26,8 @@ enum class PrecipitationUnit {
 
 data class SettingsUiState(
     val provider: WeatherProvider = WeatherProvider.OPEN_METEO,
-    val locations: List<WeatherLocation> = defaultSettingsLocations(),
-    val selectedLocationId: String? = "svilajnac",
+    val locations: List<WeatherLocation> = emptyList(),
+    val selectedLocationId: String? = null,
     val trackMeEnabled: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
@@ -38,20 +37,4 @@ data class SettingsUiState(
     val weatherAlerts: Boolean = true,
     val dailySummary: Boolean = false,
     val tripAlerts: Boolean = false
-)
-
-fun defaultSettingsLocations(): List<WeatherLocation> = listOf(
-    Svilajnac,
-    WeatherLocation(
-        id = "belgrade",
-        name = "Belgrade",
-        latitude = 44.8176,
-        longitude = 20.4633
-    ),
-    WeatherLocation(
-        id = "trieste",
-        name = "Trieste",
-        latitude = 45.6495,
-        longitude = 13.7768
-    )
 )

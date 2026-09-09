@@ -25,10 +25,13 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
 import net.droopia.hluweather.data.dayText
+import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -298,6 +301,45 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun clicking_current_location_opens_the_quick_switcher() {
+        val viewModel = WeatherViewModel(MockWeatherRepository())
+        renderWeather(viewModel)
+
+        composeRule.onNodeWithTag("current_location").performClick()
+
+        composeRule.onNodeWithText("Add location").assertIsDisplayed()
+        composeRule.onNodeWithText("Manage locations").assertIsDisplayed()
+    }
+
+    @Test
+    fun empty_saved_locations_show_setup_action() {
+        val viewModel = WeatherViewModel(
+            repository = MockWeatherRepository(),
+            settingsRepository = object : net.droopia.hluweather.ui.settings.SettingsRepository {
+                override val settings = MutableStateFlow(
+                    net.droopia.hluweather.ui.settings.PersistedSettings()
+                )
+
+                override suspend fun save(
+                    settings: net.droopia.hluweather.ui.settings.PersistedSettings
+                ) = Unit
+            },
+            locationRepository = EmptyLocationRepository()
+        )
+        var settingsClicked = false
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(viewModel = viewModel, onSettingsClick = { settingsClicked = true })
+            }
+        }
+
+        composeRule.onNodeWithText("Add your first location").assertIsDisplayed()
+        composeRule.onNodeWithText("Add location").performClick()
+
+        assertTrue(settingsClicked)
+    }
+
+    @Test
     fun scrolling_hourly_collapses_header_to_icons_and_days() {
         val viewModel = WeatherViewModel(
             MockWeatherRepository(baseTime = Instant.fromEpochSeconds(0L))
@@ -397,5 +439,20 @@ class WeatherScreenTest {
         }
 
         return viewModel
+    }
+
+    private class EmptyLocationRepository : LocationRepository {
+        override val locations = MutableStateFlow(emptyList<WeatherLocation>())
+        override val activeLocation = MutableStateFlow<ActiveLocation?>(null)
+
+        override suspend fun add(location: WeatherLocation) = Unit
+
+        override suspend fun update(location: WeatherLocation) = Unit
+
+        override suspend fun delete(id: String) = Unit
+
+        override suspend fun selectSaved(id: String) = Unit
+
+        override suspend fun setTrackMe(enabled: Boolean) = Unit
     }
 }

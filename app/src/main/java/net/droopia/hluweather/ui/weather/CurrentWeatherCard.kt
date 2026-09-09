@@ -1,5 +1,6 @@
 package net.droopia.hluweather.ui.weather
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneId
@@ -44,6 +46,7 @@ import net.droopia.hluweather.ui.theme.LocalHluColors
 fun CurrentWeatherCard(
     location: WeatherLocation,
     forecast: WeatherForecast,
+    onLocationClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
@@ -57,7 +60,13 @@ fun CurrentWeatherCard(
         Column(
             modifier = Modifier.padding(22.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onLocationClick)
+                    .testTag("current_location"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
                     contentDescription = null,

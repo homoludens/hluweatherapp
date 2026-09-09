@@ -6,9 +6,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.WeatherLocation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.After
@@ -34,7 +37,10 @@ class SettingsViewModelTest {
 
     @Test
     fun selecting_theme_updates_state() {
-        val viewModel = SettingsViewModel(InMemorySettingsRepository())
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(),
+            InMemoryLocationRepository()
+        )
 
         viewModel.setTheme(ThemeMode.DARK)
 
@@ -43,7 +49,10 @@ class SettingsViewModelTest {
 
     @Test
     fun selecting_location_disables_track_me_and_selects_location() {
-        val viewModel = SettingsViewModel(InMemorySettingsRepository())
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(),
+            InMemoryLocationRepository()
+        )
         val location = viewModel.state.value.locations[1]
         viewModel.setTrackMe(true)
 
@@ -55,7 +64,10 @@ class SettingsViewModelTest {
 
     @Test
     fun enabling_track_me_keeps_saved_location_but_marks_track_me_active() {
-        val viewModel = SettingsViewModel(InMemorySettingsRepository())
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(),
+            InMemoryLocationRepository()
+        )
 
         viewModel.setTrackMe(true)
 
@@ -65,7 +77,10 @@ class SettingsViewModelTest {
 
     @Test
     fun future_settings_actions_are_explicit_no_ops() {
-        val viewModel = SettingsViewModel(InMemorySettingsRepository())
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(),
+            InMemoryLocationRepository()
+        )
         val initialState = viewModel.state.value
 
         viewModel.onLocationMenuClick(initialState.locations.first())
@@ -87,7 +102,7 @@ class SettingsViewModelTest {
             PersistedSettings(provider = WeatherProvider.MET_NO, themeMode = ThemeMode.DARK)
         )
 
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         assertEquals(WeatherProvider.MET_NO, viewModel.state.value.provider)
         assertEquals(ThemeMode.DARK, viewModel.state.value.themeMode)
@@ -109,7 +124,7 @@ class SettingsViewModelTest {
             tripAlerts = true
         )
         val repository = InMemorySettingsRepository(initial)
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         viewModel.setDailySummary(true)
 
@@ -123,7 +138,7 @@ class SettingsViewModelTest {
             PersistedSettings(selectedLocationId = "missing-location")
         )
 
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         assertEquals("svilajnac", viewModel.state.value.selectedLocationId)
     }
@@ -136,7 +151,7 @@ class SettingsViewModelTest {
                 error("write failed")
             }
         }
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         viewModel.setTheme(ThemeMode.DARK)
 
@@ -153,7 +168,7 @@ class SettingsViewModelTest {
             override suspend fun save(settings: PersistedSettings) = Unit
         }
 
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository(emptyList()))
 
         assertEquals(SettingsUiState(), viewModel.state.value)
     }
@@ -161,12 +176,33 @@ class SettingsViewModelTest {
     @Test
     fun initial_hydration_does_not_overwrite_a_mutation_made_while_loading() {
         val repository = DeferredSettingsRepository()
-        val viewModel = SettingsViewModel(repository)
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         viewModel.setTheme(ThemeMode.LIGHT)
         repository.snapshot.complete(PersistedSettings(themeMode = ThemeMode.DARK))
 
         assertEquals(ThemeMode.LIGHT, viewModel.state.value.themeMode)
+    }
+
+    @Test
+    fun selecting_location_delegates_to_location_repository() {
+        val locationRepository = InMemoryLocationRepository()
+        val viewModel = SettingsViewModel(InMemorySettingsRepository(), locationRepository)
+        val location = viewModel.state.value.locations[1]
+
+        viewModel.selectLocation(location)
+
+        assertEquals(listOf(location.id), locationRepository.selectedIds)
+    }
+
+    @Test
+    fun track_me_changes_delegate_to_location_repository() {
+        val locationRepository = InMemoryLocationRepository()
+        val viewModel = SettingsViewModel(InMemorySettingsRepository(), locationRepository)
+
+        viewModel.setTrackMe(true)
+
+        assertEquals(listOf(true), locationRepository.trackMeValues)
     }
 
     private class InMemorySettingsRepository(
@@ -191,5 +227,38 @@ class SettingsViewModelTest {
         }
 
         override suspend fun save(settings: PersistedSettings) = Unit
+    }
+
+    private class InMemoryLocationRepository(
+        initial: List<WeatherLocation> = testLocations
+    ) : LocationRepository {
+        override val locations = MutableStateFlow(initial)
+        override val activeLocation = MutableStateFlow<ActiveLocation?>(
+            initial.firstOrNull()?.let(ActiveLocation::Saved)
+        )
+        val selectedIds = mutableListOf<String>()
+        val trackMeValues = mutableListOf<Boolean>()
+
+        override suspend fun add(location: WeatherLocation) = Unit
+
+        override suspend fun update(location: WeatherLocation) = Unit
+
+        override suspend fun delete(id: String) = Unit
+
+        override suspend fun selectSaved(id: String) {
+            selectedIds += id
+        }
+
+        override suspend fun setTrackMe(enabled: Boolean) {
+            trackMeValues += enabled
+        }
+    }
+
+    private companion object {
+        val testLocations = listOf(
+            WeatherLocation("svilajnac", "Svilajnac", 44.2380, 21.1970),
+            WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633),
+            WeatherLocation("trieste", "Trieste", 45.6495, 13.7768)
+        )
     }
 }

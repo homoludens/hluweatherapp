@@ -29,6 +29,7 @@ import net.droopia.hluweather.ui.settings.SettingsRepository
 
 data class WeatherUiState(
     val activeLocation: WeatherLocation? = null,
+    val locations: List<WeatherLocation> = emptyList(),
     val forecast: WeatherForecast? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -61,14 +62,14 @@ class WeatherViewModel(
             combine(
                 settingsRepository.settings,
                 locationRepository.activeLocation,
+                locationRepository.locations,
                 refreshes
-            ) { settings, activeLocation, _ ->
-                settings.provider to (activeLocation as? ActiveLocation.Saved)?.location
-            }.map { (provider, activeLocation) ->
+            ) { settings, activeLocation, locations, _ ->
                 WeatherLoadRequest(
                     generation = ++requestGeneration,
-                    provider = provider,
-                    location = activeLocation
+                    provider = settings.provider,
+                    location = (activeLocation as? ActiveLocation.Saved)?.location,
+                    locations = locations
                 )
             }.collectLatest { request ->
                 load(request)
@@ -78,6 +79,12 @@ class WeatherViewModel(
 
     fun refresh() {
         refreshes.update { it + 1 }
+    }
+
+    fun selectLocation(location: WeatherLocation) {
+        viewModelScope.launch {
+            locationRepository.selectSaved(location.id)
+        }
     }
 
     fun onForecastModeSelected(mode: ForecastMode) {
@@ -101,6 +108,7 @@ class WeatherViewModel(
             _state.update {
                 it.copy(
                     activeLocation = null,
+                    locations = request.locations,
                     forecast = null,
                     isLoading = false,
                     error = null,
@@ -114,6 +122,7 @@ class WeatherViewModel(
             it.copy(
                 isLoading = true,
                 activeLocation = currentLocation,
+                locations = request.locations,
                 forecast = null,
                 error = null,
                 selectedDayIndex = 0
@@ -165,7 +174,8 @@ class WeatherViewModel(
 private data class WeatherLoadRequest(
     val generation: Long,
     val provider: WeatherProvider,
-    val location: WeatherLocation?
+    val location: WeatherLocation?,
+    val locations: List<WeatherLocation>
 )
 
 private object FixedSettingsRepository : SettingsRepository {

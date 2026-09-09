@@ -29,7 +29,9 @@ fun HluNavHost(
                     ?: viewModel(factory = WeatherViewModel.Factory),
                 onSettingsClick = {
                     navController.navigate("settings")
-                }
+                },
+                onTrackMeClick = { settingsViewModel.setTrackMe(true) },
+                trackMeSelected = settingsState.trackMeEnabled
             )
         }
 

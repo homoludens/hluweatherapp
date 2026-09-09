@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,16 +54,19 @@ private val hourlyListPrefixKeys = listOf(
     HOURLY_HEADER_KEY
 )
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen(
     viewModel: WeatherViewModel = viewModel(factory = WeatherViewModel.Factory),
     onSettingsClick: () -> Unit = {},
+    onTrackMeClick: () -> Unit = {},
+    trackMeSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val forecast = state.forecast
     val location = state.activeLocation
+    var locationSwitcherVisible by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -89,54 +94,94 @@ fun WeatherScreen(
                             }
                         }
                     }
-                    else -> Unit
+                    else -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Add your first location",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text("Choose a saved place to see the weather.")
+                            Button(onClick = onSettingsClick) {
+                                Text("Add location")
+                            }
+                        }
+                    }
                 }
             }
-            return
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (state.forecastMode == ForecastMode.HOURLY) {
+                    HourlyWeatherContent(
+                        forecast = forecast,
+                        location = location,
+                        selectedDayIndex = state.selectedDayIndex,
+                        onDaySelected = viewModel::onDaySelected,
+                        onForecastModeSelected = viewModel::onForecastModeSelected,
+                        onSettingsClick = onSettingsClick,
+                        onLocationClick = { locationSwitcherVisible = true },
+                        modifier = Modifier
+                            .weight(1f)
+                    )
+                } else {
+                    WeatherHero(
+                        selected = state.forecastMode,
+                        onSelected = viewModel::onForecastModeSelected,
+                        onSettingsClick = onSettingsClick
+                    )
+
+                    CurrentWeatherCard(
+                        location = location,
+                        forecast = forecast,
+                        onLocationClick = { locationSwitcherVisible = true },
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .offset(y = (-8).dp)
+                    )
+
+                    when (state.forecastMode) {
+                        ForecastMode.DAILY -> {
+                            DailyForecastList(
+                                forecast = forecast,
+                                onDaySelected = viewModel::onDaySelected,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        ForecastMode.MAP -> {
+                            MapPlaceholder(modifier = Modifier.weight(1f))
+                        }
+                        ForecastMode.HOURLY -> Unit
+                    }
+                }
+            }
         }
 
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            if (state.forecastMode == ForecastMode.HOURLY) {
-                HourlyWeatherContent(
-                    forecast = forecast,
-                    location = location,
-                    selectedDayIndex = state.selectedDayIndex,
-                    onDaySelected = viewModel::onDaySelected,
-                    onForecastModeSelected = viewModel::onForecastModeSelected,
-                    onSettingsClick = onSettingsClick,
-                    modifier = Modifier
-                        .weight(1f)
-                )
-            } else {
-                WeatherHero(
-                    selected = state.forecastMode,
-                    onSelected = viewModel::onForecastModeSelected,
-                    onSettingsClick = onSettingsClick
-                )
-
-                CurrentWeatherCard(
-                    location = location,
-                    forecast = forecast,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-8).dp)
-                )
-
-                when (state.forecastMode) {
-                    ForecastMode.DAILY -> {
-                        DailyForecastList(
-                            forecast = forecast,
-                            onDaySelected = viewModel::onDaySelected,
-                            modifier = Modifier.weight(1f)
-                        )
+        if (locationSwitcherVisible) {
+            ModalBottomSheet(
+                onDismissRequest = { locationSwitcherVisible = false }
+            ) {
+                LocationQuickSwitcher(
+                    locations = state.locations,
+                    selectedLocationId = location?.id,
+                    trackMeSelected = trackMeSelected,
+                    onLocationSelected = { selectedLocation ->
+                        locationSwitcherVisible = false
+                        viewModel.selectLocation(selectedLocation)
+                    },
+                    onTrackMeClick = {
+                        locationSwitcherVisible = false
+                        onTrackMeClick()
+                    },
+                    onAddLocationClick = {
+                        locationSwitcherVisible = false
+                        onSettingsClick()
+                    },
+                    onManageLocationsClick = {
+                        locationSwitcherVisible = false
+                        onSettingsClick()
                     }
-                    ForecastMode.MAP -> {
-                        MapPlaceholder(modifier = Modifier.weight(1f))
-                    }
-                    ForecastMode.HOURLY -> Unit
-                }
+                )
             }
         }
     }
@@ -151,6 +196,7 @@ private fun HourlyWeatherContent(
     onDaySelected: (Int) -> Unit,
     onForecastModeSelected: (ForecastMode) -> Unit,
     onSettingsClick: () -> Unit,
+    onLocationClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
@@ -247,6 +293,7 @@ private fun HourlyWeatherContent(
                 CurrentWeatherCard(
                     location = location,
                     forecast = forecast,
+                    onLocationClick = onLocationClick,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
                         .offset(y = (-8).dp)

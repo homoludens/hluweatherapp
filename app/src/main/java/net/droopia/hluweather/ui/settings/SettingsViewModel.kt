@@ -5,17 +5,21 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import net.droopia.hluweather.HluWeatherApplication
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.LocationRepository
 
 class SettingsViewModel(
-    private val repository: SettingsRepository
+    private val repository: SettingsRepository,
+    private val locationRepository: LocationRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -24,13 +28,22 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch {
-            runCatching { repository.settings.first() }
-                .getOrNull()
-                ?.let { persisted ->
-                    if (!hasUserMutation) {
-                        _state.value = persisted.toUiState(_state.value)
+            runCatching {
+                combine(repository.settings, locationRepository.locations) { persisted, locations ->
+                    persisted to locations
+                }.collect { (persisted, locations) ->
+                    _state.value = if (hasUserMutation) {
+                        _state.value.copy(
+                            locations = locations,
+                            selectedLocationId = _state.value.selectedLocationId
+                                ?.takeIf { id -> locations.any { it.id == id } }
+                                ?: locations.firstOrNull()?.id
+                        )
+                    } else {
+                        persisted.toUiState(locations)
                     }
                 }
+            }
         }
     }
 
@@ -40,6 +53,9 @@ class SettingsViewModel(
 
     fun setTrackMe(enabled: Boolean) {
         updateSettings { it.copy(trackMeEnabled = enabled) }
+        viewModelScope.launch {
+            runCatching { locationRepository.setTrackMe(enabled) }
+        }
     }
 
     fun selectLocation(location: WeatherLocation) {
@@ -48,6 +64,9 @@ class SettingsViewModel(
                 selectedLocationId = location.id,
                 trackMeEnabled = false
             )
+        }
+        viewModelScope.launch {
+            runCatching { locationRepository.selectSaved(location.id) }
         }
     }
 
@@ -103,21 +122,25 @@ class SettingsViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val application = checkNotNull(
-                    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
+                val application = this[
+                    ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY
+                ] as HluWeatherApplication
+                SettingsViewModel(
+                    settingsRepository(application),
+                    application.locationRepository
                 )
-                SettingsViewModel(settingsRepository(application))
             }
         }
     }
 }
 
-private fun PersistedSettings.toUiState(current: SettingsUiState): SettingsUiState =
-    current.copy(
+private fun PersistedSettings.toUiState(locations: List<WeatherLocation>): SettingsUiState =
+    SettingsUiState(
         provider = provider,
+        locations = locations,
         selectedLocationId = selectedLocationId
-            ?.takeIf { id -> current.locations.any { location -> location.id == id } }
-            ?: current.selectedLocationId,
+            ?.takeIf { id -> locations.any { location -> location.id == id } }
+            ?: locations.firstOrNull()?.id,
         trackMeEnabled = trackMeEnabled,
         themeMode = themeMode,
         temperatureUnit = temperatureUnit,
