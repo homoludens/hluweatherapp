@@ -38,6 +38,8 @@ fun HluNavHost(
                 onProviderChange = settingsViewModel::setProvider,
                 onTrackMeChange = settingsViewModel::setTrackMe,
                 onLocationSelect = settingsViewModel::selectLocation,
+                onLocationMenuClick = {},
+                onAddLocationClick = {},
                 onThemeChange = settingsViewModel::setTheme,
                 onTemperatureUnitChange = settingsViewModel::setTemperatureUnit,
                 onWindUnitChange = settingsViewModel::setWindUnit,
