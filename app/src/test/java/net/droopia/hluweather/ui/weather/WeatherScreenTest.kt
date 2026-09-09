@@ -149,6 +149,16 @@ class WeatherScreenTest {
         )
         composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
+        val compactHero = composeRule.onNodeWithTag("compact_weather_hero")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        val dayStrip = composeRule.onNodeWithTag("hourly_day_strip")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        assertTrue(
+            "Day strip must start below the compact hero",
+            dayStrip.top >= compactHero.bottom
+        )
         assertTextOutsideViewport("HluWeatherApp")
         assertTextOutsideViewport("Hourly")
         assertTextOutsideViewport("Svilajnac")
@@ -170,8 +180,8 @@ class WeatherScreenTest {
         composeRule.onNodeWithTag("weather_scroll").performTouchInput {
             swipe(
                 start = Offset(200f, 300f),
-                end = Offset(200f, 299f),
-                durationMillis = 1
+                end = Offset(200f, 276f),
+                durationMillis = 100
             )
         }
         composeRule.waitForIdle()

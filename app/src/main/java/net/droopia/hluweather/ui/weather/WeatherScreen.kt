@@ -168,7 +168,7 @@ private fun HourlyWeatherContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(top = if (isCollapsed) 72.dp else 0.dp)
+                        .padding(top = if (isCollapsed) 96.dp else 0.dp)
                 ) {
                     HourlyDaySelector(
                         forecast = forecast,
@@ -194,7 +194,9 @@ private fun HourlyWeatherContent(
 
         AnimatedVisibility(
             visible = isCollapsed,
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .testTag("compact_weather_hero")
         ) {
             WeatherHero(
                 selected = ForecastMode.HOURLY,
