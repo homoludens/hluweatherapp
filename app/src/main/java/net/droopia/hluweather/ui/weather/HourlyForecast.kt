@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.HourForecast
@@ -40,7 +41,6 @@ import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureText
 import net.droopia.hluweather.data.toAppLocalDate
-import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.ui.components.HluWeatherIcon
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
@@ -52,8 +52,8 @@ fun HourlyForecast(
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dayHours = remember(forecast, selectedDayIndex) {
-        forecast.hoursForDay(selectedDayIndex)
+    val tableData = remember(forecast) {
+        forecast.toHourlyTableData()
     }
     val listState = rememberLazyListState()
 
@@ -75,11 +75,24 @@ fun HourlyForecast(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
-        items(dayHours) { hour ->
-            ForecastRow(
-                weather = hour,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+        items(
+            items = tableData.items,
+            key = { it.key }
+        ) { item ->
+            when (item) {
+                is HourlyTableBoundary -> {
+                    HourlyDateBoundary(
+                        item = item,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                is HourlyTableHour -> {
+                    ForecastRow(
+                        weather = item.hour,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -111,6 +124,7 @@ internal fun HourlyDaySelector(
         ) {
             forecast.daily.forEachIndexed { index, day ->
                 DayChip(
+                    dayIndex = index,
                     text = day.date.dayText(),
                     selected = index == selectedDayIndex,
                     onClick = { onDaySelected(index) }
@@ -122,6 +136,7 @@ internal fun HourlyDaySelector(
 
 @Composable
 private fun DayChip(
+    dayIndex: Int,
     text: String,
     selected: Boolean,
     onClick: () -> Unit
@@ -129,11 +144,13 @@ private fun DayChip(
     val colors = LocalHluColors.current
 
     Surface(
-        modifier = Modifier.selectable(
-            selected = selected,
-            role = Role.Tab,
-            onClick = onClick
-        ),
+        modifier = Modifier
+            .testTag("hourly_day_chip_$dayIndex")
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick
+            ),
         shape = RoundedCornerShape(26.dp),
         color = if (selected) colors.daySelected else Color.Transparent
     ) {
@@ -151,6 +168,22 @@ private fun DayChip(
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
+}
+
+@Composable
+private fun HourlyDateBoundary(
+    item: HourlyTableBoundary,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = item.date.dayText(),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("hourly_day_boundary_${item.dayIndex}")
+            .padding(top = 16.dp, bottom = 8.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @Composable
