@@ -64,3 +64,17 @@ Result: exit 0 with no output.
 The fix diff contains only the Open-Meteo transport and repository corrections, the compatible forecast timezone field and existing display-path threading, regression tests, and SDD records. Required-array invalid-payload tests remain unchanged and pass. No credentials or live test network calls were introduced.
 
 The remaining warnings are non-blocking existing maintenance notices, including deprecated Gradle/Kotlin APIs, target SDK guidance, and available dependency updates.
+
+## Cancellation Follow-Up
+
+The final scoped review found that `WeatherViewModel` still converted a
+repository `CancellationException` into UI error state through `runCatching`.
+The ViewModel now rethrows cancellation before its existing ordinary-error
+state update. `WeatherViewModelTest` adds a deterministic cancelled-request
+regression.
+
+Verification:
+
+- Focused `WeatherViewModelTest`: `BUILD SUCCESSFUL` (5 tests).
+- `testDebugUnitTest assembleDebug lintDebug`: `BUILD SUCCESSFUL`.
+- `git diff --check`: clean.

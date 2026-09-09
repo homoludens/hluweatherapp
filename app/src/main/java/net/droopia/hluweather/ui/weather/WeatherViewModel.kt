@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -71,9 +72,8 @@ class WeatherViewModel(
                     error = null
                 )
             }
-            runCatching {
-                repository.getForecast(currentLocation)
-            }.onSuccess { forecast ->
+            try {
+                val forecast = repository.getForecast(currentLocation)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -81,7 +81,9 @@ class WeatherViewModel(
                         error = null
                     )
                 }
-            }.onFailure { error ->
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
                 _state.update {
                     it.copy(
                         isLoading = false,

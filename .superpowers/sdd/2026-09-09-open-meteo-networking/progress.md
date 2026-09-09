@@ -35,4 +35,12 @@ Task 3: complete (commits fbea802..b16e96e, review clean)
 
 Task 4: complete (82 tests passing; assembleDebug, lintDebug, and git diff --check passing; 0 lint errors, 14 non-blocking warnings; review clean; report: task-4-report.md)
 
+Final review fix wave: complete (commit a2b8b66; optional-series, repository cancellation, and provider-timezone findings addressed; scoped re-review found no new regression in the fix diff)
+
+Final review residual Important: `WeatherViewModel` still wraps repository calls with `runCatching`, which catches `CancellationException` and converts cancellation into UI error state. This is outside the final fix diff and was not changed under the one-fix-wave limit; branch integration must not silently treat this as clean.
+
+Final review report discrepancy: final-fix report records 86 tests, while the scoped re-review observed 85 tests across 21 classes; both runs passed with zero failures.
+
+Final review follow-up: direct cancellation fix added to `WeatherViewModel` with a focused regression test; full tests, assembleDebug, lintDebug, and diff check pass.
+
 Final review fix wave: complete (86 tests passing; optional-series validation, cancellation propagation, and provider-timezone display fixes; report: final-fix-report.md)

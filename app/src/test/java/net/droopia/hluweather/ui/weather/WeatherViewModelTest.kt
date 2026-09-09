@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.weather
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -75,5 +76,17 @@ class WeatherViewModelTest {
         viewModel.onDaySelected(6)
 
         assertEquals(2, viewModel.state.value.selectedDayIndex)
+    }
+
+    @Test
+    fun cancelled_forecast_request_does_not_set_an_error() {
+        val repository = object : WeatherRepository {
+            override suspend fun getForecast(location: WeatherLocation): Nothing =
+                throw CancellationException("request cancelled")
+        }
+
+        val viewModel = WeatherViewModel(repository)
+
+        assertNull(viewModel.state.value.error)
     }
 }
