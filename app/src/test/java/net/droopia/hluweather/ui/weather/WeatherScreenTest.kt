@@ -138,6 +138,7 @@ class WeatherScreenTest {
             }
         }
 
+        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(20)
         composeRule.waitForIdle()
 
@@ -180,7 +181,7 @@ class WeatherScreenTest {
         composeRule.onNodeWithTag("weather_scroll").performTouchInput {
             swipe(
                 start = Offset(200f, 300f),
-                end = Offset(200f, 276f),
+                end = Offset(200f, 180f),
                 durationMillis = 100
             )
         }
