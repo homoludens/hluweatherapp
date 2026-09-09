@@ -31,6 +31,12 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
+    fun onLocationMenuClick(location: WeatherLocation) = Unit
+
+    fun onAddLocationClick() = Unit
+
+    fun onProviderInfoClick(provider: WeatherProvider) = Unit
+
     fun setTheme(themeMode: ThemeMode) {
         _state.update { it.copy(themeMode = themeMode) }
     }

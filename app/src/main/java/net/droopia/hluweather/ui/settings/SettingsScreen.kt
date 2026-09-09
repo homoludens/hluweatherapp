@@ -72,6 +72,7 @@ fun SettingsScreen(
     state: SettingsUiState,
     onBackClick: () -> Unit,
     onProviderChange: (WeatherProvider) -> Unit,
+    onProviderInfoClick: (WeatherProvider) -> Unit,
     onTrackMeChange: (Boolean) -> Unit,
     onLocationSelect: (WeatherLocation) -> Unit,
     onLocationMenuClick: (WeatherLocation) -> Unit,
@@ -120,6 +121,7 @@ fun SettingsScreen(
                     selected = state.provider == WeatherProvider.OPEN_METEO,
                     tag = "settings_provider_open_meteo",
                     recommended = true,
+                    onInfoClick = { onProviderInfoClick(WeatherProvider.OPEN_METEO) },
                     onClick = { onProviderChange(WeatherProvider.OPEN_METEO) }
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
@@ -128,6 +130,7 @@ fun SettingsScreen(
                     subtitle = "Norwegian Meteorological Institute",
                     selected = state.provider == WeatherProvider.MET_NO,
                     tag = "settings_provider_met_no",
+                    onInfoClick = { onProviderInfoClick(WeatherProvider.MET_NO) },
                     onClick = { onProviderChange(WeatherProvider.MET_NO) }
                 )
             }
@@ -350,6 +353,7 @@ private fun ProviderRow(
     selected: Boolean,
     tag: String,
     recommended: Boolean = false,
+    onInfoClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Row(
@@ -386,11 +390,13 @@ private fun ProviderRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Icon(
-            Icons.Outlined.Info,
-            contentDescription = "Information",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        IconButton(onClick = onInfoClick) {
+            Icon(
+                Icons.Outlined.Info,
+                contentDescription = "Information about $title",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

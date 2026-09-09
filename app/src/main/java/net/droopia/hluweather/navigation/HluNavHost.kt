@@ -36,10 +36,11 @@ fun HluNavHost(
                     navController.popBackStack()
                 },
                 onProviderChange = settingsViewModel::setProvider,
+                onProviderInfoClick = settingsViewModel::onProviderInfoClick,
                 onTrackMeChange = settingsViewModel::setTrackMe,
                 onLocationSelect = settingsViewModel::selectLocation,
-                onLocationMenuClick = {},
-                onAddLocationClick = {},
+                onLocationMenuClick = settingsViewModel::onLocationMenuClick,
+                onAddLocationClick = settingsViewModel::onAddLocationClick,
                 onThemeChange = settingsViewModel::setTheme,
                 onTemperatureUnitChange = settingsViewModel::setTemperatureUnit,
                 onWindUnitChange = settingsViewModel::setWindUnit,

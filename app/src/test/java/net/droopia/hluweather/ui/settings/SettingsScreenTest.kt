@@ -8,13 +8,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.runtime.mutableStateOf
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -57,6 +57,7 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Weather Provider").assertIsDisplayed()
         composeRule.onNodeWithText("Locations").assertIsDisplayed()
         composeRule.onNodeWithText("Appearance").assertIsDisplayed()
+        scrollTo(4)
         composeRule.onNodeWithText("Units").assertIsDisplayed()
         scrollTo(5)
         composeRule.onNodeWithText("Notifications").assertIsDisplayed()
@@ -66,25 +67,38 @@ class SettingsScreenTest {
 
     @Test
     fun provider_and_appearance_controls_report_changes() {
-        var provider: WeatherProvider? = null
-        var theme: ThemeMode? = null
+        val state = mutableStateOf(testSettingsState)
 
         renderSettings(
-            onProviderChange = { provider = it },
-            onThemeChange = { theme = it }
+            state = { state.value },
+            onProviderChange = { state.value = state.value.copy(provider = it) },
+            onThemeChange = { state.value = state.value.copy(themeMode = it) }
         )
 
         composeRule.onNodeWithText("MET.no").performClick()
+        composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
         composeRule.onNodeWithText("Dark").performClick()
+        composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
 
-        assertEquals(WeatherProvider.MET_NO, provider)
-        assertEquals(ThemeMode.DARK, theme)
+        assertEquals(WeatherProvider.MET_NO, state.value.provider)
+        assertEquals(ThemeMode.DARK, state.value.themeMode)
+    }
+
+    @Test
+    fun provider_information_reports_provider() {
+        var provider: WeatherProvider? = null
+
+        renderSettings(onProviderInfoClick = { provider = it })
+
+        composeRule.onNodeWithContentDescription("Information about Open-Meteo").performClick()
+
+        assertEquals(WeatherProvider.OPEN_METEO, provider)
     }
 
     @Test
     fun selected_controls_expose_tab_semantics() {
         renderSettings(
-            state = testSettingsState.copy(
+            state = { testSettingsState.copy(
                 provider = WeatherProvider.MET_NO,
                 themeMode = ThemeMode.DARK,
                 temperatureUnit = TemperatureUnit.FAHRENHEIT,
@@ -92,7 +106,7 @@ class SettingsScreenTest {
                 distanceUnit = DistanceUnit.MILES,
                 precipitationUnit = PrecipitationUnit.INCH,
                 selectedLocationId = "belgrade"
-            )
+            ) }
         )
 
         composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
@@ -178,9 +192,10 @@ class SettingsScreenTest {
     }
 
     private fun renderSettings(
-        state: SettingsUiState = testSettingsState,
+        state: () -> SettingsUiState = { testSettingsState },
         onBackClick: () -> Unit = {},
         onProviderChange: (WeatherProvider) -> Unit = {},
+        onProviderInfoClick: (WeatherProvider) -> Unit = {},
         onTrackMeChange: (Boolean) -> Unit = {},
         onLocationSelect: (WeatherLocation) -> Unit = {},
         onLocationMenuClick: (WeatherLocation) -> Unit = {},
@@ -198,9 +213,10 @@ class SettingsScreenTest {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 SettingsScreen(
-                    state = state,
+                    state = state(),
                     onBackClick = onBackClick,
                     onProviderChange = onProviderChange,
+                    onProviderInfoClick = onProviderInfoClick,
                     onTrackMeChange = onTrackMeChange,
                     onLocationSelect = onLocationSelect,
                     onLocationMenuClick = onLocationMenuClick,

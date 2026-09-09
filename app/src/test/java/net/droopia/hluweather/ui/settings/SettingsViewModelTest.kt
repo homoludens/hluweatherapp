@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.settings
 
 import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,5 +38,17 @@ class SettingsViewModelTest {
 
         assertTrue(viewModel.state.value.trackMeEnabled)
         assertEquals("svilajnac", viewModel.state.value.selectedLocationId)
+    }
+
+    @Test
+    fun future_settings_actions_are_explicit_no_ops() {
+        val viewModel = SettingsViewModel()
+        val initialState = viewModel.state.value
+
+        viewModel.onLocationMenuClick(initialState.locations.first())
+        viewModel.onAddLocationClick()
+        viewModel.onProviderInfoClick(WeatherProvider.OPEN_METEO)
+
+        assertEquals(initialState, viewModel.state.value)
     }
 }
