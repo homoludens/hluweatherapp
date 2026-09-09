@@ -25,7 +25,11 @@ class OpenMeteoWeatherRepository(
     private val clock: Clock = Clock.System
 ) : WeatherRepository {
 
-    override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
+    override suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
+        if (provider != WeatherProvider.OPEN_METEO) {
+            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
+        }
+
         val response = try {
             api.forecast(location)
         } catch (error: CancellationException) {

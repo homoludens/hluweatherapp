@@ -8,8 +8,12 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
+import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.locationRepository
+import net.droopia.hluweather.ui.settings.SettingsRepository
+import net.droopia.hluweather.ui.settings.settingsRepository
 
 class HluWeatherApplication : Application() {
 
@@ -27,5 +31,13 @@ class HluWeatherApplication : Application() {
 
     val weatherRepository: WeatherRepository by lazy {
         OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient))
+    }
+
+    val settingsRepository: SettingsRepository by lazy {
+        settingsRepository(this)
+    }
+
+    val locationRepository: LocationRepository by lazy {
+        locationRepository(this)
     }
 }

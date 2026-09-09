@@ -28,6 +28,7 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -133,7 +134,10 @@ class WeatherScreenTest {
         val tableData = forecast.toHourlyTableData()
         val syntheticDayIndex = tableData.days.last().dayIndex
         val viewModel = WeatherViewModel(object : WeatherRepository {
-            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: WeatherLocation
+            ): WeatherForecast = forecast
         })
         renderWeather(viewModel)
         viewModel.onDaySelected(1)
@@ -167,7 +171,10 @@ class WeatherScreenTest {
         val tableData = forecast.toHourlyTableData()
         val nearestDay = tableData.nearestDayForIndex(2)!!
         val viewModel = WeatherViewModel(object : WeatherRepository {
-            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: WeatherLocation
+            ): WeatherForecast = forecast
         })
         renderWeather(viewModel)
 
@@ -201,7 +208,10 @@ class WeatherScreenTest {
         val tableData = forecast.toHourlyTableData()
         val syntheticDayIndex = tableData.days.last().dayIndex
         val viewModel = WeatherViewModel(object : WeatherRepository {
-            override suspend fun getForecast(location: WeatherLocation): WeatherForecast = forecast
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: WeatherLocation
+            ): WeatherForecast = forecast
         })
         renderWeather(viewModel)
 
