@@ -55,7 +55,7 @@ class WeatherViewModelTest {
 
     @Test
     fun loads_mock_forecast_for_default_location() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         assertNotNull(viewModel.state.value.forecast)
         assertEquals(false, viewModel.state.value.isLoading)
@@ -64,7 +64,7 @@ class WeatherViewModelTest {
 
     @Test
     fun changes_forecast_mode() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         viewModel.onForecastModeSelected(ForecastMode.DAILY)
 
@@ -73,7 +73,7 @@ class WeatherViewModelTest {
 
     @Test
     fun day_selection_returns_to_hourly_mode() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         viewModel.onForecastModeSelected(ForecastMode.DAILY)
         viewModel.onDaySelected(2)
@@ -94,7 +94,7 @@ class WeatherViewModelTest {
                 location: WeatherLocation
             ) = forecast
         }
-        val viewModel = WeatherViewModel(repository)
+        val viewModel = WeatherViewModel(repository, Svilajnac)
 
         viewModel.onDaySelected(6)
 
@@ -111,7 +111,7 @@ class WeatherViewModelTest {
                 throw CancellationException("request cancelled")
         }
 
-        val viewModel = WeatherViewModel(repository)
+        val viewModel = WeatherViewModel(repository, Svilajnac)
 
         assertNull(viewModel.state.value.error)
     }

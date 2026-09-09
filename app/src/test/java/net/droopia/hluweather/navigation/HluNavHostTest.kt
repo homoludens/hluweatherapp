@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import net.droopia.hluweather.ui.weather.WeatherViewModel
 import org.junit.After
@@ -46,7 +47,7 @@ class HluNavHostTest {
 
     @Test
     fun navigates_from_weather_to_settings_and_back() {
-        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 HluNavHost(weatherViewModel = weatherViewModel)

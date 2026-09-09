@@ -124,7 +124,10 @@ class SettingsViewModelTest {
             tripAlerts = true
         )
         val repository = InMemorySettingsRepository(initial)
-        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
+        val viewModel = SettingsViewModel(
+            repository,
+            InMemoryLocationRepository(initialActiveLocation = null)
+        )
 
         viewModel.setDailySummary(true)
 
@@ -205,6 +208,17 @@ class SettingsViewModelTest {
         assertEquals(listOf(true), locationRepository.trackMeValues)
     }
 
+    @Test
+    fun reflects_a_saved_location_selected_through_the_shared_repository() {
+        val locationRepository = InMemoryLocationRepository()
+        val viewModel = SettingsViewModel(InMemorySettingsRepository(), locationRepository)
+        val selectedLocation = locationRepository.locations.value[1]
+
+        locationRepository.activeLocation.value = ActiveLocation.Saved(selectedLocation)
+
+        assertEquals(selectedLocation.id, viewModel.state.value.selectedLocationId)
+    }
+
     private class InMemorySettingsRepository(
         initial: PersistedSettings = PersistedSettings()
     ) : SettingsRepository {
@@ -230,11 +244,12 @@ class SettingsViewModelTest {
     }
 
     private class InMemoryLocationRepository(
-        initial: List<WeatherLocation> = testLocations
+        initial: List<WeatherLocation> = testLocations,
+        initialActiveLocation: WeatherLocation? = initial.firstOrNull()
     ) : LocationRepository {
         override val locations = MutableStateFlow(initial)
         override val activeLocation = MutableStateFlow<ActiveLocation?>(
-            initial.firstOrNull()?.let(ActiveLocation::Saved)
+            initialActiveLocation?.let(ActiveLocation::Saved)
         )
         val selectedIds = mutableListOf<String>()
         val trackMeValues = mutableListOf<Boolean>()
@@ -247,10 +262,18 @@ class SettingsViewModelTest {
 
         override suspend fun selectSaved(id: String) {
             selectedIds += id
+            activeLocation.value = locations.value
+                .firstOrNull { it.id == id }
+                ?.let(ActiveLocation::Saved)
         }
 
         override suspend fun setTrackMe(enabled: Boolean) {
             trackMeValues += enabled
+            if (!enabled && activeLocation.value == null) {
+                activeLocation.value = locations.value.firstOrNull()?.let(ActiveLocation::Saved)
+            } else if (enabled) {
+                activeLocation.value = null
+            }
         }
     }
 

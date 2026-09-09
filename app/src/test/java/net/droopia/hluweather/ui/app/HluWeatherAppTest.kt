@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import net.droopia.hluweather.ui.weather.WeatherViewModel
 import org.junit.After
@@ -50,7 +51,7 @@ class HluWeatherAppTest {
 
     @Test
     fun displays_app_title() {
-        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 HluWeatherApp(weatherViewModel)
@@ -61,7 +62,7 @@ class HluWeatherAppTest {
 
     @Test
     fun selecting_theme_updates_app_state() {
-        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherApp(weatherViewModel)
         }
@@ -75,7 +76,7 @@ class HluWeatherAppTest {
 
     @Test
     fun app_root_uses_the_factory_backed_settings_view_model() {
-        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherApp(weatherViewModel)
         }

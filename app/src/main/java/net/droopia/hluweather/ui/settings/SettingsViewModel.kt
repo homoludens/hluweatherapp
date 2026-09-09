@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
@@ -29,18 +30,33 @@ class SettingsViewModel(
     init {
         viewModelScope.launch {
             runCatching {
-                combine(repository.settings, locationRepository.locations) { persisted, locations ->
-                    persisted to locations
-                }.collect { (persisted, locations) ->
+                combine(
+                    repository.settings,
+                    locationRepository.locations,
+                    locationRepository.activeLocation
+                ) { persisted, locations, activeLocation ->
+                    Triple(persisted, locations, activeLocation)
+                }.collect { (persisted, locations, activeLocation) ->
                     _state.value = if (hasUserMutation) {
+                        val activeSavedId = (activeLocation as? ActiveLocation.Saved)?.location?.id
                         _state.value.copy(
                             locations = locations,
-                            selectedLocationId = _state.value.selectedLocationId
-                                ?.takeIf { id -> locations.any { it.id == id } }
-                                ?: locations.firstOrNull()?.id
+                            selectedLocationId = activeSavedId
+                                ?: _state.value.selectedLocationId?.takeIf { id ->
+                                    locations.any { it.id == id }
+                                }
+                                ?: locations.firstOrNull()?.id,
+                            trackMeEnabled = if (
+                                activeSavedId != null &&
+                                _state.value.selectedLocationId != activeSavedId
+                            ) {
+                                false
+                            } else {
+                                _state.value.trackMeEnabled
+                            }
                         )
                     } else {
-                        persisted.toUiState(locations)
+                        persisted.toUiState(locations, activeLocation)
                     }
                 }
             }
@@ -134,12 +150,15 @@ class SettingsViewModel(
     }
 }
 
-private fun PersistedSettings.toUiState(locations: List<WeatherLocation>): SettingsUiState =
+private fun PersistedSettings.toUiState(
+    locations: List<WeatherLocation>,
+    activeLocation: ActiveLocation?
+): SettingsUiState =
     SettingsUiState(
         provider = provider,
         locations = locations,
-        selectedLocationId = selectedLocationId
-            ?.takeIf { id -> locations.any { location -> location.id == id } }
+        selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id
+            ?: selectedLocationId?.takeIf { id -> locations.any { location -> location.id == id } }
             ?: locations.firstOrNull()?.id,
         trackMeEnabled = trackMeEnabled,
         themeMode = themeMode,

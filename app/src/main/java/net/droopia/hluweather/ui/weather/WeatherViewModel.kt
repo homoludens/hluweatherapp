@@ -23,7 +23,6 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.WeatherRepository
-import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 
@@ -42,8 +41,6 @@ class WeatherViewModel(
     private val settingsRepository: SettingsRepository,
     private val locationRepository: LocationRepository
 ) : ViewModel() {
-
-    constructor(repository: WeatherRepository) : this(repository, Svilajnac)
 
     constructor(repository: WeatherRepository, location: WeatherLocation) : this(
         repository = repository,

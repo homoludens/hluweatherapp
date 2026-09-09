@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import kotlin.math.roundToInt
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.ui.app.HluWeatherApp
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -32,7 +33,7 @@ class MainActivityInsetsTest {
 
     @Test
     fun weather_content_respects_dispatched_system_bar_insets() {
-        val weatherViewModel = WeatherViewModel(MockWeatherRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.activity.enableEdgeToEdge()
         composeRule.setContent {
             HluWeatherApp(weatherViewModel)

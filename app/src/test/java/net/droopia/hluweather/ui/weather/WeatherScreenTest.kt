@@ -141,7 +141,7 @@ class WeatherScreenTest {
                 provider: WeatherProvider,
                 location: WeatherLocation
             ): WeatherForecast = forecast
-        })
+        }, Svilajnac)
         renderWeather(viewModel)
         viewModel.onDaySelected(1)
         composeRule.waitForIdle()
@@ -178,7 +178,7 @@ class WeatherScreenTest {
                 provider: WeatherProvider,
                 location: WeatherLocation
             ): WeatherForecast = forecast
-        })
+        }, Svilajnac)
         renderWeather(viewModel)
 
         composeRule.onNodeWithText("Daily").performClick()
@@ -215,7 +215,7 @@ class WeatherScreenTest {
                 provider: WeatherProvider,
                 location: WeatherLocation
             ): WeatherForecast = forecast
-        })
+        }, Svilajnac)
         renderWeather(viewModel)
 
         assertTrue(
@@ -250,7 +250,7 @@ class WeatherScreenTest {
 
     @Test
     fun switches_to_daily_content() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -267,7 +267,7 @@ class WeatherScreenTest {
 
     @Test
     fun switches_to_map_placeholder() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -284,7 +284,7 @@ class WeatherScreenTest {
 
     @Test
     fun settings_icon_reports_click() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         var settingsClicked = false
 
         composeRule.setContent {
@@ -302,7 +302,7 @@ class WeatherScreenTest {
 
     @Test
     fun clicking_current_location_opens_the_quick_switcher() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         renderWeather(viewModel)
 
         composeRule.onNodeWithTag("current_location").performClick()
@@ -342,7 +342,8 @@ class WeatherScreenTest {
     @Test
     fun scrolling_hourly_collapses_header_to_icons_and_days() {
         val viewModel = WeatherViewModel(
-            MockWeatherRepository(baseTime = Instant.fromEpochSeconds(0L))
+            MockWeatherRepository(baseTime = Instant.fromEpochSeconds(0L)),
+            Svilajnac
         )
 
         composeRule.setContent {
@@ -383,7 +384,7 @@ class WeatherScreenTest {
 
     @Test
     fun tiny_hourly_scroll_does_not_show_compact_header_early() {
-        val viewModel = WeatherViewModel(MockWeatherRepository())
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -424,7 +425,9 @@ class WeatherScreenTest {
     }
 
     private fun renderWeather(baseTime: Instant): WeatherViewModel {
-        return renderWeather(WeatherViewModel(MockWeatherRepository(baseTime = baseTime)))
+        return renderWeather(
+            WeatherViewModel(MockWeatherRepository(baseTime = baseTime), Svilajnac)
+        )
     }
 
     private fun renderWeather(viewModel: WeatherViewModel): WeatherViewModel {
