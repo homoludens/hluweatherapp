@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -12,6 +13,7 @@ import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -68,8 +70,14 @@ class SettingsViewModelTest {
         viewModel.onLocationMenuClick(initialState.locations.first())
         viewModel.onAddLocationClick()
         viewModel.onProviderInfoClick(WeatherProvider.OPEN_METEO)
+        viewModel.clearCache()
 
         assertEquals(initialState, viewModel.state.value)
+    }
+
+    @Test
+    fun exposes_a_view_model_factory() {
+        assertNotNull(SettingsViewModel.Factory)
     }
 
     @Test
@@ -86,13 +94,26 @@ class SettingsViewModelTest {
 
     @Test
     fun mutations_save_the_updated_snapshot() {
-        val repository = InMemorySettingsRepository()
+        val initial = PersistedSettings(
+            provider = WeatherProvider.MET_NO,
+            selectedLocationId = "trieste",
+            trackMeEnabled = true,
+            themeMode = ThemeMode.DARK,
+            temperatureUnit = TemperatureUnit.FAHRENHEIT,
+            windUnit = WindUnit.MPH,
+            distanceUnit = DistanceUnit.MILES,
+            precipitationUnit = PrecipitationUnit.INCH,
+            weatherAlerts = false,
+            dailySummary = false,
+            tripAlerts = true
+        )
+        val repository = InMemorySettingsRepository(initial)
         val viewModel = SettingsViewModel(repository)
 
         viewModel.setDailySummary(true)
 
         assertTrue(viewModel.state.value.dailySummary)
-        assertEquals(true, repository.saved?.dailySummary)
+        assertEquals(initial.copy(dailySummary = true), repository.saved)
     }
 
     @Test
@@ -119,6 +140,21 @@ class SettingsViewModelTest {
         viewModel.setTheme(ThemeMode.DARK)
 
         assertEquals(ThemeMode.DARK, viewModel.state.value.themeMode)
+    }
+
+    @Test
+    fun failed_read_keeps_default_state() {
+        val repository = object : SettingsRepository {
+            override val settings = flow<PersistedSettings> {
+                error("read failed")
+            }
+
+            override suspend fun save(settings: PersistedSettings) = Unit
+        }
+
+        val viewModel = SettingsViewModel(repository)
+
+        assertEquals(SettingsUiState(), viewModel.state.value)
     }
 
     private class InMemorySettingsRepository(
