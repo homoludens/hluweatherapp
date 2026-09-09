@@ -49,18 +49,19 @@ class DataStoreSettingsRepository(
             }
         }
         .map { preferences ->
+            val defaults = PersistedSettings()
             PersistedSettings(
-                provider = preferences.enum(providerKey, PersistedSettings().provider),
-                selectedLocationId = preferences[selectedLocationIdKey] ?: PersistedSettings().selectedLocationId,
-                trackMeEnabled = preferences[trackMeEnabledKey] ?: PersistedSettings().trackMeEnabled,
-                themeMode = preferences.enum(themeModeKey, PersistedSettings().themeMode),
-                temperatureUnit = preferences.enum(temperatureUnitKey, PersistedSettings().temperatureUnit),
-                windUnit = preferences.enum(windUnitKey, PersistedSettings().windUnit),
-                distanceUnit = preferences.enum(distanceUnitKey, PersistedSettings().distanceUnit),
-                precipitationUnit = preferences.enum(precipitationUnitKey, PersistedSettings().precipitationUnit),
-                weatherAlerts = preferences[weatherAlertsKey] ?: PersistedSettings().weatherAlerts,
-                dailySummary = preferences[dailySummaryKey] ?: PersistedSettings().dailySummary,
-                tripAlerts = preferences[tripAlertsKey] ?: PersistedSettings().tripAlerts
+                provider = preferences.enum(providerKey, defaults.provider),
+                selectedLocationId = preferences.getStringOrNull(selectedLocationIdKey) ?: defaults.selectedLocationId,
+                trackMeEnabled = preferences.getBooleanOrNull(trackMeEnabledKey) ?: defaults.trackMeEnabled,
+                themeMode = preferences.enum(themeModeKey, defaults.themeMode),
+                temperatureUnit = preferences.enum(temperatureUnitKey, defaults.temperatureUnit),
+                windUnit = preferences.enum(windUnitKey, defaults.windUnit),
+                distanceUnit = preferences.enum(distanceUnitKey, defaults.distanceUnit),
+                precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
+                weatherAlerts = preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts,
+                dailySummary = preferences.getBooleanOrNull(dailySummaryKey) ?: defaults.dailySummary,
+                tripAlerts = preferences.getBooleanOrNull(tripAlertsKey) ?: defaults.tripAlerts
             )
         }
 
@@ -87,7 +88,13 @@ class DataStoreSettingsRepository(
     private inline fun <reified T : Enum<T>> Preferences.enum(
         key: Preferences.Key<String>,
         default: T
-    ): T = this[key]?.let { value -> enumValues<T>().firstOrNull { it.name == value } } ?: default
+    ): T = getStringOrNull(key)?.let { value -> enumValues<T>().firstOrNull { it.name == value } } ?: default
+
+    private fun Preferences.getStringOrNull(key: Preferences.Key<String>): String? =
+        asMap().entries.firstOrNull { it.key.name == key.name }?.value as? String
+
+    private fun Preferences.getBooleanOrNull(key: Preferences.Key<Boolean>): Boolean? =
+        asMap().entries.firstOrNull { it.key.name == key.name }?.value as? Boolean
 }
 
 fun settingsRepository(context: Context): SettingsRepository =

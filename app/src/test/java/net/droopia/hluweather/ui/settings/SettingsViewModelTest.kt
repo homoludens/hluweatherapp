@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.settings
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
@@ -157,6 +158,17 @@ class SettingsViewModelTest {
         assertEquals(SettingsUiState(), viewModel.state.value)
     }
 
+    @Test
+    fun initial_hydration_does_not_overwrite_a_mutation_made_while_loading() {
+        val repository = DeferredSettingsRepository()
+        val viewModel = SettingsViewModel(repository)
+
+        viewModel.setTheme(ThemeMode.LIGHT)
+        repository.snapshot.complete(PersistedSettings(themeMode = ThemeMode.DARK))
+
+        assertEquals(ThemeMode.LIGHT, viewModel.state.value.themeMode)
+    }
+
     private class InMemorySettingsRepository(
         initial: PersistedSettings = PersistedSettings()
     ) : SettingsRepository {
@@ -169,5 +181,15 @@ class SettingsViewModelTest {
             saved = settings
             stored.value = settings
         }
+    }
+
+    private class DeferredSettingsRepository : SettingsRepository {
+        val snapshot = CompletableDeferred<PersistedSettings>()
+
+        override val settings = flow {
+            emit(snapshot.await())
+        }
+
+        override suspend fun save(settings: PersistedSettings) = Unit
     }
 }

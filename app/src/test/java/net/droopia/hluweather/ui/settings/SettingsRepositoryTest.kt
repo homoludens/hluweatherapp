@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
@@ -59,5 +60,32 @@ class SettingsRepositoryTest {
         val settings = DataStoreSettingsRepository(dataStore).settings.first()
 
         assertEquals(PersistedSettings(), settings)
+    }
+
+    @Test
+    fun malformed_typed_preferences_default_only_the_affected_fields() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.provider")] = "MET_NO"
+            it[stringPreferencesKey("settings.track_me_enabled")] = "not-a-boolean"
+            it[booleanPreferencesKey("settings.weather_alerts")] = false
+            it[booleanPreferencesKey("settings.daily_summary")] = true
+            it[booleanPreferencesKey("settings.trip_alerts")] = true
+            it[booleanPreferencesKey("settings.theme_mode")] = true
+        }
+
+        assertEquals(
+            PersistedSettings(
+                provider = WeatherProvider.MET_NO,
+                weatherAlerts = false,
+                dailySummary = true,
+                tripAlerts = true
+            ),
+            DataStoreSettingsRepository(dataStore).settings.first()
+        )
     }
 }
