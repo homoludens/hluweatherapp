@@ -97,5 +97,32 @@ class HluWeatherAppTest {
         composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(3)
         composeRule.onNodeWithText("Light").performClick()
         composeRule.onNodeWithTag("settings_theme_light").assertIsSelected()
+
+        composeRule.waitForIdle()
+        composeRule.activity.viewModelStore.clear()
+        composeRule.activity.recreate()
+        composeRule.setContent {
+            HluWeatherApp()
+        }
+
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("weather_scroll")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(0)
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithContentDescription("Settings")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Settings")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(3)
+        composeRule.onNodeWithTag("settings_theme_light").assertIsSelected()
     }
 }
