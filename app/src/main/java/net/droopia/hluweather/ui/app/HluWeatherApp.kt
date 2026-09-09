@@ -11,7 +11,7 @@ import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
 fun HluWeatherApp() {
-    val settingsViewModel: SettingsViewModel = viewModel()
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
     val state = settingsViewModel.state.collectAsStateWithLifecycle().value
     val systemDark = isSystemInDarkTheme()
     val darkTheme = when (state.themeMode) {

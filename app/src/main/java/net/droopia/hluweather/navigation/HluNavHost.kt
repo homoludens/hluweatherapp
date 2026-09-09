@@ -12,7 +12,7 @@ import net.droopia.hluweather.ui.weather.WeatherScreen
 
 @Composable
 fun HluNavHost(
-    settingsViewModel: SettingsViewModel = viewModel()
+    settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value

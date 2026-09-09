@@ -65,4 +65,14 @@ class HluWeatherAppTest {
         composeRule.onNodeWithText("Dark").performClick()
         composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
     }
+
+    @Test
+    fun app_root_uses_the_factory_backed_settings_view_model() {
+        composeRule.setContent {
+            HluWeatherApp()
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+    }
 }
