@@ -58,6 +58,8 @@ class ThemeTest {
         assertEquals(Color(0xFF9AA7FF), capturedScheme?.primary)
         assertEquals(Color(0xFF071225), capturedHluColors?.heroTop)
         assertEquals(Color(0xFF10264B), capturedHluColors?.heroBottom)
+        assertEquals(Color(0xFFF5F7FF), capturedHluColors?.navSelectedText)
+        assertEquals(Color(0xFFF5F7FF), capturedHluColors?.daySelectedText)
     }
 
     @Test

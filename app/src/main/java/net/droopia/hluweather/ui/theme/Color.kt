@@ -47,11 +47,11 @@ val DarkHluColors = HluColors(
     moon = Color(0xFFE4D7B7),
     moonAccent = Color(0xFF7789FF),
     cloudAccent = Color(0xFF8493D7),
-    navSelected = Color(0xFF9DA8FF),
-    navSelectedText = Color(0xFF131A3C),
+    navSelected = Color(0xFF1B3569),
+    navSelectedText = Color(0xFFF5F7FF),
     weatherCard = Color(0xFF111C2D),
     tableHeader = Color(0xFF1A2740),
     tableRow = Color(0xFF101A2B),
-    daySelected = Color(0xFF8492FF),
-    daySelectedText = Color(0xFF101632)
+    daySelected = Color(0xFF234A86),
+    daySelectedText = Color(0xFFF5F7FF)
 )

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import java.util.TimeZone
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -369,6 +370,30 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithText("Daily").performClick()
         composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
+    }
+
+    @Test
+    fun dark_theme_keeps_selected_navigation_and_day_text_visible() {
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = true) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onSettingsClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Daily").performClick()
+        composeRule.onNodeWithText("Daily").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Hourly").performClick()
+        val forecast = viewModel.state.value.forecast!!
+        val day = forecast.toHourlyTableData().days[1]
+        val dayText = day.date.dayText(ZoneId.of(forecast.timezone))
+        composeRule.onNodeWithTag("hourly_day_chip_${day.dayIndex}").performClick()
+        composeRule.onNodeWithText(dayText).assertIsDisplayed()
     }
 
     @Test

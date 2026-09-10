@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -30,11 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,12 +49,11 @@ fun WeatherHero(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
-    val fontScale = LocalDensity.current.fontScale
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(if (compact) 96.dp else 240.dp * fontScale.coerceAtLeast(1f))
+            .height(if (compact) 96.dp else 176.dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -68,17 +63,6 @@ fun WeatherHero(
                 )
             )
     ) {
-        if (!compact) {
-            Box(
-                modifier = Modifier
-                    .size(82.dp)
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-65).dp, y = 65.dp)
-                    .clip(CircleShape)
-                    .background(colors.moon)
-            )
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -101,7 +85,7 @@ fun WeatherHero(
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
-                    top = if (compact) 0.dp else 16.dp
+                    top = if (compact) 0.dp else 8.dp
                 )
         ) {
             if (!compact) {
@@ -140,7 +124,7 @@ fun WeatherHero(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
             }
 
             NavigationTabs(
