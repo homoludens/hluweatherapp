@@ -82,37 +82,57 @@ class MetNoWeatherRepositoryTest {
 
     @Test
     fun getForecast_maps_all_symbol_families_and_day_night_variants() = runTest {
-        val expected = mapOf(
-            "ClEaRsKy_NiGhT" to (WeatherCondition.CLEAR to false),
-            "fair_night" to (WeatherCondition.MOSTLY_CLEAR to false),
-            "partlycloudy_day" to (WeatherCondition.PARTLY_CLOUDY to true),
-            "partlycloudy_polartwilight" to (WeatherCondition.PARTLY_CLOUDY to null),
-            "cloudy_night" to (WeatherCondition.CLOUDY to false),
-            "fog_day" to (WeatherCondition.FOG to true),
-            "thunder_night" to (WeatherCondition.THUNDERSTORM to false),
-            "snow_day" to (WeatherCondition.SNOW to true),
-            "sleet_night" to (WeatherCondition.SNOW to false),
-            "rain_day" to (WeatherCondition.RAIN to true),
-            "rainshowers_night" to (WeatherCondition.RAIN to false),
-            "lightrainshowers_day" to (WeatherCondition.RAIN to true),
-            "heavyrainshowers_night" to (WeatherCondition.RAIN to false),
-            "lightsnowshowers_day" to (WeatherCondition.SNOW to true),
-            "heavysnowshowers_night" to (WeatherCondition.SNOW to false),
-            "lightsleetshowers_day" to (WeatherCondition.SNOW to true),
-            "heavysleetshowers_night" to (WeatherCondition.SNOW to false),
-            "rainshowersandthunder_day" to (WeatherCondition.THUNDERSTORM to true),
-            "snowshowersandthunder_night" to (WeatherCondition.THUNDERSTORM to false),
-            "sleetshowersandthunder_polartwilight" to (WeatherCondition.THUNDERSTORM to null)
+        val suffixes = listOf(
+            "_day" to true,
+            "_night" to false,
+            "_polartwilight" to null
         )
+        val baseFamilies = listOf(
+            "clearsky" to WeatherCondition.CLEAR,
+            "fair" to WeatherCondition.MOSTLY_CLEAR,
+            "partlycloudy" to WeatherCondition.PARTLY_CLOUDY,
+            "cloudy" to WeatherCondition.CLOUDY,
+            "fog" to WeatherCondition.FOG,
+            "thunder" to WeatherCondition.THUNDERSTORM,
+            "snow" to WeatherCondition.SNOW,
+            "sleet" to WeatherCondition.SNOW,
+            "rain" to WeatherCondition.RAIN
+        )
+        val directLightHeavyFamilies = listOf(
+            "lightrain" to WeatherCondition.RAIN,
+            "heavyrain" to WeatherCondition.RAIN,
+            "lightsnow" to WeatherCondition.SNOW,
+            "heavysnow" to WeatherCondition.SNOW,
+            "lightsleet" to WeatherCondition.SNOW,
+            "heavysleet" to WeatherCondition.SNOW
+        )
+        val thunderCompounds = listOf(
+            "rainandthunder" to WeatherCondition.THUNDERSTORM,
+            "snowandthunder" to WeatherCondition.THUNDERSTORM,
+            "sleetandthunder" to WeatherCondition.THUNDERSTORM
+        )
+        val expected = buildList {
+            baseFamilies.forEachIndexed { index, (family, condition) ->
+                suffixes.forEach { (suffix, isDay) ->
+                    val symbol = if (index == 0) "ClEaRsKy$suffix" else "$family$suffix"
+                    add(ExpectedSymbol(symbol, condition, isDay))
+                }
+            }
+            (directLightHeavyFamilies + thunderCompounds).forEach { (family, condition) ->
+                suffixes.forEach { (suffix, isDay) ->
+                    add(ExpectedSymbol("$family$suffix", condition, isDay))
+                }
+            }
+        }
 
-        expected.forEach { (symbol, result) ->
+        expected.forEach { (symbol, condition, isDay) ->
             val forecast = repository(
                 response = responseWithTimeseries(timeSeries(symbol)),
                 clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
             ).getForecast(WeatherProvider.MET_NO, location)
 
-            assertEquals(result.first, forecast.current.condition)
-            assertEquals(result.second, forecast.current.isDay)
+            assertEquals(condition, forecast.current.condition)
+            assertEquals(isDay, forecast.current.isDay)
         }
     }
 
@@ -251,6 +271,12 @@ class MetNoWeatherRepositoryTest {
     private fun fixedClock(instant: Instant): Clock = object : Clock {
         override fun now(): Instant = instant
     }
+
+    private data class ExpectedSymbol(
+        val symbol: String,
+        val condition: WeatherCondition,
+        val isDay: Boolean?
+    )
 
     private companion object {
         val location = WeatherLocation("nis", "Nis", 44.8176, 20.4633)
