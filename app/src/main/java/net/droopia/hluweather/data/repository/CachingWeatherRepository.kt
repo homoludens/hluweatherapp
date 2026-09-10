@@ -2,8 +2,8 @@ package net.droopia.hluweather.data.repository
 
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
-import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.cache.ForecastCacheKey
+import net.droopia.hluweather.data.cache.ForecastCacheStore
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -12,13 +12,13 @@ import net.droopia.hluweather.data.model.WeatherProvider
 
 class CachingWeatherRepository(
     private val sources: Map<WeatherProvider, WeatherSource>,
-    private val cache: ForecastCache
+    private val cache: ForecastCacheStore
 ) : WeatherRepository {
 
     constructor(
         openMeteo: WeatherSource,
         metNo: WeatherSource,
-        cache: ForecastCache
+        cache: ForecastCacheStore
     ) : this(
         sources = mapOf(
             WeatherProvider.OPEN_METEO to openMeteo,
@@ -34,15 +34,22 @@ class CachingWeatherRepository(
         val source = sources[provider]
             ?: throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
         val key = ForecastCacheKey(provider, location.cacheLocationKey())
-        return try {
-            val forecast = source.getForecast(location.toWeatherLocation())
-            cache.put(key, forecast)
-            ForecastLoad(forecast, isStale = false)
+        val forecast = try {
+            source.getForecast(location.toWeatherLocation())
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            cache.get(key)?.let { ForecastLoad(it, isStale = true) } ?: throw error
+            cache.get(key)?.let { return ForecastLoad(it, isStale = true) }
+                ?: throw error
         }
+        try {
+            cache.put(key, forecast)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // A live result is still usable when persistence is unavailable.
+        }
+        return ForecastLoad(forecast, isStale = false)
     }
 
     override suspend fun clearCache() {

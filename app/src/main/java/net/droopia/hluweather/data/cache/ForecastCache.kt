@@ -22,15 +22,22 @@ data class ForecastCacheKey(
     val locationKey: String
 )
 
+interface ForecastCacheStore {
+    suspend fun get(key: ForecastCacheKey): WeatherForecast?
+    suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast)
+    suspend fun entries(): List<ForecastCacheKey>
+    suspend fun clear()
+}
+
 class ForecastCache(
     private val dataStore: DataStore<Preferences>,
     private val maxEntries: Int = 20
-) {
+) : ForecastCacheStore {
     init {
         require(maxEntries > 0) { "maxEntries must be positive" }
     }
 
-    suspend fun get(key: ForecastCacheKey): WeatherForecast? {
+    override suspend fun get(key: ForecastCacheKey): WeatherForecast? {
         var result: WeatherForecast? = null
         dataStore.edit { preferences ->
             val entries = preferences.decodeEntries()
@@ -49,7 +56,7 @@ class ForecastCache(
         return result
     }
 
-    suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) {
+    override suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) {
         dataStore.edit { preferences ->
             val entries = preferences.decodeEntries()
                 .filterNot { it.key == key }
@@ -60,11 +67,11 @@ class ForecastCache(
         }
     }
 
-    suspend fun entries(): List<ForecastCacheKey> = dataStore.data.first()
+    override suspend fun entries(): List<ForecastCacheKey> = dataStore.data.first()
         .decodeEntries()
         .mapNotNull(CacheEntry::keyOrNull)
 
-    suspend fun clear() {
+    override suspend fun clear() {
         dataStore.edit { it.remove(entriesKey) }
     }
 

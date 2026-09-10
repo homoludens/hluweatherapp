@@ -49,12 +49,6 @@ class OpenMeteoWeatherRepository(
         }
     }
 
-    suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
-        if (provider != WeatherProvider.OPEN_METEO) {
-            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
-        }
-        return getForecast(location)
-    }
 }
 
 private fun OpenMeteoResponse.toWeatherForecast(

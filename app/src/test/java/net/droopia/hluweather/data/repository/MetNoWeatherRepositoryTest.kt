@@ -33,7 +33,7 @@ class MetNoWeatherRepositoryTest {
     fun getForecast_normalizes_utc_times_and_groups_daily_values_in_the_device_zone() = runTest {
         val fetchedAt = Instant.parse("2026-09-10T12:00:00Z")
         val forecast = repository(response = aggregatedResponse, clock = fixedClock(fetchedAt))
-            .getForecast(WeatherProvider.MET_NO, location)
+            .getForecast(location)
 
         assertEquals(location, forecast.location)
         assertEquals(WeatherProvider.MET_NO, forecast.provider)
@@ -70,7 +70,7 @@ class MetNoWeatherRepositoryTest {
         val forecast = repository(
             response = response,
             clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
-        ).getForecast(WeatherProvider.MET_NO, location)
+        ).getForecast(location)
 
         assertEquals(
             listOf("2026-09-10", "2026-09-11", "2026-09-16"),
@@ -148,7 +148,7 @@ class MetNoWeatherRepositoryTest {
             val forecast = repository(
                 response = responseWithTimeseries(timeSeries(symbol)),
                 clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
-            ).getForecast(WeatherProvider.MET_NO, location)
+            ).getForecast(location)
 
             assertEquals(condition, forecast.current.condition)
             assertEquals(isDay, forecast.current.isDay)
@@ -160,7 +160,7 @@ class MetNoWeatherRepositoryTest {
         val forecast = repository(
             response = responseWithTimeseries(timeSeries(null, humidity = null, dewPoint = null)),
             clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
-        ).getForecast(WeatherProvider.MET_NO, location)
+        ).getForecast(location)
 
         assertEquals(WeatherCondition.UNKNOWN, forecast.current.condition)
         assertNull(forecast.current.apparentTemperature)
@@ -177,7 +177,7 @@ class MetNoWeatherRepositoryTest {
         val forecast = repository(
             response = responseWithTimeseries(timeSeries("clearsky_day", precipitation = 0.0)),
             clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
-        ).getForecast(WeatherProvider.MET_NO, location)
+        ).getForecast(location)
 
         assertEquals(0.0, forecast.daily.single().precipitation!!, 0.0)
     }
@@ -187,24 +187,6 @@ class MetNoWeatherRepositoryTest {
         assertRepositoryFailure(MetNoResponse(MetNoProperties(emptyList())))
         assertRepositoryFailure(responseWithTimeseries(timeSeries("rain_day", time = "not-an-instant")))
         assertRepositoryFailure(responseWithTimeseries(timeSeries("rain_day", temperature = null)))
-    }
-
-    @Test
-    fun getForecast_rejects_an_unsupported_provider_without_calling_the_api() = runTest {
-        var called = false
-        val repository = MetNoWeatherRepository(
-            api = object : MetNoApi {
-                override suspend fun forecast(location: WeatherLocation): MetNoResponse {
-                    called = true
-                    return aggregatedResponse
-                }
-            }
-        )
-
-        assertThrows(WeatherRepositoryException::class.java, ThrowingRunnable {
-            runBlocking { repository.getForecast(WeatherProvider.OPEN_METEO, location) }
-        })
-        assertEquals(false, called)
     }
 
     @Test
@@ -219,7 +201,7 @@ class MetNoWeatherRepositoryTest {
         )
 
         val thrown = assertThrows(CancellationException::class.java, ThrowingRunnable {
-            runBlocking { repository.getForecast(WeatherProvider.MET_NO, location) }
+            runBlocking { repository.getForecast(location) }
         })
 
         assertSame(cancellation, thrown)
@@ -229,7 +211,7 @@ class MetNoWeatherRepositoryTest {
         val exception = assertThrows(WeatherRepositoryException::class.java, ThrowingRunnable {
             runBlocking {
                 repository(response, fixedClock(Instant.parse("2026-09-10T12:00:00Z")))
-                    .getForecast(WeatherProvider.MET_NO, location)
+                    .getForecast(location)
             }
         })
         assertTrue(!exception.message.isNullOrBlank())

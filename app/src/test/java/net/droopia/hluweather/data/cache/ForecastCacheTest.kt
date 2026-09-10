@@ -2,6 +2,8 @@ package net.droopia.hluweather.data.cache
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -30,7 +32,7 @@ class ForecastCacheTest {
     fun successful_write_can_be_read_after_cache_recreation() = runTest {
         val dataStore = dataStore(backgroundScope)
         val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
-        val forecast = buildMockForecast(Svilajnac)
+        val forecast = fixedForecast()
 
         ForecastCache(dataStore).put(key, forecast)
 
@@ -42,7 +44,7 @@ class ForecastCacheTest {
         val cache = cache(backgroundScope)
         val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:belgrade")
 
-        cache.put(key, buildMockForecast(Svilajnac))
+        cache.put(key, fixedForecast())
 
         assertNull(cache.get(key.copy(provider = WeatherProvider.MET_NO)))
     }
@@ -53,11 +55,11 @@ class ForecastCacheTest {
         val keys = (0 until 20).map { index ->
             ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:$index")
         }
-        keys.forEach { key -> cache.put(key, buildMockForecast(Svilajnac)) }
+        keys.forEach { key -> cache.put(key, fixedForecast()) }
         assertNotNull(cache.get(keys.first()))
 
         val newestKey = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:20")
-        cache.put(newestKey, buildMockForecast(Svilajnac))
+        cache.put(newestKey, fixedForecast())
 
         assertEquals(20, cache.entries().size)
         assertNotNull(cache.get(keys.first()))
@@ -70,7 +72,7 @@ class ForecastCacheTest {
         val cache = cache(backgroundScope)
         cache.put(
             ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"),
-            buildMockForecast(Svilajnac)
+            fixedForecast()
         )
 
         cache.clear()
@@ -83,5 +85,11 @@ class ForecastCacheTest {
     private fun dataStore(scope: CoroutineScope) = PreferenceDataStoreFactory.create(
         scope = scope,
         produceFile = { temporaryFolder.newFile("cache.preferences_pb") }
+    )
+
+    private fun fixedForecast() = buildMockForecast(
+        Svilajnac,
+        Instant.parse("2026-09-10T12:00:00Z"),
+        TimeZone.of("UTC")
     )
 }

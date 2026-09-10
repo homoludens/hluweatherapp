@@ -28,7 +28,7 @@ class OpenMeteoWeatherRepositoryTest {
         val location = WeatherLocation("svilajnac", "Svilajnac", 44.22, 21.20)
         val fetchedAt = Instant.parse("2026-09-09T14:30:00Z")
 
-        val forecast = repository(clock = fixedClock(fetchedAt)).getForecast(WeatherProvider.OPEN_METEO, location)
+        val forecast = repository(clock = fixedClock(fetchedAt)).getForecast(location)
 
         assertEquals(location, forecast.location)
         assertEquals(WeatherProvider.OPEN_METEO, forecast.provider)
@@ -66,24 +66,6 @@ class OpenMeteoWeatherRepositoryTest {
     }
 
     @Test
-    fun getForecast_rejects_unsupported_provider_without_calling_the_api() = runTest {
-        var apiCalled = false
-        val repository = OpenMeteoWeatherRepository(
-            api = object : OpenMeteoApi {
-                override suspend fun forecast(location: WeatherLocation): OpenMeteoResponse {
-                    apiCalled = true
-                    return validResponse
-                }
-            }
-        )
-
-        assertThrows(WeatherRepositoryException::class.java, ThrowingRunnable {
-            runBlocking { repository.getForecast(WeatherProvider.MET_NO, location) }
-        })
-        assertEquals(false, apiCalled)
-    }
-
-    @Test
     fun getForecast_maps_optional_values_to_null() = runTest {
         val response = validResponse.copy(
             current = validResponse.current!!.copy(
@@ -107,7 +89,7 @@ class OpenMeteoWeatherRepositoryTest {
             )
         )
 
-        val forecast = repository(response).getForecast(WeatherProvider.OPEN_METEO, location)
+        val forecast = repository(response).getForecast(location)
 
         assertNull(forecast.current.apparentTemperature)
         assertNull(forecast.current.humidity)
@@ -153,7 +135,7 @@ class OpenMeteoWeatherRepositoryTest {
             """.trimIndent()
         )
 
-        val forecast = repository(response).getForecast(WeatherProvider.OPEN_METEO, location)
+        val forecast = repository(response).getForecast(location)
 
         assertNull(forecast.current.apparentTemperature)
         assertNull(forecast.current.humidity)
@@ -191,7 +173,7 @@ class OpenMeteoWeatherRepositoryTest {
                 daily = validResponse.daily!!.copy(weatherCode = listOf(code))
             )
 
-            val forecast = repository(response).getForecast(WeatherProvider.OPEN_METEO, location)
+            val forecast = repository(response).getForecast(location)
 
             assertEquals(condition, forecast.current.condition)
             assertEquals(condition, forecast.hourly.single().condition)
@@ -259,7 +241,7 @@ class OpenMeteoWeatherRepositoryTest {
         )
 
         val exception = assertThrows(CancellationException::class.java, ThrowingRunnable {
-            runBlocking { repository.getForecast(WeatherProvider.OPEN_METEO, location) }
+            runBlocking { repository.getForecast(location) }
         })
 
         assertEquals("cancelled", exception.message)
@@ -268,7 +250,7 @@ class OpenMeteoWeatherRepositoryTest {
     private fun assertRepositoryFailure(response: OpenMeteoResponse) {
         val exception = assertThrows(WeatherRepositoryException::class.java, ThrowingRunnable {
             runBlocking {
-                repository(response).getForecast(WeatherProvider.OPEN_METEO, location)
+                repository(response).getForecast(location)
             }
         })
 

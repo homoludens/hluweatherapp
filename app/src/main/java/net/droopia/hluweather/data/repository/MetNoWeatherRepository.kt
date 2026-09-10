@@ -50,12 +50,6 @@ class MetNoWeatherRepository(
         }
     }
 
-    suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
-        if (provider != WeatherProvider.MET_NO) {
-            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
-        }
-        return getForecast(location)
-    }
 }
 
 private fun MetNoResponse.toWeatherForecast(

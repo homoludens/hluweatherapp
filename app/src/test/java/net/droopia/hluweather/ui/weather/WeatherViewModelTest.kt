@@ -145,6 +145,18 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun retry_starts_a_new_forecast_request() = runTest {
+        val repository = RecordingWeatherRepository()
+        val viewModel = WeatherViewModel(repository, Svilajnac)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(2, repository.requests.size)
+    }
+
+    @Test
     fun provider_change_refetches_for_the_same_location() = runTest {
         val settings = TestSettingsRepository()
         val locations = TestLocationRepository(ActiveLocation.Saved(Svilajnac))

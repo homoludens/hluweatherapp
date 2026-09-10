@@ -25,10 +25,11 @@ val Svilajnac = WeatherLocation(
 
 fun buildMockForecast(
     location: WeatherLocation,
-    baseTime: Instant = Clock.System.now()
+    baseTime: Instant = Clock.System.now(),
+    timeZone: TimeZone = TimeZone.currentSystemDefault()
 ): WeatherForecast {
     val startDate =
-        baseTime.toLocalDateTime(TimeZone.currentSystemDefault()).date
+        baseTime.toLocalDateTime(timeZone).date
 
     val daily = (0 until 7).map { offset ->
         DayForecast(
@@ -83,6 +84,7 @@ fun buildMockForecast(
         ),
         hourly = hourly,
         daily = daily,
-        moonPhase = MoonPhaseCalculator.phase(baseTime)
+        moonPhase = MoonPhaseCalculator.phase(baseTime),
+        timezone = timeZone.id
     )
 }
