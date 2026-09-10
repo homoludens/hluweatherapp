@@ -100,4 +100,26 @@ class WeatherHeroTest {
 
         composeRule.onNodeWithTag("weather_hero_moon").assertDoesNotExist()
     }
+
+    @Test
+    fun compact_hero_remains_96_dp() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherHero(
+                    selected = ForecastMode.HOURLY,
+                    onSelected = {},
+                    onSettingsClick = {},
+                    compact = true,
+                    modifier = androidx.compose.ui.Modifier.testTag("compact_weather_hero")
+                )
+            }
+        }
+
+        val heroHeight = composeRule.onNodeWithTag("compact_weather_hero")
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .height
+
+        assertEquals(96.dp, with(composeRule.density) { heroHeight.toDp() })
+    }
 }
