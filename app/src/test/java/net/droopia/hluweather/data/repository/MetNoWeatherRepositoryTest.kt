@@ -173,6 +173,27 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
+    fun getForecast_uses_next_six_hours_when_next_hour_data_is_absent() = runTest {
+        val forecast = repository(
+            response = responseWithTimeseries(
+                timeSeries(
+                    symbol = null,
+                    precipitation = null,
+                    next6Symbol = "heavyrain_night",
+                    next6Precipitation = 4.5
+                )
+            ),
+            clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
+        ).getForecast(location)
+
+        assertEquals(WeatherCondition.RAIN, forecast.current.condition)
+        assertEquals(false, forecast.current.isDay)
+        assertEquals(4.5, forecast.current.precipitation!!, 0.0)
+        assertEquals(4.5, forecast.hourly.single().precipitation, 0.0)
+        assertEquals(4.5, forecast.daily.single().precipitation!!, 0.0)
+    }
+
+    @Test
     fun getForecast_preserves_a_reported_zero_daily_precipitation() = runTest {
         val forecast = repository(
             response = responseWithTimeseries(timeSeries("clearsky_day", precipitation = 0.0)),
@@ -234,7 +255,9 @@ class MetNoWeatherRepositoryTest {
         temperature: Double? = 20.0,
         precipitation: Double? = 1.25,
         humidity: Int? = 60,
-        dewPoint: Double? = 10.0
+        dewPoint: Double? = 10.0,
+        next6Symbol: String? = null,
+        next6Precipitation: Double? = null
     ) = MetNoTimeSeries(
         time = time,
         data = MetNoTimeSeriesData(
@@ -243,6 +266,12 @@ class MetNoWeatherRepositoryTest {
                 MetNoData(
                     summary = MetNoSummary(it),
                     precipitationAmount = precipitation
+                )
+            },
+            next6Hours = next6Symbol?.let {
+                MetNoData(
+                    summary = MetNoSummary(it),
+                    precipitationAmount = next6Precipitation
                 )
             }
         )

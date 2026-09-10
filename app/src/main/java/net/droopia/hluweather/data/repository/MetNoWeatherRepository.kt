@@ -99,9 +99,9 @@ private fun MetNoTimeSeries.toNormalizedHour(index: Int): NormalizedHour {
     val temperature = details.airTemperature.required(
         "timeseries[$index].data.instant.details.air_temperature"
     )
-    val nextHour = data?.next1Hours
-    val symbol = nextHour?.summary?.symbolCode.toWeatherSymbol()
-    val precipitation = nextHour?.details?.precipitationAmount
+    val period = data?.next1Hours ?: data?.next6Hours
+    val symbol = period?.summary?.symbolCode.toWeatherSymbol()
+    val precipitation = period?.details?.precipitationAmount
     return NormalizedHour(
         forecast = HourForecast(
             time = timestamp,

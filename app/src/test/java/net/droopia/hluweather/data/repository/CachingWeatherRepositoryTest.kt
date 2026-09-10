@@ -150,6 +150,28 @@ class CachingWeatherRepositoryTest {
     }
 
     @Test
+    fun cache_cancellation_is_propagated_when_reading_after_live_failure() = runTest {
+        val cancellation = kotlinx.coroutines.CancellationException("cache read cancelled")
+        val repository = repository(
+            FakeSource(
+                WeatherProvider.OPEN_METEO,
+                forecast(WeatherProvider.OPEN_METEO),
+                WeatherRepositoryException("offline")
+            ),
+            ReadFailingCache(cancellation)
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(WeatherProvider.OPEN_METEO, ActiveLocation.Saved(Svilajnac))
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(cancellation, error)
+    }
+
+    @Test
     fun cache_write_failure_returns_the_live_result_without_stale_fallback() = runTest {
         val liveForecast = forecast(WeatherProvider.OPEN_METEO, "2026-09-10T12:00:00Z")
         val olderForecast = forecast(WeatherProvider.OPEN_METEO, "2026-09-09T12:00:00Z")
@@ -272,6 +294,51 @@ class CachingWeatherRepositoryTest {
         assertSame(liveFailure, error)
     }
 
+    @Test
+    fun edited_saved_location_coordinates_do_not_use_old_cache_when_offline() = runTest {
+        val oldLocation = Svilajnac
+        val editedLocation = oldLocation.copy(latitude = 44.9, longitude = 20.6)
+        val liveFailure = WeatherRepositoryException("offline")
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:${oldLocation.id}"),
+            forecast(WeatherProvider.OPEN_METEO).copy(location = oldLocation)
+        )
+        val repository = repository(
+            FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO), liveFailure),
+            cache
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(editedLocation)
+            )
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
+    }
+
+    @Test
+    fun selected_source_provider_is_validated_again_at_use_time() = runTest {
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val repository = repository(source, InMemoryCache())
+        source.provider = WeatherProvider.MET_NO
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(WeatherProvider.OPEN_METEO, ActiveLocation.Saved(Svilajnac))
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertTrue(error is IllegalArgumentException)
+        assertEquals(0, source.calls)
+    }
+
     private fun repository(source: FakeSource, cache: ForecastCacheStore) = CachingWeatherRepository(
         sources = mapOf(source.provider to source),
         cache = cache
@@ -294,7 +361,7 @@ class CachingWeatherRepositoryTest {
     ).copy(provider = provider)
 
     private class FakeSource(
-        override val provider: WeatherProvider,
+        override var provider: WeatherProvider,
         val forecast: WeatherForecast,
         var failure: Throwable? = null
     ) : WeatherSource {

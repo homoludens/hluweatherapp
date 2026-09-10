@@ -22,7 +22,8 @@ data class MetNoTimeSeries(
 @Serializable
 data class MetNoTimeSeriesData(
     val instant: MetNoInstant? = null,
-    @SerialName("next_1_hours") val next1Hours: MetNoData? = null
+    @SerialName("next_1_hours") val next1Hours: MetNoData? = null,
+    @SerialName("next_6_hours") val next6Hours: MetNoData? = null
 )
 
 @Serializable

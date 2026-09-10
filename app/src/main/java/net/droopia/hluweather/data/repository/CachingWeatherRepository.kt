@@ -39,8 +39,9 @@ class CachingWeatherRepository(
             ?: throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
         validateSource(provider, source)
         val key = ForecastCacheKey(provider, location.cacheLocationKey())
+        val requestedLocation = location.toWeatherLocation()
         val forecast = try {
-            source.getForecast(location.toWeatherLocation())
+            source.getForecast(requestedLocation)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -51,7 +52,9 @@ class CachingWeatherRepository(
             } catch (_: Exception) {
                 throw error
             }
-            if (cached != null && cached.provider == key.provider) {
+            if (cached != null && cached.provider == key.provider &&
+                cached.location.coordinatesMatch(requestedLocation)
+            ) {
                 return ForecastLoad(cached, isStale = true)
             }
             throw error
@@ -101,3 +104,6 @@ private fun ActiveLocation.toWeatherLocation(): WeatherLocation = when (this) {
         altitude = altitude
     )
 }
+
+private fun WeatherLocation.coordinatesMatch(other: WeatherLocation): Boolean =
+    latitude == other.latitude && longitude == other.longitude
