@@ -9,10 +9,12 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.device.AndroidDeviceLocationSource
 import net.droopia.hluweather.data.device.DeviceLocationSource
+import net.droopia.hluweather.data.network.KtorMetNoApi
 import net.droopia.hluweather.data.network.KtorNominatimApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
 import net.droopia.hluweather.data.repository.NominatimReverseGeocoder
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.MetNoWeatherRepository
 import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.repository.WeatherRepository
@@ -36,6 +38,10 @@ class HluWeatherApplication : Application() {
 
     val weatherRepository: WeatherRepository by lazy {
         OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient))
+    }
+
+    val metNoWeatherRepository: WeatherRepository by lazy {
+        MetNoWeatherRepository(KtorMetNoApi(httpClient))
     }
 
     val settingsRepository: SettingsRepository by lazy {
