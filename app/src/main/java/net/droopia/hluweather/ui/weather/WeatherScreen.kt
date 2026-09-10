@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -18,8 +19,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -165,73 +168,90 @@ fun WeatherScreen(
                 }
             }
         } else {
-            Column(
-                modifier = Modifier.fillMaxSize()
+            PullToRefreshBox(
+                isRefreshing = state.isRefreshing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {}
             ) {
-                if (state.isStale) {
-                    StaleForecastBanner(
-                        fetchedAt = forecast.fetchedAt.toString(),
-                        onRetry = viewModel::refresh
-                    )
-                }
-                if (state.forecastMode == ForecastMode.HOURLY) {
-                    HourlyWeatherContent(
-                        forecast = forecast,
-                        location = location,
-                        selectedDayIndex = state.selectedDayIndex,
-                        temperatureUnit = temperatureUnit,
-                        precipitationUnit = precipitationUnit,
-                        onDaySelected = viewModel::onDaySelected,
-                        onForecastModeSelected = viewModel::onForecastModeSelected,
-                        onSettingsClick = onSettingsClick,
-                        onLocationClick = { locationSwitcherVisible = true },
-                        modifier = Modifier
-                            .weight(1f)
-                    )
-                } else {
-                    WeatherHero(
-                        selected = state.forecastMode,
-                        onSelected = viewModel::onForecastModeSelected,
-                        onSettingsClick = onSettingsClick
-                    )
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    if (state.isStale) {
+                        StaleForecastBanner(
+                            fetchedAt = forecast.fetchedAt.toString(),
+                            onRetry = viewModel::refresh
+                        )
+                    }
+                    if (state.forecastMode == ForecastMode.HOURLY) {
+                        HourlyWeatherContent(
+                            forecast = forecast,
+                            location = location,
+                            selectedDayIndex = state.selectedDayIndex,
+                            temperatureUnit = temperatureUnit,
+                            precipitationUnit = precipitationUnit,
+                            onDaySelected = viewModel::onDaySelected,
+                            onForecastModeSelected = viewModel::onForecastModeSelected,
+                            onSettingsClick = onSettingsClick,
+                            onLocationClick = { locationSwitcherVisible = true },
+                            modifier = Modifier
+                                .weight(1f)
+                        )
+                    } else {
+                        WeatherHero(
+                            selected = state.forecastMode,
+                            onSelected = viewModel::onForecastModeSelected,
+                            onSettingsClick = onSettingsClick
+                        )
 
-                    CurrentWeatherCard(
-                        location = location,
-                        forecast = forecast,
-                        temperatureUnit = temperatureUnit,
-                        precipitationUnit = precipitationUnit,
-                        onLocationClick = { locationSwitcherVisible = true },
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .offset(y = (-8).dp)
-                    )
+                        CurrentWeatherCard(
+                            location = location,
+                            forecast = forecast,
+                            temperatureUnit = temperatureUnit,
+                            precipitationUnit = precipitationUnit,
+                            onLocationClick = { locationSwitcherVisible = true },
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .offset(y = (-8).dp)
+                        )
 
-                    when (state.forecastMode) {
-                        ForecastMode.DAILY -> {
-                            DailyForecastList(
-                                forecast = forecast,
-                                temperatureUnit = temperatureUnit,
-                                precipitationUnit = precipitationUnit,
-                                onDaySelected = viewModel::onDaySelected,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        ForecastMode.MAP -> {
-                            Box(modifier = Modifier.weight(1f)) {
-                                mapContent(
-                                    location,
-                                    state.locations,
-                                    location.id.takeUnless { it == "current" },
-                                    darkTheme
-                                ) {
-                                    if (!trackMeSelected) onTrackMeClick()
+                        when (state.forecastMode) {
+                            ForecastMode.DAILY -> {
+                                DailyForecastList(
+                                    forecast = forecast,
+                                    temperatureUnit = temperatureUnit,
+                                    precipitationUnit = precipitationUnit,
+                                    onDaySelected = viewModel::onDaySelected,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            ForecastMode.MAP -> {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    mapContent(
+                                        location,
+                                        state.locations,
+                                        location.id.takeUnless { it == "current" },
+                                        darkTheme
+                                    ) {
+                                        if (!trackMeSelected) onTrackMeClick()
+                                    }
                                 }
                             }
+                            ForecastMode.HOURLY -> Unit
                         }
-                        ForecastMode.HOURLY -> Unit
                     }
                 }
             }
+        }
+
+        if (forecast != null && location != null && state.isRefreshing) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .align(Alignment.TopCenter)
+                    .testTag("weather_refresh_indicator")
+            )
         }
 
         trackMeStatusText(state.trackMeStatus, trackMeSelected)?.let { status ->

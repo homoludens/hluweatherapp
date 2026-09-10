@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
 import androidx.compose.material3.Text
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -87,6 +90,91 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
+    }
+
+    @Test
+    fun initial_loading_uses_full_screen_spinner_only_without_forecast() {
+        val initialResult = CompletableDeferred<ForecastLoad>()
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = DeferredWeatherRepository(initialResult, refreshResult)
+        val viewModel = WeatherViewModel(repository, Svilajnac)
+        renderWeather(viewModel)
+
+        composeRule
+            .onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
+            .assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("weather_refresh_indicator")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+
+        initialResult.complete(
+            ForecastLoad(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L)))
+        )
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate)).assertDoesNotExist()
+        viewModel.refresh()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_refresh_indicator").assertIsDisplayed()
+    }
+
+    @Test
+    fun refresh_keeps_forecast_content_visible_and_shows_indicator_until_completion() {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = DeferredWeatherRepository(
+            CompletableDeferred(ForecastLoad(initialForecast)),
+            refreshResult
+        )
+        val viewModel = WeatherViewModel(repository, Svilajnac)
+        renderWeather(viewModel)
+        composeRule.waitForIdle()
+
+        viewModel.refresh()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("current_temperature").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_refresh_indicator").assertIsDisplayed()
+
+        refreshResult.complete(
+            ForecastLoad(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L)))
+        )
+        composeRule.waitForIdle()
+
+        assertTrue(
+            composeRule.onAllNodesWithTag("weather_refresh_indicator")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun pulling_down_from_top_starts_refresh_request() {
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = DeferredWeatherRepository(
+            CompletableDeferred(
+                ForecastLoad(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L)))
+            ),
+            refreshResult
+        )
+        val viewModel = WeatherViewModel(repository, Svilajnac)
+        renderWeather(viewModel)
+        composeRule.waitForIdle()
+
+        assertEquals(1, repository.networkRequests)
+        composeRule.onNodeWithTag("weather_scroll").performTouchInput {
+            swipe(
+                start = Offset(200f, 12f),
+                end = Offset(200f, 600f),
+                durationMillis = 600
+            )
+        }
+        composeRule.waitForIdle()
+
+        assertEquals(2, repository.networkRequests)
+        assertTrue(viewModel.state.value.isRefreshing)
     }
 
     @Test
@@ -528,5 +616,18 @@ class WeatherScreenTest {
         override suspend fun selectSaved(id: String) = Unit
 
         override suspend fun setTrackMe(enabled: Boolean) = Unit
+    }
+
+    private class DeferredWeatherRepository(
+        private vararg val networkResults: CompletableDeferred<ForecastLoad>
+    ) : WeatherRepository {
+        var networkRequests = 0
+
+        override suspend fun getForecast(
+            provider: WeatherProvider,
+            location: ActiveLocation
+        ): ForecastLoad = networkResults[networkRequests++].await()
+
+        override suspend fun clearCache() = Unit
     }
 }
