@@ -1,13 +1,12 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
 android {
     namespace = "net.droopia.hluweather"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "net.droopia.hluweather"
@@ -60,6 +59,8 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.maplibre.compose)
+    runtimeOnly(libs.maplibre.compose.runtime.opengl)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -17,6 +17,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import org.junit.Assert.assertEquals
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
@@ -267,20 +270,23 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun switches_to_map_placeholder() {
+    fun switches_to_map_content() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    mapContent = { _, _, _, _ ->
+                        Text("Map", Modifier.testTag("weather_map"))
+                    }
                 )
             }
         }
 
         composeRule.onNodeWithText("Map").performClick()
-        composeRule.onNodeWithTag("map_placeholder").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
     }
 
     @Test

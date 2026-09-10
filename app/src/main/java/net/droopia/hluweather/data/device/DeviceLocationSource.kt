@@ -7,6 +7,10 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
@@ -14,6 +18,10 @@ import kotlin.coroutines.resume
 
 interface DeviceLocationSource {
     suspend fun currentLocation(): GpsResult
+
+    fun foregroundLocations(): Flow<GpsResult> = flow {
+        emit(currentLocation())
+    }
 }
 
 class AndroidDeviceLocationSource(
@@ -25,6 +33,52 @@ class AndroidDeviceLocationSource(
         context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     }
 ) : DeviceLocationSource {
+
+    override fun foregroundLocations(): Flow<GpsResult> = callbackFlow {
+        if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION) &&
+            !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+        ) {
+            trySend(GpsResult.PermissionRequired)
+            close()
+            return@callbackFlow
+        }
+
+        if (!locationManager.isLocationEnabled) {
+            trySend(GpsResult.LocationDisabled)
+            close()
+            return@callbackFlow
+        }
+
+        val provider = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER
+        ).firstOrNull(locationManager::isProviderEnabled)
+        if (provider == null) {
+            trySend(GpsResult.Unavailable)
+            close()
+            return@callbackFlow
+        }
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                trySend(location.toGpsResult())
+            }
+        }
+
+        try {
+            locationManager.requestLocationUpdates(provider, 5_000L, 10f, listener, mainLooper)
+        } catch (_: SecurityException) {
+            trySend(GpsResult.PermissionRequired)
+            close()
+        } catch (_: RuntimeException) {
+            trySend(GpsResult.Unavailable)
+            close()
+        }
+
+        awaitClose {
+            locationManager.removeUpdates(listener)
+        }
+    }
 
     override suspend fun currentLocation(): GpsResult {
         if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION) &&

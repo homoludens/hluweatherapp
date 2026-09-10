@@ -9,6 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.locationpicker.LocationPickerScreen
 import net.droopia.hluweather.ui.locationpicker.LocationPickerViewModel
 import net.droopia.hluweather.ui.settings.SettingsScreen
@@ -19,7 +21,9 @@ import net.droopia.hluweather.ui.weather.WeatherViewModel
 @Composable
 fun HluNavHost(
     settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
-    weatherViewModel: WeatherViewModel? = null
+    weatherViewModel: WeatherViewModel? = null,
+    weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, () -> Unit) -> Unit)? = null,
+    locationPickerMapContent: (@Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit)? = null
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
@@ -29,15 +33,24 @@ fun HluNavHost(
         startDestination = "weather"
     ) {
         composable("weather") {
-            WeatherScreen(
-                viewModel = weatherViewModel
-                    ?: viewModel(factory = WeatherViewModel.Factory),
-                onSettingsClick = {
-                    navController.navigate("settings")
-                },
-                onTrackMeClick = { settingsViewModel.setTrackMe(true) },
-                trackMeSelected = settingsState.trackMeEnabled
-            )
+            if (weatherMapContent == null) {
+                WeatherScreen(
+                    viewModel = weatherViewModel
+                        ?: viewModel(factory = WeatherViewModel.Factory),
+                    onSettingsClick = { navController.navigate("settings") },
+                    onTrackMeClick = { settingsViewModel.setTrackMe(true) },
+                    trackMeSelected = settingsState.trackMeEnabled
+                )
+            } else {
+                WeatherScreen(
+                    viewModel = weatherViewModel
+                        ?: viewModel(factory = WeatherViewModel.Factory),
+                    onSettingsClick = { navController.navigate("settings") },
+                    onTrackMeClick = { settingsViewModel.setTrackMe(true) },
+                    trackMeSelected = settingsState.trackMeEnabled,
+                    mapContent = weatherMapContent
+                )
+            }
         }
 
         composable("settings") {
@@ -78,12 +91,22 @@ fun HluNavHost(
             )
         ) { backStackEntry ->
             val locationId = backStackEntry.arguments?.getString(LOCATION_ID_ARGUMENT)
-            LocationPickerScreen(
-                viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
-                onBackClick = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() },
-                onDeleted = { navController.popBackStack() }
-            )
+            if (locationPickerMapContent == null) {
+                LocationPickerScreen(
+                    viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
+                    onBackClick = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() }
+                )
+            } else {
+                LocationPickerScreen(
+                    viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
+                    onBackClick = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() },
+                    mapContent = locationPickerMapContent
+                )
+            }
         }
     }
 }

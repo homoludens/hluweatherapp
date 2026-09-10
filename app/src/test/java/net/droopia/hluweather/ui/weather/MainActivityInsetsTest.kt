@@ -3,6 +3,10 @@ package net.droopia.hluweather.ui.weather
 import android.graphics.Insets
 import android.view.WindowInsets
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -36,7 +40,12 @@ class MainActivityInsetsTest {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.activity.enableEdgeToEdge()
         composeRule.setContent {
-            HluWeatherApp(weatherViewModel)
+            HluWeatherApp(
+                weatherViewModel = weatherViewModel,
+                weatherMapContent = { _, _, _, _ ->
+                    Box(Modifier.fillMaxSize().testTag("map_placeholder"))
+                }
+            )
         }
 
         composeRule.waitUntil(5_000) {

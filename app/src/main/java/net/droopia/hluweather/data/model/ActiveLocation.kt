@@ -7,4 +7,5 @@ enum class LocationMode {
 
 sealed interface ActiveLocation {
     data class Saved(val location: WeatherLocation) : ActiveLocation
+    data class Current(val point: GeoPoint, val altitude: Int? = null) : ActiveLocation
 }

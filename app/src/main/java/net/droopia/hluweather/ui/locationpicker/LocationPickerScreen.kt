@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.ui.map.WeatherMap
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,8 +53,14 @@ fun LocationPickerScreen(
     onSaved: () -> Unit = onBackClick,
     onDeleted: () -> Unit = onBackClick,
     modifier: Modifier = Modifier,
-    mapContent: @Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit = { point, _ ->
-        LocationPickerMap(point)
+    mapContent: @Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit = { point, onCameraIdle ->
+        WeatherMap(
+            center = point,
+            darkTheme = isSystemInDarkTheme(),
+            onMapClick = onCameraIdle,
+            onCameraIdle = onCameraIdle,
+            onRecenterClick = viewModel::onGpsClick
+        )
     }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -185,27 +193,6 @@ fun LocationPickerScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-@Composable
-fun LocationPickerMap(
-    point: GeoPoint,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("location_picker_map"),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Map preview", style = MaterialTheme.typography.titleMedium)
-            Text(
-                coordinateText(point),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

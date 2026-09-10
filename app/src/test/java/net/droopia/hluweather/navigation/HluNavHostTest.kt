@@ -1,5 +1,8 @@
 package net.droopia.hluweather.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -52,7 +55,10 @@ class HluNavHostTest {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluNavHost(weatherViewModel = weatherViewModel)
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    locationPickerMapContent = { _, _ -> Box(Modifier.fillMaxSize()) }
+                )
             }
         }
 
@@ -68,7 +74,10 @@ class HluNavHostTest {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                HluNavHost(weatherViewModel = weatherViewModel)
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    locationPickerMapContent = { _, _ -> Box(Modifier.fillMaxSize()) }
+                )
             }
         }
 

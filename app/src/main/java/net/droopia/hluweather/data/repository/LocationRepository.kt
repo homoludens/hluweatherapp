@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import java.io.IOException
@@ -28,6 +29,7 @@ interface LocationRepository {
     suspend fun delete(id: String)
     suspend fun selectSaved(id: String)
     suspend fun setTrackMe(enabled: Boolean)
+    suspend fun setCurrentLocation(point: GeoPoint, altitude: Int? = null) = Unit
 }
 
 internal val Context.applicationDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -38,6 +40,8 @@ fun locationRepository(context: Context): LocationRepository =
 class DataStoreLocationRepository(
     private val dataStore: DataStore<Preferences>
 ) : LocationRepository {
+
+    private val currentLocation = kotlinx.coroutines.flow.MutableStateFlow<ActiveLocation.Current?>(null)
 
     private val snapshot = dataStore.data
         .catch { exception ->
@@ -69,9 +73,9 @@ class DataStoreLocationRepository(
         .map { it.locations }
         .distinctUntilChanged()
 
-    override val activeLocation: Flow<ActiveLocation?> = snapshot.map { state ->
+    override val activeLocation: Flow<ActiveLocation?> = kotlinx.coroutines.flow.combine(snapshot, currentLocation) { state, current ->
         if (state.mode == LocationMode.TRACK_ME) {
-            null
+            current
         } else {
             state.locations
                 .firstOrNull { it.id == state.selectedId }
@@ -144,6 +148,11 @@ class DataStoreLocationRepository(
                 LocationMode.SAVED_LOCATION.name
             }
         }
+        if (!enabled) currentLocation.value = null
+    }
+
+    override suspend fun setCurrentLocation(point: GeoPoint, altitude: Int?) {
+        currentLocation.value = ActiveLocation.Current(point, altitude)
     }
 
     private fun Preferences.decodeLocations(): List<WeatherLocation> =

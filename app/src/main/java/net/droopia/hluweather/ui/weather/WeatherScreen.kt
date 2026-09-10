@@ -1,8 +1,10 @@
 package net.droopia.hluweather.ui.weather
 
+import android.Manifest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,8 +34,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
 import java.time.ZoneId
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -41,9 +49,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.ui.map.MapPlaceholder
+import net.droopia.hluweather.ui.map.WeatherMap
 
 private const val WEATHER_HEADER_KEY = "weather_header"
 private const val HOURLY_HEADER_KEY = "hourly_header"
@@ -61,12 +70,54 @@ fun WeatherScreen(
     onSettingsClick: () -> Unit = {},
     onTrackMeClick: () -> Unit = {},
     trackMeSelected: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, () -> Unit) -> Unit =
+        { mapLocation, locations, activeLocationId, onRecenterClick ->
+            WeatherMap(
+                locations = locations,
+                activeLocationId = activeLocationId,
+                center = GeoPoint(mapLocation.latitude, mapLocation.longitude),
+                darkTheme = isSystemInDarkTheme(),
+                onLocationClick = viewModel::selectLocation,
+                onRecenterClick = onRecenterClick
+            )
+        }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val forecast = state.forecast
     val location = state.activeLocation
     var locationSwitcherVisible by remember { mutableStateOf(false) }
+    var permissionRetry by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        viewModel.onTrackMePermissionResult(
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        )
+        permissionRetry++
+    }
+
+    LaunchedEffect(lifecycleOwner, trackMeSelected, permissionRetry, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (trackMeSelected) {
+                viewModel.trackMeWhileStarted()
+            }
+        }
+    }
+
+    LaunchedEffect(state.trackMeStatus, trackMeSelected) {
+        if (trackMeSelected && state.trackMeStatus == TrackMeStatus.PermissionRequired) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
+        }
+        if (!trackMeSelected) viewModel.clearTrackMeStatus()
+    }
 
     Box(
         modifier = modifier
@@ -149,12 +200,38 @@ fun WeatherScreen(
                             )
                         }
                         ForecastMode.MAP -> {
-                            MapPlaceholder(modifier = Modifier.weight(1f))
+                            Box(modifier = Modifier.weight(1f)) {
+                                mapContent(
+                                    location,
+                                    state.locations,
+                                    location.id.takeUnless { it == "current" }
+                                ) {
+                                    if (!trackMeSelected) onTrackMeClick()
+                                }
+                            }
                         }
                         ForecastMode.HOURLY -> Unit
                     }
                 }
             }
+        }
+
+        trackMeStatusText(state.trackMeStatus, trackMeSelected)?.let { status ->
+            Text(
+                text = status,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag("track_me_status"),
+                color = if (state.trackMeStatus == TrackMeStatus.PermissionRequired ||
+                    state.trackMeStatus == TrackMeStatus.LocationDisabled
+                ) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
         }
 
         if (locationSwitcherVisible) {
@@ -184,6 +261,18 @@ fun WeatherScreen(
                 )
             }
         }
+    }
+}
+
+private fun trackMeStatusText(status: TrackMeStatus, enabled: Boolean): String? {
+    if (!enabled) return null
+    return when (status) {
+        TrackMeStatus.Idle -> null
+        TrackMeStatus.Locating -> "Finding your location..."
+        TrackMeStatus.Active -> null
+        TrackMeStatus.PermissionRequired -> "Location permission is required"
+        TrackMeStatus.LocationDisabled -> "Location is disabled"
+        TrackMeStatus.Unavailable -> "Location unavailable"
     }
 }
 

@@ -5,6 +5,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -15,6 +16,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -24,6 +27,7 @@ import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
@@ -279,6 +283,64 @@ class WeatherViewModelTest {
         assertFalse(viewModel.state.value.isLoading)
     }
 
+    @Test
+    fun track_me_updates_the_display_but_refreshes_only_after_the_gate() = runTest {
+        val source = TestDeviceLocationSource()
+        val locations = TestLocationRepository(null)
+        locations.mode.value = LocationMode.TRACK_ME
+        val repository = RecordingWeatherRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            locations,
+            source,
+            now = { Instant.fromEpochSeconds(1_000L) }
+        )
+        val tracking = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.trackMeWhileStarted()
+        }
+        val first = GeoPoint(44.8176, 20.4633)
+        val nearby = GeoPoint(44.8266, 20.4633)
+        val farAway = GeoPoint(44.8650, 20.4633)
+
+        source.emit(GpsResult.Success(first, null))
+        advanceUntilIdle()
+        source.emit(GpsResult.Success(nearby, null))
+        advanceUntilIdle()
+
+        assertEquals(nearby.latitude, viewModel.state.value.activeLocation?.latitude)
+        assertEquals(1, repository.requests.size)
+
+        source.emit(GpsResult.Success(farAway, null))
+        advanceUntilIdle()
+
+        assertEquals(farAway.latitude, viewModel.state.value.activeLocation?.latitude)
+        assertEquals(2, repository.requests.size)
+        tracking.cancel()
+    }
+
+    @Test
+    fun track_me_routes_permission_and_disabled_statuses() = runTest {
+        val source = TestDeviceLocationSource()
+        val viewModel = WeatherViewModel(
+            RecordingWeatherRepository(),
+            TestSettingsRepository(),
+            TestLocationRepository(null),
+            source
+        )
+        val tracking = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.trackMeWhileStarted()
+        }
+
+        source.emit(GpsResult.PermissionRequired)
+        advanceUntilIdle()
+        assertEquals(TrackMeStatus.PermissionRequired, viewModel.state.value.trackMeStatus)
+        source.emit(GpsResult.LocationDisabled)
+        advanceUntilIdle()
+        assertEquals(TrackMeStatus.LocationDisabled, viewModel.state.value.trackMeStatus)
+        tracking.cancel()
+    }
+
     private class RecordingWeatherRepository : WeatherRepository {
         val requests = mutableListOf<Request>()
 
@@ -355,9 +417,8 @@ class WeatherViewModelTest {
             (initialActive as? ActiveLocation.Saved)?.let { listOf(it.location) } ?: emptyList()
         )
         override val activeLocation: StateFlow<ActiveLocation?> = active
-        override val locationMode: StateFlow<LocationMode> = MutableStateFlow(
-            LocationMode.SAVED_LOCATION
-        )
+        val mode = MutableStateFlow(LocationMode.SAVED_LOCATION)
+        override val locationMode: StateFlow<LocationMode> = mode
 
         suspend fun emitActive(value: ActiveLocation?) {
             active.emit(value)
@@ -368,5 +429,21 @@ class WeatherViewModelTest {
         override suspend fun delete(id: String) = Unit
         override suspend fun selectSaved(id: String) = Unit
         override suspend fun setTrackMe(enabled: Boolean) = Unit
+
+        override suspend fun setCurrentLocation(point: GeoPoint, altitude: Int?) {
+            active.value = ActiveLocation.Current(point, altitude)
+        }
+    }
+
+    private class TestDeviceLocationSource : DeviceLocationSource {
+        val updates = MutableSharedFlow<GpsResult>(extraBufferCapacity = 1)
+
+        override suspend fun currentLocation(): GpsResult = GpsResult.Unavailable
+
+        override fun foregroundLocations() = updates
+
+        suspend fun emit(result: GpsResult) {
+            updates.emit(result)
+        }
     }
 }

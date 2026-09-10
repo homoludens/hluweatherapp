@@ -18,14 +18,20 @@ import kotlinx.coroutines.launch
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.ui.map.shouldRefresh
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
+import kotlinx.datetime.Instant
+import kotlin.time.Clock
 
 data class WeatherUiState(
     val activeLocation: WeatherLocation? = null,
@@ -34,13 +40,25 @@ data class WeatherUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val forecastMode: ForecastMode = ForecastMode.HOURLY,
-    val selectedDayIndex: Int = 0
+    val selectedDayIndex: Int = 0,
+    val trackMeStatus: TrackMeStatus = TrackMeStatus.Idle
 )
+
+sealed interface TrackMeStatus {
+    data object Idle : TrackMeStatus
+    data object Locating : TrackMeStatus
+    data object Active : TrackMeStatus
+    data object PermissionRequired : TrackMeStatus
+    data object LocationDisabled : TrackMeStatus
+    data object Unavailable : TrackMeStatus
+}
 
 class WeatherViewModel(
     private val repository: WeatherRepository,
     private val settingsRepository: SettingsRepository,
-    private val locationRepository: LocationRepository
+    private val locationRepository: LocationRepository,
+    private val deviceLocationSource: DeviceLocationSource? = null,
+    private val now: () -> Instant = { Clock.System.now() }
 ) : ViewModel() {
 
     constructor(repository: WeatherRepository, location: WeatherLocation) : this(
@@ -52,6 +70,11 @@ class WeatherViewModel(
     private val refreshes = MutableStateFlow(0)
     private val _state = MutableStateFlow(WeatherUiState(isLoading = true))
     private var requestGeneration = 0L
+    private var lastCurrentFetchPoint: GeoPoint? = null
+    private var lastCurrentFetchAt: Instant? = null
+    private var lastLoadedLocationKey: String? = null
+    private var lastLoadedProvider: WeatherProvider? = null
+    private var handledRefresh = 0
 
     val state = _state.asStateFlow()
 
@@ -66,8 +89,9 @@ class WeatherViewModel(
                 WeatherLoadRequest(
                     generation = ++requestGeneration,
                     provider = settings.provider,
-                    location = (activeLocation as? ActiveLocation.Saved)?.location,
-                    locations = locations
+                    activeLocation = activeLocation,
+                    locations = locations,
+                    refresh = refreshes.value
                 )
             }.collectLatest { request ->
                 load(request)
@@ -77,6 +101,35 @@ class WeatherViewModel(
 
     fun refresh() {
         refreshes.update { it + 1 }
+    }
+
+    suspend fun trackMeWhileStarted() {
+        val source = deviceLocationSource ?: return
+        _state.update { it.copy(trackMeStatus = TrackMeStatus.Locating) }
+        source.foregroundLocations().collect { result ->
+            when (result) {
+                is GpsResult.Success -> {
+                    locationRepository.setCurrentLocation(result.point, result.altitude)
+                    _state.update { it.copy(trackMeStatus = TrackMeStatus.Active) }
+                }
+                GpsResult.PermissionRequired ->
+                    _state.update { it.copy(trackMeStatus = TrackMeStatus.PermissionRequired) }
+                GpsResult.LocationDisabled ->
+                    _state.update { it.copy(trackMeStatus = TrackMeStatus.LocationDisabled) }
+                GpsResult.Unavailable ->
+                    _state.update { it.copy(trackMeStatus = TrackMeStatus.Unavailable) }
+            }
+        }
+    }
+
+    fun onTrackMePermissionResult(granted: Boolean) {
+        _state.update {
+            it.copy(trackMeStatus = if (granted) TrackMeStatus.Idle else TrackMeStatus.PermissionRequired)
+        }
+    }
+
+    fun clearTrackMeStatus() {
+        _state.update { it.copy(trackMeStatus = TrackMeStatus.Idle) }
     }
 
     fun selectLocation(location: WeatherLocation) {
@@ -100,7 +153,7 @@ class WeatherViewModel(
     }
 
     private suspend fun load(request: WeatherLoadRequest) {
-        val currentLocation = request.location
+        val currentLocation = request.activeLocation.toWeatherLocation()
         if (currentLocation == null) {
             if (requestGeneration != request.generation) return
             _state.update {
@@ -110,7 +163,31 @@ class WeatherViewModel(
                     forecast = null,
                     isLoading = false,
                     error = null,
-                    selectedDayIndex = 0
+                    selectedDayIndex = 0,
+                    trackMeStatus = it.trackMeStatus
+                )
+            }
+            return
+        }
+
+        val currentPoint = (request.activeLocation as? ActiveLocation.Current)?.point
+        val locationKey = currentPoint?.let { "current" } ?: currentLocation.id
+        val refreshRequested = request.refresh != handledRefresh
+        val providerChanged = request.provider != lastLoadedProvider
+        val locationChanged = currentPoint == null && locationKey != lastLoadedLocationKey
+        val currentNeedsRefresh = currentPoint != null && shouldRefresh(
+            lastCurrentFetchPoint,
+            currentPoint,
+            lastCurrentFetchAt,
+            now()
+        )
+        if (!refreshRequested && !providerChanged && !locationChanged && !currentNeedsRefresh) {
+            _state.update {
+                it.copy(
+                    activeLocation = currentLocation,
+                    locations = request.locations,
+                    isLoading = false,
+                    error = null
                 )
             }
             return
@@ -138,6 +215,13 @@ class WeatherViewModel(
                         error = null
                     )
                 }
+                handledRefresh = request.refresh
+                lastLoadedLocationKey = locationKey
+                lastLoadedProvider = request.provider
+                if (currentPoint != null) {
+                    lastCurrentFetchPoint = currentPoint
+                    lastCurrentFetchAt = now()
+                }
             }
         } catch (error: CancellationException) {
             throw error
@@ -162,7 +246,8 @@ class WeatherViewModel(
                 WeatherViewModel(
                     application.weatherRepository,
                     application.settingsRepository,
-                    application.locationRepository
+                    application.locationRepository,
+                    application.deviceLocationSource
                 )
             }
         }
@@ -172,9 +257,22 @@ class WeatherViewModel(
 private data class WeatherLoadRequest(
     val generation: Long,
     val provider: WeatherProvider,
-    val location: WeatherLocation?,
-    val locations: List<WeatherLocation>
+    val activeLocation: ActiveLocation?,
+    val locations: List<WeatherLocation>,
+    val refresh: Int
 )
+
+private fun ActiveLocation?.toWeatherLocation(): WeatherLocation? = when (this) {
+    is ActiveLocation.Saved -> location
+    is ActiveLocation.Current -> WeatherLocation(
+        id = "current",
+        name = "Current location",
+        latitude = point.latitude,
+        longitude = point.longitude,
+        altitude = altitude
+    )
+    null -> null
+}
 
 private object FixedSettingsRepository : SettingsRepository {
     override val settings = flowOf(PersistedSettings())
@@ -194,4 +292,5 @@ private class FixedLocationRepository(
     override suspend fun delete(id: String) = Unit
     override suspend fun selectSaved(id: String) = Unit
     override suspend fun setTrackMe(enabled: Boolean) = Unit
+    override suspend fun setCurrentLocation(point: GeoPoint, altitude: Int?) = Unit
 }
