@@ -622,7 +622,10 @@ private fun SummaryTimeRow(time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
+            .clickable(
+                onClickLabel = "Set daily summary time",
+                role = Role.Button
+            ) {
                 TimePickerDialog(
                     context,
                     { _, hour, minute -> onTimeChange(LocalTime(hour, minute)) },
@@ -641,8 +644,6 @@ private fun SummaryTimeRow(time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
             Text("Daily summary time", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 "Best effort; delivery may be delayed by Android.",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

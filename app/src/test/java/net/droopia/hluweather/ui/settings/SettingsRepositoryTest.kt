@@ -144,4 +144,46 @@ class SettingsRepositoryTest {
         assertTrue(settings.weatherAlerts)
         assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
     }
+
+    @Test
+    fun legacy_trip_alerts_preference_is_ignored() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.trip_alerts")] = true
+        }
+
+        assertEquals(PersistedSettings(), DataStoreSettingsRepository(dataStore).settings.first())
+    }
+
+    @Test
+    fun non_canonical_short_summary_time_uses_the_default() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.daily_summary_time")] = "8:00"
+        }
+
+        assertEquals(LocalTime(8, 0), DataStoreSettingsRepository(dataStore).settings.first().dailySummaryTime)
+    }
+
+    @Test
+    fun non_canonical_seconds_summary_time_uses_the_default() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.daily_summary_time")] = "08:00:00"
+        }
+
+        assertEquals(LocalTime(8, 0), DataStoreSettingsRepository(dataStore).settings.first().dailySummaryTime)
+    }
 }

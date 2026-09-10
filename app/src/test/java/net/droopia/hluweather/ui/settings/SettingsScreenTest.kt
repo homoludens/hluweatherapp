@@ -1,5 +1,7 @@
 package net.droopia.hluweather.ui.settings
 
+import android.app.TimePickerDialog
+import android.content.DialogInterface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -21,6 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowAlertDialog
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +78,22 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("08:00").assertIsDisplayed()
         composeRule.onNodeWithText("Best effort; delivery may be delayed by Android.").assertIsDisplayed()
         composeRule.onNodeWithText("Trip alerts").assertDoesNotExist()
+    }
+
+    @Test
+    fun clicking_summary_time_row_opens_picker_and_reports_selected_time() {
+        var selectedTime: LocalTime? = null
+        renderSettings(onDailySummaryTimeChange = { selectedTime = it })
+
+        scrollTo(5)
+        composeRule.onNodeWithTag("settings_daily_summary_time").performClick()
+
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        check(dialog is TimePickerDialog)
+        dialog.updateTime(9, 15)
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
+
+        assertEquals(LocalTime(9, 15), selectedTime)
     }
 
     @Test
