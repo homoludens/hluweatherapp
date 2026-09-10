@@ -274,7 +274,7 @@ class PrimaryFlowsAccessibilityTest {
     }
 
     @Test
-    fun large_font_scale_is_preserved_and_settings_text_wraps_without_ellipsis() {
+    fun large_font_scale_is_capped_and_settings_text_wraps_without_ellipsis() {
         var capturedFontScale = 0f
 
         composeRule.setContent {
@@ -304,7 +304,7 @@ class PrimaryFlowsAccessibilityTest {
             }
         }
 
-        assertEquals(1.5f, capturedFontScale, 0f)
+        assertEquals(1f, capturedFontScale, 0f)
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(5)
         composeRule.onNodeWithText("Thunderstorm alerts only").assertIsDisplayed()

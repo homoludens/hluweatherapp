@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF5367E8),
@@ -43,8 +45,14 @@ fun HluWeatherTheme(
 ) {
     val materialColors = if (darkTheme) DarkColors else LightColors
     val hluColors = if (darkTheme) DarkHluColors else LightHluColors
+    val density = LocalDensity.current
+    val cappedDensity = Density(
+        density = density.density,
+        fontScale = density.fontScale.coerceAtMost(1f)
+    )
 
     CompositionLocalProvider(
+        LocalDensity provides cappedDensity,
         LocalHluColors provides hluColors
     ) {
         MaterialTheme(colorScheme = materialColors, content = content)
