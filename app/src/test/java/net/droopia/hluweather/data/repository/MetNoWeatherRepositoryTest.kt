@@ -111,6 +111,18 @@ class MetNoWeatherRepositoryTest {
             "snowandthunder" to WeatherCondition.THUNDERSTORM,
             "sleetandthunder" to WeatherCondition.THUNDERSTORM
         )
+        val showerFamilies = listOf(
+            "rainshowers" to WeatherCondition.RAIN,
+            "lightrainshowers" to WeatherCondition.RAIN,
+            "heavyrainshowers" to WeatherCondition.RAIN,
+            "lightsnowshowers" to WeatherCondition.SNOW,
+            "heavysnowshowers" to WeatherCondition.SNOW,
+            "lightsleetshowers" to WeatherCondition.SNOW,
+            "heavysleetshowers" to WeatherCondition.SNOW,
+            "rainshowersandthunder" to WeatherCondition.THUNDERSTORM,
+            "snowshowersandthunder" to WeatherCondition.THUNDERSTORM,
+            "sleetshowersandthunder" to WeatherCondition.THUNDERSTORM
+        )
         val expected = buildList {
             baseFamilies.forEachIndexed { index, (family, condition) ->
                 suffixes.forEach { (suffix, isDay) ->
@@ -123,6 +135,13 @@ class MetNoWeatherRepositoryTest {
                     add(ExpectedSymbol("$family$suffix", condition, isDay))
                 }
             }
+            showerFamilies.forEach { (family, condition) ->
+                suffixes.forEach { (suffix, isDay) ->
+                    add(ExpectedSymbol("$family$suffix", condition, isDay))
+                }
+            }
+            add(ExpectedSymbol("ClEaRsKy_NiGhT", WeatherCondition.CLEAR, false))
+            add(ExpectedSymbol("RaInShowers_PoLaRtWiLiGhT", WeatherCondition.RAIN, null))
         }
 
         expected.forEach { (symbol, condition, isDay) ->
