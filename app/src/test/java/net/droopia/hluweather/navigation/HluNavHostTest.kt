@@ -3,8 +3,10 @@ package net.droopia.hluweather.navigation
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,5 +61,21 @@ class HluNavHostTest {
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+    }
+
+    @Test
+    fun add_location_opens_the_location_picker() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HluNavHost(weatherViewModel = weatherViewModel)
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(2)
+        composeRule.onNodeWithText("Add Location").performClick()
+
+        composeRule.onNodeWithText("Location picker").assertIsDisplayed()
     }
 }
