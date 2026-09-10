@@ -177,8 +177,8 @@ private fun String?.toWeatherSymbol(): WeatherSymbol {
         family == "cloudy" -> WeatherCondition.CLOUDY
         family.startsWith("fog") -> WeatherCondition.FOG
         family.contains("thunder") -> WeatherCondition.THUNDERSTORM
-        family.startsWith("snow") || family.startsWith("sleet") -> WeatherCondition.SNOW
-        family.startsWith("rain") -> WeatherCondition.RAIN
+        family.contains("snow") || family.contains("sleet") -> WeatherCondition.SNOW
+        family.contains("rain") -> WeatherCondition.RAIN
         else -> WeatherCondition.UNKNOWN
     }
     return WeatherSymbol(condition, isDay)

@@ -4,6 +4,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.WeatherCondition
@@ -19,6 +20,7 @@ import net.droopia.hluweather.data.network.MetNoTimeSeries
 import net.droopia.hluweather.data.network.MetNoTimeSeriesData
 import net.droopia.hluweather.data.network.MetNoProperties
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -57,11 +59,34 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
+    fun getForecast_keeps_the_seventh_local_date_and_excludes_the_eighth() = runTest {
+        val response = responseWithTimeseries(
+            *(aggregatedResponse.properties.timeseries + listOf(
+                timeSeries("fair_day", time = "2026-09-15T22:00:00Z"),
+                timeSeries("fair_day", time = "2026-09-16T22:00:00Z")
+            )).toTypedArray()
+        )
+
+        val forecast = repository(
+            response = response,
+            clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
+        ).getForecast(WeatherProvider.MET_NO, location)
+
+        assertEquals(
+            listOf("2026-09-10", "2026-09-11", "2026-09-16"),
+            forecast.daily.map { it.date.toString() }
+        )
+        assertEquals(4, forecast.hourly.size)
+        assertEquals(Instant.parse("2026-09-15T22:00:00Z"), forecast.hourly.last().time)
+    }
+
+    @Test
     fun getForecast_maps_all_symbol_families_and_day_night_variants() = runTest {
         val expected = mapOf(
-            "clearsky_day" to (WeatherCondition.CLEAR to true),
+            "ClEaRsKy_NiGhT" to (WeatherCondition.CLEAR to false),
             "fair_night" to (WeatherCondition.MOSTLY_CLEAR to false),
             "partlycloudy_day" to (WeatherCondition.PARTLY_CLOUDY to true),
+            "partlycloudy_polartwilight" to (WeatherCondition.PARTLY_CLOUDY to null),
             "cloudy_night" to (WeatherCondition.CLOUDY to false),
             "fog_day" to (WeatherCondition.FOG to true),
             "thunder_night" to (WeatherCondition.THUNDERSTORM to false),
@@ -69,7 +94,15 @@ class MetNoWeatherRepositoryTest {
             "sleet_night" to (WeatherCondition.SNOW to false),
             "rain_day" to (WeatherCondition.RAIN to true),
             "rainshowers_night" to (WeatherCondition.RAIN to false),
-            "rainshowersandthunder_day" to (WeatherCondition.THUNDERSTORM to true)
+            "lightrainshowers_day" to (WeatherCondition.RAIN to true),
+            "heavyrainshowers_night" to (WeatherCondition.RAIN to false),
+            "lightsnowshowers_day" to (WeatherCondition.SNOW to true),
+            "heavysnowshowers_night" to (WeatherCondition.SNOW to false),
+            "lightsleetshowers_day" to (WeatherCondition.SNOW to true),
+            "heavysleetshowers_night" to (WeatherCondition.SNOW to false),
+            "rainshowersandthunder_day" to (WeatherCondition.THUNDERSTORM to true),
+            "snowshowersandthunder_night" to (WeatherCondition.THUNDERSTORM to false),
+            "sleetshowersandthunder_polartwilight" to (WeatherCondition.THUNDERSTORM to null)
         )
 
         expected.forEach { (symbol, result) ->
@@ -133,6 +166,24 @@ class MetNoWeatherRepositoryTest {
             runBlocking { repository.getForecast(WeatherProvider.OPEN_METEO, location) }
         })
         assertEquals(false, called)
+    }
+
+    @Test
+    fun getForecast_rethrows_the_same_api_cancellation_unchanged() {
+        val cancellation = CancellationException("cancelled")
+        val repository = MetNoWeatherRepository(
+            api = object : MetNoApi {
+                override suspend fun forecast(location: WeatherLocation): MetNoResponse {
+                    throw cancellation
+                }
+            }
+        )
+
+        val thrown = assertThrows(CancellationException::class.java, ThrowingRunnable {
+            runBlocking { repository.getForecast(WeatherProvider.MET_NO, location) }
+        })
+
+        assertSame(cancellation, thrown)
     }
 
     private fun assertRepositoryFailure(response: MetNoResponse) {
