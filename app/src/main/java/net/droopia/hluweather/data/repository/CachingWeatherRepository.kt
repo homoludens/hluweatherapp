@@ -15,6 +15,10 @@ class CachingWeatherRepository(
     private val cache: ForecastCacheStore
 ) : WeatherRepository {
 
+    init {
+        validateSources()
+    }
+
     constructor(
         openMeteo: WeatherSource,
         metNo: WeatherSource,
@@ -33,14 +37,24 @@ class CachingWeatherRepository(
     ): ForecastLoad {
         val source = sources[provider]
             ?: throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
+        validateSource(provider, source)
         val key = ForecastCacheKey(provider, location.cacheLocationKey())
         val forecast = try {
             source.getForecast(location.toWeatherLocation())
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            cache.get(key)?.let { return ForecastLoad(it, isStale = true) }
-                ?: throw error
+            val cached = try {
+                cache.get(key)
+            } catch (cacheError: CancellationException) {
+                throw cacheError
+            } catch (_: Exception) {
+                throw error
+            }
+            if (cached != null && cached.provider == key.provider) {
+                return ForecastLoad(cached, isStale = true)
+            }
+            throw error
         }
         try {
             cache.put(key, forecast)
@@ -54,6 +68,18 @@ class CachingWeatherRepository(
 
     override suspend fun clearCache() {
         cache.clear()
+    }
+
+    private fun validateSources() {
+        sources.forEach { (provider, source) ->
+            validateSource(provider, source)
+        }
+    }
+
+    private fun validateSource(provider: WeatherProvider, source: WeatherSource) {
+        require(source.provider == provider) {
+            "Weather provider ${provider.title} is routed to ${source.provider.title}"
+        }
     }
 }
 

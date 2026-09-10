@@ -355,6 +355,34 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun stale_track_me_result_does_not_advance_live_refresh_gate() = runTest {
+        val source = TestDeviceLocationSource()
+        val locations = TestLocationRepository(null)
+        locations.mode.value = LocationMode.TRACK_ME
+        val repository = RecordingWeatherRepository(stale = true)
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            locations,
+            source,
+            now = { Instant.fromEpochSeconds(1_000L) }
+        )
+        val tracking = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.trackMeWhileStarted()
+        }
+        val first = GeoPoint(44.8176, 20.4633)
+        val nearby = GeoPoint(44.8266, 20.4633)
+
+        source.emit(GpsResult.Success(first, null))
+        advanceUntilIdle()
+        source.emit(GpsResult.Success(nearby, null))
+        advanceUntilIdle()
+
+        assertEquals(2, repository.requests.size)
+        tracking.cancel()
+    }
+
+    @Test
     fun track_me_routes_permission_and_disabled_statuses() = runTest {
         val source = TestDeviceLocationSource()
         val viewModel = WeatherViewModel(
@@ -408,7 +436,9 @@ class WeatherViewModelTest {
         viewModel.clearTrackMeStatus()
     }
 
-    private class RecordingWeatherRepository : WeatherRepository {
+    private class RecordingWeatherRepository(
+        private val stale: Boolean = false
+    ) : WeatherRepository {
         val requests = mutableListOf<Request>()
 
         override suspend fun getForecast(
@@ -418,7 +448,8 @@ class WeatherViewModelTest {
             val weatherLocation = location.toTestWeatherLocation()
             return ForecastLoad(
                 buildMockForecast(weatherLocation, Instant.fromEpochSeconds(requests.size.toLong()))
-                    .copy(provider = provider)
+                    .copy(provider = provider),
+                isStale = stale
             ).also {
                 requests += Request(provider, weatherLocation)
             }

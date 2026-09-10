@@ -132,6 +132,24 @@ class CachingWeatherRepositoryTest {
     }
 
     @Test
+    fun cache_read_failure_preserves_the_live_failure() = runTest {
+        val liveFailure = WeatherRepositoryException("offline")
+        val repository = repository(
+            FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO), liveFailure),
+            ReadFailingCache(IllegalStateException("cache unavailable"))
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(WeatherProvider.OPEN_METEO, ActiveLocation.Saved(Svilajnac))
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
+    }
+
+    @Test
     fun cache_write_failure_returns_the_live_result_without_stale_fallback() = runTest {
         val liveForecast = forecast(WeatherProvider.OPEN_METEO, "2026-09-10T12:00:00Z")
         val olderForecast = forecast(WeatherProvider.OPEN_METEO, "2026-09-09T12:00:00Z")
@@ -218,6 +236,42 @@ class CachingWeatherRepositoryTest {
         assertEquals(0, source.calls)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun mismatched_source_provider_is_rejected_at_construction() {
+        CachingWeatherRepository(
+            sources = mapOf(
+                WeatherProvider.OPEN_METEO to FakeSource(
+                    WeatherProvider.MET_NO,
+                    forecast(WeatherProvider.MET_NO)
+                )
+            ),
+            cache = InMemoryCache()
+        )
+    }
+
+    @Test
+    fun cached_forecast_with_mismatched_embedded_provider_is_rejected() = runTest {
+        val liveFailure = WeatherRepositoryException("offline")
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"),
+            forecast(WeatherProvider.MET_NO)
+        )
+        val repository = repository(
+            FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO), liveFailure),
+            cache
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(WeatherProvider.OPEN_METEO, ActiveLocation.Saved(Svilajnac))
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
+    }
+
     private fun repository(source: FakeSource, cache: ForecastCacheStore) = CachingWeatherRepository(
         sources = mapOf(source.provider to source),
         cache = cache
@@ -266,6 +320,18 @@ class CachingWeatherRepositoryTest {
         override suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) {
             error("cache write failed")
         }
+
+        override suspend fun entries() = emptyList<ForecastCacheKey>()
+
+        override suspend fun clear() = Unit
+    }
+
+    private class ReadFailingCache(
+        private val failure: Throwable
+    ) : ForecastCacheStore {
+        override suspend fun get(key: ForecastCacheKey): WeatherForecast? = throw failure
+
+        override suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) = Unit
 
         override suspend fun entries() = emptyList<ForecastCacheKey>()
 

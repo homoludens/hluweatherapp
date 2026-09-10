@@ -232,7 +232,7 @@ class WeatherViewModel(
                 handledRefresh = request.refresh
                 lastLoadedLocationKey = locationKey
                 lastLoadedProvider = request.provider
-                if (currentPoint != null) {
+                if (currentPoint != null && !forecast.isStale) {
                     lastCurrentFetchPoint = currentPoint
                     lastCurrentFetchAt = now()
                 }
