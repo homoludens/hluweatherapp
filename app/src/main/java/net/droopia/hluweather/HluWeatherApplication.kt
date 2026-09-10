@@ -1,11 +1,19 @@
 package net.droopia.hluweather
 
 import android.app.Application
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
@@ -23,10 +31,41 @@ import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.applicationDataStore
 import net.droopia.hluweather.data.repository.locationRepository
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.LocationMode
+import net.droopia.hluweather.notifications.DataStoreNotificationStateRepository
+import net.droopia.hluweather.notifications.NotificationBoundaryWorker
+import net.droopia.hluweather.notifications.NotificationChannels
+import net.droopia.hluweather.notifications.NotificationScheduler
+import net.droopia.hluweather.notifications.NotificationStateRepository
+import net.droopia.hluweather.notifications.WorkManagerNotificationScheduler
+import net.droopia.hluweather.notifications.notificationDataStore
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import net.droopia.hluweather.ui.settings.settingsRepository
 
-class HluWeatherApplication : Application() {
+class HluWeatherApplication : Application(), Configuration.Provider {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
+
+    override fun onCreate() {
+        super.onCreate()
+        NotificationChannels.create(this)
+        applicationScope.launch {
+            combine(
+                settingsRepository.settings,
+                locationRepository.activeLocation,
+                locationRepository.locationMode
+            ) { settings, activeLocation, locationMode ->
+                settings.copy(
+                    selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id,
+                    trackMeEnabled = settings.trackMeEnabled || locationMode == LocationMode.TRACK_ME
+                )
+            }.collect(notificationScheduler::reconcile)
+        }
+    }
 
     private val httpClient: HttpClient by lazy {
         HttpClient(OkHttp) {
@@ -62,6 +101,18 @@ class HluWeatherApplication : Application() {
 
     val deviceLocationSource: DeviceLocationSource by lazy {
         AndroidDeviceLocationSource(this)
+    }
+
+    val notificationStateRepository: NotificationStateRepository by lazy {
+        DataStoreNotificationStateRepository(notificationDataStore)
+    }
+
+    val notificationScheduler: NotificationScheduler by lazy {
+        WorkManagerNotificationScheduler(
+            workManager = WorkManager.getInstance(this),
+            alertWorkerClass = NotificationBoundaryWorker::class.java,
+            summaryWorkerClass = NotificationBoundaryWorker::class.java
+        )
     }
 
     val reverseGeocoder: ReverseGeocoder by lazy {

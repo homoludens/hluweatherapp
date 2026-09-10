@@ -9,6 +9,7 @@ navigationCompose = "2.9.8"
 coroutines = "1.11.0"
 kotlinxDateTime = "0.8.0"
 dataStore = "1.1.7"
+workManager = "2.10.1"
 junit = "4.13.2"
 robolectric = "4.16.1"
 androidxTestCore = "1.7.0"
@@ -33,6 +34,8 @@ navigation-compose = { module = "androidx.navigation:navigation-compose", versio
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDateTime" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "dataStore" }
+work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
+work-testing = { module = "androidx.work:work-testing", version.ref = "workManager" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
