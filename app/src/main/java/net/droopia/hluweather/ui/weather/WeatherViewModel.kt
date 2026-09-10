@@ -216,6 +216,8 @@ class WeatherViewModel(
             return
         }
 
+        if (refreshRequested) handledRefresh = request.refresh
+
         _state.update {
             it.copy(
                 activeLocation = currentLocation,

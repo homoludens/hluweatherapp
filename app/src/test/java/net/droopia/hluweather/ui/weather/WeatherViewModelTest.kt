@@ -177,6 +177,67 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun failed_refresh_is_handled_before_provider_change() = runTest {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = null,
+            networkResults = listOf(
+                CompletableDeferred(ForecastLoad(initialForecast)),
+                refreshResult,
+                CompletableDeferred(ForecastLoad(initialForecast.copy(provider = WeatherProvider.MET_NO)))
+            )
+        )
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            settings,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        refreshResult.completeExceptionally(IllegalStateException("offline"))
+        advanceUntilIdle()
+
+        settings.emit(provider = WeatherProvider.MET_NO)
+        advanceUntilIdle()
+
+        assertEquals(2, repository.cacheReads)
+        assertEquals(3, repository.networkRequests)
+        assertEquals(WeatherProvider.MET_NO, viewModel.state.value.forecast?.provider)
+    }
+
+    @Test
+    fun cancelled_refresh_is_handled_before_provider_change() = runTest {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val refreshRequest = PendingRequest()
+        val providerRequest = PendingRequest()
+        val repository = CancellationAwareWeatherRepository(
+            PendingRequest().also { it.result.complete(initialForecast) },
+            refreshRequest,
+            providerRequest
+        )
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            settings,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+        settings.emit(provider = WeatherProvider.MET_NO)
+        advanceUntilIdle()
+
+        assertEquals(2, repository.cacheReads)
+        providerRequest.result.complete(newForecast)
+        advanceUntilIdle()
+    }
+
+    @Test
     fun no_cache_keeps_initial_loading_until_network_completes() = runTest {
         val networkResult = CompletableDeferred<ForecastLoad>()
         val repository = CacheFirstRecordingRepository(
@@ -727,6 +788,15 @@ class WeatherViewModelTest {
         private vararg val requests: PendingRequest
     ) : WeatherRepository {
         private var requestIndex = 0
+        var cacheReads = 0
+
+        override suspend fun getCachedForecast(
+            provider: WeatherProvider,
+            location: ActiveLocation
+        ): ForecastLoad? {
+            cacheReads++
+            return null
+        }
 
         override suspend fun getForecast(
             provider: WeatherProvider,
