@@ -219,7 +219,6 @@ class WeatherViewModelTest {
         withTimeout(5_000) {
             viewModel.state.first { it.forecast != null }
         }
-        advanceUntilIdle()
 
         assertEquals(1, settingsEmissions.size)
         assertEquals(1, source.requests)
