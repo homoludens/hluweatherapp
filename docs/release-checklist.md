@@ -129,10 +129,13 @@
 ## Device Verification
 
 The local environment detected a connected Android device (`M2012K11AG`, API
-33), but it was unusable for verification because installation was user-
-restricted (`INSTALL_FAILED_USER_RESTRICTED`). No AVD was available.
+33), but it was unusable for verification. The initial direct adb installation
+returned `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`; a later
+bounded retry reached installation but returned
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did not
+match. No AVD was available.
 
-- [ ] `connectedDebugAndroidTest` launch and navigation smoke test.
+- [ ] `connectedDebugAndroidTest` activity-launch smoke test.
 - [ ] Install and launch a signed release APK manually on an unrestricted
   device. `connectedDebugAndroidTest` installs the debug APK and does not prove
   signed-release execution.
@@ -301,8 +304,10 @@ Verification date: `2026-09-10`.
   not match; test-APK cleanup also returned `DELETE_FAILED_INTERNAL_ERROR`.
   It started `0` tests, so no instrumentation assertion result was obtained.
   The task installs the debug APK, not the signed release APK.
-- [ ] Signed release install and launch. Blocked by the same device
-  installation restriction.
+- [ ] Signed release install and launch. Not completed: the initial install
+  returned `INSTALL_FAILED_USER_RESTRICTED`, and the later retry returned
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did
+  not match.
 - [ ] TalkBack labels and actions. Manual device check remains open.
 - [ ] Large-font layout and text wrapping. Automated constrained-font coverage
   passed; manual device check remains open.

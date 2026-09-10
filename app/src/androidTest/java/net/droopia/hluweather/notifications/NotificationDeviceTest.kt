@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.core.content.ContextCompat
@@ -16,6 +17,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 @RunWith(AndroidJUnit4::class)
 class NotificationDeviceTest {
@@ -24,7 +27,7 @@ class NotificationDeviceTest {
     private val testId = System.nanoTime().toString()
     private val testWeatherChannelId = "device_test_weather_$testId"
     private val testSummaryChannelId = "device_test_summary_$testId"
-    private val testNotificationId = testId.hashCode()
+    private val testNotificationId = TEST_NOTIFICATION_ID
 
     @Test
     fun notification_channels_are_created_with_expected_importance() {
@@ -92,7 +95,15 @@ class NotificationDeviceTest {
             setPostNotificationsPermission(granted = true)
             assertTrue(hasPostNotificationsPermission())
         } finally {
-            setPostNotificationsPermission(granted = wasGranted)
+            val restorationFailure = runCatching {
+                setPostNotificationsPermission(granted = wasGranted)
+            }.exceptionOrNull()
+            assertEquals(
+                "Notification permission was not restored",
+                wasGranted,
+                hasPostNotificationsPermission()
+            )
+            restorationFailure?.let { throw it }
         }
     }
 
@@ -110,9 +121,21 @@ class NotificationDeviceTest {
 
     private fun setPostNotificationsPermission(granted: Boolean) {
         val action = if (granted) "grant" else "revoke"
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand("pm $action ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}")
-            .close()
+        val command = "pm $action ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}" +
+            "; printf '\\n$SHELL_EXIT_STATUS_MARKER=%s\\n' \"\$?\""
+        val output = ParcelFileDescriptor.AutoCloseInputStream(
+            InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand(command)
+        ).use { input ->
+            BufferedReader(InputStreamReader(input)).readText()
+        }
+        val exitStatus = output.lineSequence()
+            .lastOrNull { it.startsWith("$SHELL_EXIT_STATUS_MARKER=") }
+            ?.substringAfter('=')
+            ?.toIntOrNull()
+        check(exitStatus == 0) {
+            "Permission command failed with exit status $exitStatus: ${output.trim()}"
+        }
     }
 
     private fun deleteTestChannels() {
@@ -120,5 +143,10 @@ class NotificationDeviceTest {
             manager.deleteNotificationChannel(testWeatherChannelId)
             manager.deleteNotificationChannel(testSummaryChannelId)
         }
+    }
+
+    private companion object {
+        const val SHELL_EXIT_STATUS_MARKER = "NOTIFICATION_TEST_EXIT_STATUS"
+        const val TEST_NOTIFICATION_ID = 2_000_001
     }
 }
