@@ -41,6 +41,7 @@ import net.droopia.hluweather.notifications.NotificationStateRepository
 import net.droopia.hluweather.notifications.WorkManagerNotificationScheduler
 import net.droopia.hluweather.notifications.notificationDataStore
 import net.droopia.hluweather.ui.settings.SettingsRepository
+import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.settingsRepository
 
 class HluWeatherApplication : Application(), Configuration.Provider {
@@ -59,10 +60,7 @@ class HluWeatherApplication : Application(), Configuration.Provider {
                 locationRepository.activeLocation,
                 locationRepository.locationMode
             ) { settings, activeLocation, locationMode ->
-                settings.copy(
-                    selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id,
-                    trackMeEnabled = settings.trackMeEnabled || locationMode == LocationMode.TRACK_ME
-                )
+                notificationSettingsForReconciliation(settings, activeLocation, locationMode)
             }.collect(notificationScheduler::reconcile)
         }
     }
@@ -119,3 +117,12 @@ class HluWeatherApplication : Application(), Configuration.Provider {
         NominatimReverseGeocoder(KtorNominatimApi(httpClient))
     }
 }
+
+internal fun notificationSettingsForReconciliation(
+    settings: PersistedSettings,
+    activeLocation: ActiveLocation?,
+    locationMode: LocationMode
+): PersistedSettings = settings.copy(
+    selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id,
+    trackMeEnabled = locationMode == LocationMode.TRACK_ME
+)

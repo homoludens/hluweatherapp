@@ -25,6 +25,8 @@ import kotlin.time.Duration
 interface NotificationScheduler {
     fun reconcile(settings: net.droopia.hluweather.ui.settings.PersistedSettings)
 
+    fun enqueueNextDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings)
+
     companion object {
         const val WEATHER_ALERT_WORK_NAME = "weather_alerts"
         const val DAILY_SUMMARY_WORK_NAME = "daily_summary"
@@ -62,13 +64,19 @@ class WorkManagerNotificationScheduler(
     fun delayUntil(summaryTime: LocalTime, now: LocalDateTime): Duration =
         delayUntil(summaryTime, now, timeZone)
 
-    fun enqueueNextDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
+    override fun enqueueNextDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
         if (!settings.trackMeEnabled && settings.selectedLocationId != null && settings.dailySummary) {
-            enqueueDailySummary(settings)
+            enqueueDailySummary(settings, replaceExisting = true)
         }
     }
 
     private fun enqueueWeatherAlerts(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
+        if (hasPendingWork(
+                NotificationScheduler.WEATHER_ALERT_WORK_NAME,
+                alertScheduleIdentity(settings)
+            )
+        ) return
+
         val request = PeriodicWorkRequest.Builder(
             alertWorkerClass,
             ALERT_INTERVAL_MINUTES,
@@ -77,15 +85,25 @@ class WorkManagerNotificationScheduler(
             .setConstraints(alertConstraints)
             .setInitialDelay(ALERT_INITIAL_DELAY_MINUTES, java.util.concurrent.TimeUnit.MINUTES)
             .setInputData(settingsInput(settings))
+            .addTag(alertScheduleIdentity(settings))
             .build()
         workManager.enqueueUniquePeriodicWork(
             NotificationScheduler.WEATHER_ALERT_WORK_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
             request
         )
     }
 
-    private fun enqueueDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
+    private fun enqueueDailySummary(
+        settings: net.droopia.hluweather.ui.settings.PersistedSettings,
+        replaceExisting: Boolean = false
+    ) {
+        if (!replaceExisting && hasPendingWork(
+                NotificationScheduler.DAILY_SUMMARY_WORK_NAME,
+                summaryScheduleIdentity(settings)
+            )
+        ) return
+
         val delay = delayUntil(
             settings.dailySummaryTime,
             clock.now().toLocalDateTime(timeZone)
@@ -93,6 +111,7 @@ class WorkManagerNotificationScheduler(
         val request = OneTimeWorkRequest.Builder(summaryWorkerClass)
             .setInitialDelay(delay.inWholeMilliseconds, java.util.concurrent.TimeUnit.MILLISECONDS)
             .setInputData(settingsInput(settings))
+            .addTag(summaryScheduleIdentity(settings))
             .build()
         workManager.enqueueUniqueWork(
             NotificationScheduler.DAILY_SUMMARY_WORK_NAME,
@@ -103,8 +122,20 @@ class WorkManagerNotificationScheduler(
 
     private fun settingsInput(settings: net.droopia.hluweather.ui.settings.PersistedSettings) = workDataOf(
         LOCATION_ID_INPUT to settings.selectedLocationId,
-        PROVIDER_INPUT to settings.provider.name
+        PROVIDER_INPUT to settings.provider.name,
+        SUMMARY_TIME_INPUT to settings.dailySummaryTime.toString()
     )
+
+    private fun hasPendingWork(name: String, identity: String): Boolean =
+        workManager.getWorkInfosForUniqueWork(name).get().any { workInfo ->
+            !workInfo.state.isFinished && identity in workInfo.tags
+        }
+
+    private fun alertScheduleIdentity(settings: net.droopia.hluweather.ui.settings.PersistedSettings): String =
+        "notification.schedule.alert.${settings.provider.name}.${settings.selectedLocationId}"
+
+    private fun summaryScheduleIdentity(settings: net.droopia.hluweather.ui.settings.PersistedSettings): String =
+        "notification.schedule.summary.${settings.provider.name}.${settings.selectedLocationId}.${settings.dailySummaryTime}"
 
     private fun cancelWeatherAlerts() {
         workManager.cancelUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME)
@@ -137,6 +168,7 @@ fun delayUntil(summaryTime: LocalTime, now: LocalDateTime, timeZone: TimeZone): 
 
 const val LOCATION_ID_INPUT = "notification.location_id"
 const val PROVIDER_INPUT = "notification.provider"
+const val SUMMARY_TIME_INPUT = "notification.summary_time"
 
 /** Scheduling boundary used until Task 3 supplies the real delivery workers. */
 class NotificationBoundaryWorker(

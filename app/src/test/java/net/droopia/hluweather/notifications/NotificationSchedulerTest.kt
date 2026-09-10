@@ -109,6 +109,114 @@ class NotificationSchedulerTest {
     }
 
     @Test
+    fun alert_work_starts_after_fifteen_minutes() = runBlocking {
+        scheduler.reconcile(
+            PersistedSettings(
+                selectedLocationId = "belgrade",
+                weatherAlerts = true
+            )
+        )
+
+        val work = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME)
+            .get()
+            .single()
+        val delay = work.nextScheduleTimeMillis - System.currentTimeMillis()
+
+        assertTrue(delay in 14 * 60 * 1000L..16 * 60 * 1000L)
+    }
+
+    @Test
+    fun missing_selected_location_cancels_both_work_sequences() = runBlocking {
+        scheduler.reconcile(
+            PersistedSettings(
+                selectedLocationId = "belgrade",
+                weatherAlerts = true,
+                dailySummary = true
+            )
+        )
+
+        scheduler.reconcile(
+            PersistedSettings(
+                weatherAlerts = true,
+                dailySummary = true
+            )
+        )
+
+        assertTrue(
+            workManager.getWorkInfosForUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME)
+                .get().single().state.isFinished
+        )
+        assertTrue(
+            workManager.getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+                .get().single().state.isFinished
+        )
+    }
+
+    @Test
+    fun reconciliation_preserves_pending_summary_with_the_same_identity() = runBlocking {
+        val settings = PersistedSettings(
+            selectedLocationId = "belgrade",
+            provider = WeatherProvider.OPEN_METEO,
+            dailySummary = true
+        )
+
+        scheduler.reconcile(settings)
+        val first = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get().single().id
+
+        scheduler.reconcile(settings)
+        val second = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get().single().id
+
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun reconciliation_replaces_summary_when_delivery_time_changes() = runBlocking {
+        scheduler.reconcile(
+            PersistedSettings(
+                selectedLocationId = "belgrade",
+                dailySummary = true,
+                dailySummaryTime = LocalTime(8, 0)
+            )
+        )
+        val first = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get().single().id
+
+        scheduler.reconcile(
+            PersistedSettings(
+                selectedLocationId = "belgrade",
+                dailySummary = true,
+                dailySummaryTime = LocalTime(9, 0)
+            )
+        )
+        val second = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get().single().id
+
+        assertFalse(first == second)
+    }
+
+    @Test
+    fun summary_successor_is_available_through_scheduler_interface() = runBlocking {
+        val interfaceScheduler: NotificationScheduler = scheduler
+
+        interfaceScheduler.enqueueNextDailySummary(
+            PersistedSettings(selectedLocationId = "belgrade", dailySummary = true)
+        )
+
+        assertEquals(
+            androidx.work.WorkInfo.State.ENQUEUED,
+            workManager.getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+                .get().single().state
+        )
+    }
+
+    @Test
     fun disabled_setting_cancels_only_its_work() = runBlocking {
         scheduler.reconcile(
             PersistedSettings(
