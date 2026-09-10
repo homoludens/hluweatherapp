@@ -142,6 +142,17 @@ fun LocationPickerScreen(
                     state.altitude?.let { altitude ->
                         Text("Altitude: ${altitude} m", style = MaterialTheme.typography.bodyMedium)
                     }
+                    when (state.initialization) {
+                        LocationPickerInitialization.Ready -> Unit
+                        LocationPickerInitialization.Loading ->
+                            Text("Loading location...", style = MaterialTheme.typography.bodySmall)
+                        LocationPickerInitialization.MissingEditLocation ->
+                            Text(
+                                "Location not found",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                    }
                     gpsStatusText(state.gpsStatus)?.let { status ->
                         Text(
                             text = status,
@@ -164,7 +175,10 @@ fun LocationPickerScreen(
                                 Text("Delete")
                             }
                         }
-                        Button(onClick = viewModel::save) {
+                        Button(
+                            enabled = state.initialization == LocationPickerInitialization.Ready,
+                            onClick = viewModel::save
+                        ) {
                             Text("Save")
                         }
                     }

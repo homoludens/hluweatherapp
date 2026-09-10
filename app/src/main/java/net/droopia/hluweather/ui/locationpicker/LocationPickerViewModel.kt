@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,13 +38,20 @@ sealed interface GpsStatus {
     data object Unavailable : GpsStatus
 }
 
+sealed interface LocationPickerInitialization {
+    data object Ready : LocationPickerInitialization
+    data object Loading : LocationPickerInitialization
+    data object MissingEditLocation : LocationPickerInitialization
+}
+
 data class LocationPickerUiState(
     val latitude: Double = DEFAULT_LATITUDE,
     val longitude: Double = DEFAULT_LONGITUDE,
     val altitude: Int? = null,
     val name: String = NEW_LOCATION_NAME,
     val isNameEditing: Boolean = false,
-    val gpsStatus: GpsStatus = GpsStatus.Idle
+    val gpsStatus: GpsStatus = GpsStatus.Idle,
+    val initialization: LocationPickerInitialization = LocationPickerInitialization.Ready
 ) {
     val point: GeoPoint
         get() = GeoPoint(latitude, longitude)
@@ -72,14 +80,21 @@ class LocationPickerViewModel(
     private var reverseGeocodingJob: Job? = null
     private val editingLocationId = initialLocation?.id ?: locationId
     val isEditMode: Boolean
-        get() = editingLocationId != null
+        get() = editingLocationId != null && _state.value.initialization == LocationPickerInitialization.Ready
 
     init {
         if (initialLocation == null && locationId != null) {
+            _state.update { it.copy(initialization = LocationPickerInitialization.Loading) }
             viewModelScope.launch {
-                locationRepository.locations.first()
+                val location = locationRepository.locations.first()
                     .firstOrNull { it.id == locationId }
-                    ?.let { location -> _state.value = location.toPickerState() }
+                if (location == null) {
+                    _state.update {
+                        it.copy(initialization = LocationPickerInitialization.MissingEditLocation)
+                    }
+                } else {
+                    _state.value = location.toPickerState()
+                }
             }
         }
     }
@@ -103,8 +118,14 @@ class LocationPickerViewModel(
     fun onGpsClick() {
         _state.update { it.copy(gpsStatus = GpsStatus.Locating) }
         viewModelScope.launch {
-            onGpsResult(runCatching { deviceLocationSource.currentLocation() }
-                .getOrDefault(GpsResult.Unavailable))
+            val result = try {
+                deviceLocationSource.currentLocation()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                GpsResult.Unavailable
+            }
+            onGpsResult(result)
         }
     }
 
@@ -136,6 +157,7 @@ class LocationPickerViewModel(
     }
 
     fun save() {
+        if (_state.value.initialization != LocationPickerInitialization.Ready) return
         val current = _state.value
         val location = WeatherLocation(
             id = editingLocationId ?: UUID.randomUUID().toString(),
@@ -160,6 +182,7 @@ class LocationPickerViewModel(
     }
 
     fun delete() {
+        if (!isEditMode) return
         val id = editingLocationId ?: return
         viewModelScope.launch {
             runCatching { locationRepository.delete(id) }
@@ -185,7 +208,13 @@ class LocationPickerViewModel(
     private fun requestReverseGeocode(point: GeoPoint) {
         reverseGeocodingJob?.cancel()
         reverseGeocodingJob = viewModelScope.launch {
-            onReverseGeocoded(reverseGeocoder.reverse(point))
+            try {
+                onReverseGeocoded(reverseGeocoder.reverse(point))
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                onReverseGeocoded(null)
+            }
         }
     }
 

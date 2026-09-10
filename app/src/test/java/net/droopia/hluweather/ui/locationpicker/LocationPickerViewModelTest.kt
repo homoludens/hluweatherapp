@@ -1,10 +1,14 @@
 package net.droopia.hluweather.ui.locationpicker
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -92,6 +96,52 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun route_edit_save_waits_for_hydration_and_then_updates_the_existing_location() = runTest {
+        val existing = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
+        val locations = MutableSharedFlow<List<WeatherLocation>>()
+        val repository = FakeLocationRepository(locationsFlow = locations)
+        val viewModel = picker(repository = repository, locationId = existing.id)
+
+        assertEquals(LocationPickerInitialization.Loading, viewModel.state.value.initialization)
+        viewModel.save()
+        advanceUntilIdle()
+        assertTrue(repository.updated.isEmpty())
+
+        locations.emit(listOf(existing))
+        advanceUntilIdle()
+
+        assertEquals(LocationPickerInitialization.Ready, viewModel.state.value.initialization)
+        assertEquals(existing.name, viewModel.state.value.name)
+        viewModel.onNameChanged("Stari Grad")
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(existing.copy(name = "Stari Grad"), repository.updated.single())
+    }
+
+    @Test
+    fun missing_route_location_cannot_be_saved_or_deleted() = runTest {
+        val locations = MutableSharedFlow<List<WeatherLocation>>()
+        val repository = FakeLocationRepository(locationsFlow = locations)
+        val viewModel = picker(repository = repository, locationId = "missing")
+
+        locations.emit(emptyList())
+        advanceUntilIdle()
+
+        assertEquals(
+            LocationPickerInitialization.MissingEditLocation,
+            viewModel.state.value.initialization
+        )
+        assertFalse(viewModel.isEditMode)
+        viewModel.save()
+        viewModel.delete()
+        advanceUntilIdle()
+
+        assertTrue(repository.updated.isEmpty())
+        assertTrue(repository.deleted.isEmpty())
+    }
+
+    @Test
     fun gps_success_updates_coordinates_altitude_and_status() = runTest {
         val point = GeoPoint(45.6495, 13.7768)
         val viewModel = picker(
@@ -123,6 +173,49 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun denied_permission_preserves_permission_required_status() {
+        val viewModel = picker()
+
+        viewModel.onPermissionResult(granted = false)
+
+        assertEquals(GpsStatus.PermissionRequired, viewModel.state.value.gpsStatus)
+    }
+
+    @Test
+    fun granted_permission_retries_gps() = runTest {
+        val point = GeoPoint(45.6495, 13.7768)
+        val gps = RecordingDeviceLocationSource(GpsResult.Success(point, altitude = null))
+        val viewModel = picker(gps = gps)
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(1, gps.calls)
+        assertEquals(point, viewModel.state.value.point)
+        assertEquals(GpsStatus.Success, viewModel.state.value.gpsStatus)
+    }
+
+    @Test
+    fun reverse_geocoding_exception_uses_fallback_name() = runTest {
+        val viewModel = picker(geocoder = ThrowingReverseGeocoder())
+
+        viewModel.onCameraIdle(viewModelPoint)
+        advanceUntilIdle()
+
+        assertEquals(NEW_LOCATION_NAME, viewModel.state.value.name)
+    }
+
+    @Test
+    fun gps_cancellation_does_not_become_unavailable() = runTest {
+        val viewModel = picker(gps = CancellingDeviceLocationSource())
+
+        viewModel.onGpsClick()
+        advanceUntilIdle()
+
+        assertEquals(GpsStatus.Locating, viewModel.state.value.gpsStatus)
+    }
+
+    @Test
     fun delete_only_deletes_in_edit_mode() = runTest {
         val existing = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
         val repository = FakeLocationRepository(listOf(existing))
@@ -142,18 +235,37 @@ class LocationPickerViewModelTest {
         repository: FakeLocationRepository = FakeLocationRepository(),
         gps: DeviceLocationSource = FakeDeviceLocationSource(GpsResult.Unavailable),
         geocoder: ReverseGeocoder = FakeReverseGeocoder(),
-        initialLocation: WeatherLocation? = null
+        initialLocation: WeatherLocation? = null,
+        locationId: String? = null
     ) = LocationPickerViewModel(
         locationRepository = repository,
         deviceLocationSource = gps,
         reverseGeocoder = geocoder,
-        initialLocation = initialLocation
+        initialLocation = initialLocation,
+        locationId = locationId
     )
 
     private class FakeDeviceLocationSource(
         private val result: GpsResult
     ) : DeviceLocationSource {
         override suspend fun currentLocation(): GpsResult = result
+    }
+
+    private class RecordingDeviceLocationSource(
+        private val result: GpsResult
+    ) : DeviceLocationSource {
+        var calls = 0
+
+        override suspend fun currentLocation(): GpsResult {
+            calls++
+            return result
+        }
+    }
+
+    private class CancellingDeviceLocationSource : DeviceLocationSource {
+        override suspend fun currentLocation(): GpsResult {
+            throw CancellationException("cancelled")
+        }
     }
 
     private class FakeReverseGeocoder : ReverseGeocoder {
@@ -166,10 +278,17 @@ class LocationPickerViewModelTest {
         }
     }
 
+    private class ThrowingReverseGeocoder : ReverseGeocoder {
+        override suspend fun reverse(point: GeoPoint): String? {
+            error("geocoding failed")
+        }
+    }
+
     private class FakeLocationRepository(
-        initialLocations: List<WeatherLocation> = emptyList()
+        initialLocations: List<WeatherLocation> = emptyList(),
+        locationsFlow: Flow<List<WeatherLocation>> = MutableStateFlow(initialLocations)
     ) : LocationRepository {
-        override val locations = MutableStateFlow(initialLocations)
+        override val locations = locationsFlow
         override val activeLocation = MutableStateFlow<ActiveLocation?>(null)
         override val locationMode = MutableStateFlow(LocationMode.SAVED_LOCATION)
         val added = mutableListOf<WeatherLocation>()
