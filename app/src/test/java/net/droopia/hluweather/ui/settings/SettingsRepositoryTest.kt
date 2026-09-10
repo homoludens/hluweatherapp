@@ -7,10 +7,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -21,6 +26,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsRepositoryTest {
 
     @get:Rule
@@ -62,6 +68,28 @@ class SettingsRepositoryTest {
             "07:30",
             dataStore.data.first()[stringPreferencesKey("settings.daily_summary_time")]
         )
+    }
+
+    @Test
+    fun active_collectors_receive_effective_settings_changes() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val repository = DataStoreSettingsRepository(dataStore)
+        val emissions = Channel<PersistedSettings>(Channel.UNLIMITED)
+        backgroundScope.launch {
+            repository.settings.collect { emissions.send(it) }
+        }
+        val initialSettings = withTimeout(5_000) { emissions.receive() }
+
+        val changedSettings = PersistedSettings(provider = WeatherProvider.MET_NO)
+        repository.save(changedSettings)
+        val actualChangedSettings = withTimeout(5_000) { emissions.receive() }
+
+        assertEquals(PersistedSettings(), initialSettings)
+        assertEquals(changedSettings, actualChangedSettings)
     }
 
     @Test

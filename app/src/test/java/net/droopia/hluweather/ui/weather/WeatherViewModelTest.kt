@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -215,7 +216,9 @@ class WeatherViewModelTest {
             settingsRepository,
             TestLocationRepository(ActiveLocation.Saved(Svilajnac))
         )
-        viewModel.state.first { it.forecast != null }
+        withTimeout(5_000) {
+            viewModel.state.first { it.forecast != null }
+        }
         advanceUntilIdle()
 
         assertEquals(1, settingsEmissions.size)
