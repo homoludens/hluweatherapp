@@ -46,6 +46,14 @@ class WeatherMapTest {
     }
 
     @Test
+    fun camera_center_only_animates_when_it_differs_from_the_map_target() {
+        val point = GeoPoint(44.8176, 20.4633)
+
+        assertFalse(shouldAnimateWeatherMapCenter(point, point))
+        assertTrue(shouldAnimateWeatherMapCenter(point, GeoPoint(45.0, 22.0)))
+    }
+
+    @Test
     fun refreshes_after_five_kilometers_or_thirty_minutes() {
         val lastPoint = GeoPoint(44.8176, 20.4633)
         val movedBeyondFiveKm = GeoPoint(44.8650, 20.4633)

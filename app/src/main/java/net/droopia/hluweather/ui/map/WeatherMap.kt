@@ -19,13 +19,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.GeoPoint
@@ -33,6 +32,7 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.interaction.ClickResult
 import org.maplibre.compose.interaction.MapInteractions
+import org.maplibre.compose.map.MapEvent
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.StyleLoadState
 import org.maplibre.compose.map.rememberMapState
@@ -78,6 +78,9 @@ fun recenterWeatherMap(onRecenter: () -> Unit) {
     onRecenter()
 }
 
+fun shouldAnimateWeatherMapCenter(current: GeoPoint, requested: GeoPoint): Boolean =
+    current != requested
+
 fun shouldRefresh(
     lastPoint: GeoPoint?,
     currentPoint: GeoPoint,
@@ -117,21 +120,26 @@ fun WeatherMap(
     }
 
     LaunchedEffect(mapState) {
-        snapshotFlow { mapState.cameraPosition.target }
-            .distinctUntilChanged()
-            .collect { position ->
+        mapState.events
+            .filterIsInstance<MapEvent.Idle>()
+            .collect {
+                val position = mapState.cameraPosition.target
                 onCameraIdle(GeoPoint(position.latitude, position.longitude))
             }
     }
 
     LaunchedEffect(center) {
         center?.let { point ->
-            mapState.animateCameraPosition(
-                CameraPosition(
-                    target = point.toPosition(),
-                    zoom = mapState.cameraPosition.zoom
+            val current = mapState.cameraPosition.target
+            val currentPoint = GeoPoint(current.latitude, current.longitude)
+            if (shouldAnimateWeatherMapCenter(currentPoint, point)) {
+                mapState.animateCameraPosition(
+                    CameraPosition(
+                        target = point.toPosition(),
+                        zoom = mapState.cameraPosition.zoom
+                    )
                 )
-            )
+            }
         }
     }
 

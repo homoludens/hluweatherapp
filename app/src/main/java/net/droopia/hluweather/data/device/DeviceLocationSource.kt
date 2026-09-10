@@ -1,6 +1,7 @@
 package net.droopia.hluweather.data.device
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -8,6 +9,8 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
@@ -24,6 +27,7 @@ interface DeviceLocationSource {
     }
 }
 
+@SuppressLint("MissingPermission")
 class AndroidDeviceLocationSource(
     private val context: Context,
     private val locationManager: LocationManager =
@@ -31,54 +35,82 @@ class AndroidDeviceLocationSource(
     private val mainLooper: Looper = Looper.getMainLooper(),
     private val hasPermission: (String) -> Boolean = { permission ->
         context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-    }
+    },
+    private val isLocationEnabled: () -> Boolean = { locationManager.isLocationEnabled },
+    private val isProviderEnabled: (String) -> Boolean = locationManager::isProviderEnabled,
+    private val timeoutMillis: Long = LOCATION_TIMEOUT_MILLIS,
+    private val requestLocationUpdates: (String, Long, Float, LocationListener) -> Unit =
+        { provider, intervalMillis, minDistanceMeters, listener ->
+            locationManager.requestLocationUpdates(
+                provider,
+                intervalMillis,
+                minDistanceMeters,
+                listener,
+                mainLooper
+            )
+        },
+    private val requestSingleUpdate: (String, LocationListener) -> Unit =
+        { provider, listener -> locationManager.requestSingleUpdate(provider, listener, mainLooper) },
+    private val removeLocationUpdates: (LocationListener) -> Unit = locationManager::removeUpdates
 ) : DeviceLocationSource {
 
     override fun foregroundLocations(): Flow<GpsResult> = callbackFlow {
-        if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION) &&
-            !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-        ) {
-            trySend(GpsResult.PermissionRequired)
-            close()
-            return@callbackFlow
-        }
+                if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION) &&
+                    !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                ) {
+                    trySend(GpsResult.PermissionRequired)
+                    close()
+                    return@callbackFlow
+                }
 
-        if (!locationManager.isLocationEnabled) {
-            trySend(GpsResult.LocationDisabled)
-            close()
-            return@callbackFlow
-        }
+                if (!isLocationEnabled()) {
+                    trySend(GpsResult.LocationDisabled)
+                    close()
+                    return@callbackFlow
+                }
 
-        val provider = listOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
-        ).firstOrNull(locationManager::isProviderEnabled)
-        if (provider == null) {
-            trySend(GpsResult.Unavailable)
-            close()
-            return@callbackFlow
-        }
+                val provider = selectLocationProvider(
+                    hasFinePermission = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION),
+                    isProviderEnabled = isProviderEnabled
+                )
+                if (provider == null) {
+                    trySend(GpsResult.Unavailable)
+                    close()
+                    return@callbackFlow
+                }
 
-        val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                trySend(location.toGpsResult())
+                val firstFix = CompletableDeferred<Unit>()
+                val listener = object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        firstFix.complete(Unit)
+                        trySend(location.toGpsResult())
+                    }
+                }
+
+                try {
+                    requestLocationUpdates(provider, 5_000L, 10f, listener)
+                } catch (_: SecurityException) {
+                    trySend(GpsResult.PermissionRequired)
+                    close()
+                    return@callbackFlow
+                } catch (_: RuntimeException) {
+                    trySend(GpsResult.Unavailable)
+                    close()
+                    return@callbackFlow
+                }
+
+                val fixReceived = withTimeoutOrNull(timeoutMillis) {
+                    firstFix.await()
+                } != null
+                if (!fixReceived) {
+                    trySend(GpsResult.Unavailable)
+                    close()
+                }
+
+                awaitClose {
+                    removeLocationUpdates(listener)
+                }
             }
-        }
-
-        try {
-            locationManager.requestLocationUpdates(provider, 5_000L, 10f, listener, mainLooper)
-        } catch (_: SecurityException) {
-            trySend(GpsResult.PermissionRequired)
-            close()
-        } catch (_: RuntimeException) {
-            trySend(GpsResult.Unavailable)
-            close()
-        }
-
-        awaitClose {
-            locationManager.removeUpdates(listener)
-        }
-    }
 
     override suspend fun currentLocation(): GpsResult {
         if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION) &&
@@ -87,44 +119,62 @@ class AndroidDeviceLocationSource(
             return GpsResult.PermissionRequired
         }
 
-        if (!locationManager.isLocationEnabled) {
+        if (!isLocationEnabled()) {
             return GpsResult.LocationDisabled
         }
 
-        val provider = listOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
-        ).firstOrNull(locationManager::isProviderEnabled)
+        val provider = selectLocationProvider(
+            hasFinePermission = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION),
+            isProviderEnabled = isProviderEnabled
+        )
             ?: return GpsResult.Unavailable
 
-        return suspendCancellableCoroutine { continuation ->
-            val listener = object : LocationListener {
-                override fun onLocationChanged(location: Location) {
+        return withTimeoutOrNull(timeoutMillis) {
+            suspendCancellableCoroutine { continuation ->
+                lateinit var listener: LocationListener
+                listener = object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        if (continuation.isActive) {
+                            removeLocationUpdates(listener)
+                            continuation.resume(
+                                location.toGpsResult()
+                            )
+                        }
+                    }
+                }
+
+                continuation.invokeOnCancellation {
+                    removeLocationUpdates(listener)
+                }
+
+                try {
+                    requestSingleUpdate(provider, listener)
+                } catch (_: SecurityException) {
                     if (continuation.isActive) {
-                        continuation.resume(
-                            location.toGpsResult()
-                        )
+                        continuation.resume(GpsResult.PermissionRequired)
+                    }
+                } catch (_: RuntimeException) {
+                    if (continuation.isActive) {
+                        continuation.resume(GpsResult.Unavailable)
                     }
                 }
             }
-
-            continuation.invokeOnCancellation {
-                locationManager.removeUpdates(listener)
-            }
-
-            try {
-                locationManager.requestSingleUpdate(provider, listener, mainLooper)
-            } catch (_: SecurityException) {
-                if (continuation.isActive) {
-                    continuation.resume(GpsResult.PermissionRequired)
-                }
-            } catch (_: RuntimeException) {
-                if (continuation.isActive) {
-                    continuation.resume(GpsResult.Unavailable)
-                }
-            }
-        }
+        } ?: GpsResult.Unavailable
     }
+}
+
+internal const val LOCATION_TIMEOUT_MILLIS = 10_000L
+
+internal fun selectLocationProvider(
+    hasFinePermission: Boolean,
+    isProviderEnabled: (String) -> Boolean
+): String? {
+    val providers = if (hasFinePermission) {
+        listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+    } else {
+        listOf(LocationManager.NETWORK_PROVIDER)
+    }
+    return providers.firstOrNull(isProviderEnabled)
 }
 
 internal fun Location.toGpsResult(): GpsResult.Success = GpsResult.Success(

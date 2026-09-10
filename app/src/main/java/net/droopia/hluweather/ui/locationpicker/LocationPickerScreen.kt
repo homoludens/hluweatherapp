@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -57,7 +59,6 @@ fun LocationPickerScreen(
         WeatherMap(
             center = point,
             darkTheme = mapDarkTheme,
-            onMapClick = onCameraIdle,
             onCameraIdle = onCameraIdle,
             onRecenterClick = viewModel::onGpsClick
         )
@@ -121,6 +122,16 @@ fun LocationPickerScreen(
                     .height(320.dp)
             ) {
                 mapContent(state.point, darkTheme, viewModel::onCameraIdle)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .testTag("location_picker_center_marker"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", color = MaterialTheme.colorScheme.onPrimary)
+                }
             }
 
             Card(
@@ -179,13 +190,13 @@ fun LocationPickerScreen(
                         }
                         Spacer(Modifier.weight(1f))
                         if (viewModel.isEditMode) {
-                            TextButton(onClick = viewModel::delete) {
+                            TextButton(onClick = { viewModel.delete() }) {
                                 Text("Delete")
                             }
                         }
                         Button(
                             enabled = state.initialization == LocationPickerInitialization.Ready,
-                            onClick = viewModel::save
+                            onClick = { viewModel.save() }
                         ) {
                             Text("Save")
                         }

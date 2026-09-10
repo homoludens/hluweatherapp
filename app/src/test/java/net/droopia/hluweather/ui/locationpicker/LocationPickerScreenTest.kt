@@ -62,6 +62,7 @@ class LocationPickerScreenTest {
 
         composeRule.onNodeWithText("Location picker").assertIsDisplayed()
         composeRule.onNodeWithTag("location_picker_map").assertIsDisplayed()
+        composeRule.onNodeWithTag("location_picker_center_marker").assertIsDisplayed()
         composeRule.onNodeWithTag("location_picker_name").assertIsDisplayed()
     }
 

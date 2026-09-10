@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -67,7 +68,8 @@ class LocationPickerViewModel(
     private val deviceLocationSource: DeviceLocationSource,
     private val reverseGeocoder: ReverseGeocoder,
     private val locationId: String? = null,
-    initialLocation: WeatherLocation? = null
+    initialLocation: WeatherLocation? = null,
+    private val reverseGeocodeDebounceMillis: Long = 300L
 ) : ViewModel() {
     private val _state = MutableStateFlow(initialLocation.toPickerState())
     val state: StateFlow<LocationPickerUiState> = _state
@@ -162,8 +164,10 @@ class LocationPickerViewModel(
         }
     }
 
-    fun save() {
-        if (_state.value.initialization != LocationPickerInitialization.Ready) return
+    fun save(): Job {
+        if (_state.value.initialization != LocationPickerInitialization.Ready) {
+            return viewModelScope.launch { }
+        }
         val current = _state.value
         val location = WeatherLocation(
             id = editingLocationId ?: UUID.randomUUID().toString(),
@@ -172,31 +176,36 @@ class LocationPickerViewModel(
             longitude = current.longitude,
             altitude = current.altitude
         )
-        viewModelScope.launch {
-            runCatching {
+        return viewModelScope.launch {
+            try {
                 if (editingLocationId == null) {
                     locationRepository.add(location)
                 } else {
                     locationRepository.update(location)
                 }
-            }.onSuccess {
                 val event = LocationPickerEvent.Saved
                 _events.tryEmit(event)
                 _completion.value = event
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
             }
         }
     }
 
-    fun delete() {
-        if (!isEditMode) return
-        val id = editingLocationId ?: return
-        viewModelScope.launch {
-            runCatching { locationRepository.delete(id) }
-                .onSuccess {
-                    val event = LocationPickerEvent.Deleted
-                    _events.tryEmit(event)
-                    _completion.value = event
-                }
+    fun delete(): Job {
+        if (!isEditMode) return viewModelScope.launch { }
+        val id = editingLocationId ?: return viewModelScope.launch { }
+        return viewModelScope.launch {
+            try {
+                locationRepository.delete(id)
+                val event = LocationPickerEvent.Deleted
+                _events.tryEmit(event)
+                _completion.value = event
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -215,6 +224,7 @@ class LocationPickerViewModel(
         reverseGeocodingJob?.cancel()
         reverseGeocodingJob = viewModelScope.launch {
             try {
+                delay(reverseGeocodeDebounceMillis)
                 onReverseGeocoded(reverseGeocoder.reverse(point))
             } catch (exception: CancellationException) {
                 throw exception

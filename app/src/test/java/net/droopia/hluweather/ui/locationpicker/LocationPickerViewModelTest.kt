@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -24,6 +25,7 @@ import net.droopia.hluweather.data.repository.ReverseGeocoder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -207,6 +209,23 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun reverse_geocoding_is_debounced_to_the_latest_camera_idle_point() = runTest {
+        val geocoder = RecordingReverseGeocoder()
+        val viewModel = picker(geocoder = geocoder, reverseGeocodeDebounceMillis = 300L)
+
+        viewModel.onCameraIdle(GeoPoint(44.8176, 20.4633))
+        advanceTimeBy(200L)
+        viewModel.onCameraIdle(GeoPoint(45.6495, 13.7768))
+        advanceTimeBy(299L)
+
+        assertTrue(geocoder.points.isEmpty())
+        advanceTimeBy(1L)
+        advanceUntilIdle()
+
+        assertEquals(listOf(GeoPoint(45.6495, 13.7768)), geocoder.points)
+    }
+
+    @Test
     fun gps_cancellation_does_not_become_unavailable() = runTest {
         val viewModel = picker(gps = CancellingDeviceLocationSource())
 
@@ -249,18 +268,42 @@ class LocationPickerViewModelTest {
         assertEquals(listOf("belgrade"), repository.deleted)
     }
 
+    @Test
+    fun save_cancellation_cancels_the_operation_job() = runTest {
+        val viewModel = picker(repository = CancellingLocationRepository(), initialLocation = existingLocation)
+
+        val job = viewModel.save()
+        advanceUntilIdle()
+
+        assertTrue(job.isCancelled)
+        assertNull(viewModel.completion.value)
+    }
+
+    @Test
+    fun delete_cancellation_cancels_the_operation_job() = runTest {
+        val viewModel = picker(repository = CancellingLocationRepository(), initialLocation = existingLocation)
+
+        val job = viewModel.delete()
+        advanceUntilIdle()
+
+        assertTrue(job.isCancelled)
+        assertNull(viewModel.completion.value)
+    }
+
     private fun picker(
         repository: FakeLocationRepository = FakeLocationRepository(),
         gps: DeviceLocationSource = FakeDeviceLocationSource(GpsResult.Unavailable),
         geocoder: ReverseGeocoder = FakeReverseGeocoder(),
         initialLocation: WeatherLocation? = null,
-        locationId: String? = null
+        locationId: String? = null,
+        reverseGeocodeDebounceMillis: Long = 0L
     ) = LocationPickerViewModel(
         locationRepository = repository,
         deviceLocationSource = gps,
         reverseGeocoder = geocoder,
         initialLocation = initialLocation,
-        locationId = locationId
+        locationId = locationId,
+        reverseGeocodeDebounceMillis = reverseGeocodeDebounceMillis
     )
 
     private class FakeDeviceLocationSource(
@@ -311,7 +354,16 @@ class LocationPickerViewModelTest {
         }
     }
 
-    private class FakeLocationRepository(
+    private class RecordingReverseGeocoder : ReverseGeocoder {
+        val points = mutableListOf<GeoPoint>()
+
+        override suspend fun reverse(point: GeoPoint): String? {
+            points += point
+            return null
+        }
+    }
+
+    private open class FakeLocationRepository(
         initialLocations: List<WeatherLocation> = emptyList(),
         locationsFlow: Flow<List<WeatherLocation>> = MutableStateFlow(initialLocations)
     ) : LocationRepository {
@@ -339,7 +391,14 @@ class LocationPickerViewModelTest {
         override suspend fun setTrackMe(enabled: Boolean) = Unit
     }
 
+    private class CancellingLocationRepository : FakeLocationRepository() {
+        override suspend fun add(location: WeatherLocation): Unit = throw CancellationException("cancelled")
+        override suspend fun update(location: WeatherLocation): Unit = throw CancellationException("cancelled")
+        override suspend fun delete(id: String): Unit = throw CancellationException("cancelled")
+    }
+
     private companion object {
         val viewModelPoint = GeoPoint(44.8176, 20.4633)
+        val existingLocation = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
     }
 }
