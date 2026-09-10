@@ -21,19 +21,22 @@ class MainActivityLaunchTest {
     }
 
     @Test
-    fun settings_navigation_is_available_from_the_initial_screen() {
+    fun initial_setup_action_opens_settings() {
         ActivityScenario.launch(MainActivity::class.java).use {
             val instrumentation = InstrumentationRegistry.getInstrumentation()
-            val settingsAction = waitForNode(
-                instrumentation,
-                text = "Add location",
-                contentDescription = "Settings"
+            assertNotNull(
+                "First-launch setup screen was not displayed",
+                waitForNode(instrumentation, text = "Add your first location", requireClickable = false)
             )
-            assertNotNull("No settings entry action was exposed", settingsAction)
-            assertTrue(settingsAction!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val addLocationAction = waitForNode(
+                instrumentation,
+                text = "Add location"
+            )
+            assertNotNull("First-launch Add location action was not exposed", addLocationAction)
+            assertTrue(addLocationAction!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
 
             assertNotNull(
-                "Settings screen did not appear after selecting its entry action",
+                "Settings screen did not appear after selecting Add location",
                 waitForNode(instrumentation, text = "Settings", requireClickable = false)
             )
         }
@@ -64,7 +67,13 @@ class MainActivityLaunchTest {
         if ((text != null && node.text?.toString() == text) ||
             (contentDescription != null && node.contentDescription?.toString() == contentDescription)
         ) {
-            return node.takeIf { !requireClickable || it.isClickable }
+            if (!requireClickable) return node
+
+            var clickableNode: AccessibilityNodeInfo? = node
+            while (clickableNode != null && !clickableNode.isClickable) {
+                clickableNode = clickableNode.parent
+            }
+            return clickableNode
         }
         for (index in 0 until node.childCount) {
             node.getChild(index)?.let { child ->
