@@ -31,13 +31,15 @@ import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.applicationDataStore
 import net.droopia.hluweather.data.repository.locationRepository
+import net.droopia.hluweather.notifications.AndroidWeatherNotificationPublisher
+import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.notifications.DataStoreNotificationStateRepository
-import net.droopia.hluweather.notifications.NotificationBoundaryWorker
 import net.droopia.hluweather.notifications.NotificationChannels
 import net.droopia.hluweather.notifications.NotificationScheduler
 import net.droopia.hluweather.notifications.NotificationStateRepository
+import net.droopia.hluweather.notifications.WeatherNotificationPublisher
 import net.droopia.hluweather.notifications.WorkManagerNotificationScheduler
 import net.droopia.hluweather.notifications.notificationDataStore
 import net.droopia.hluweather.ui.settings.SettingsRepository
@@ -49,7 +51,9 @@ class HluWeatherApplication : Application(), Configuration.Provider {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder().build()
+        get() = Configuration.Builder()
+            .setWorkerFactory(AppWorkerFactory(this))
+            .build()
 
     override fun onCreate() {
         super.onCreate()
@@ -105,11 +109,15 @@ class HluWeatherApplication : Application(), Configuration.Provider {
         DataStoreNotificationStateRepository(notificationDataStore)
     }
 
+    val notificationPublisher: WeatherNotificationPublisher by lazy {
+        AndroidWeatherNotificationPublisher(this)
+    }
+
     val notificationScheduler: NotificationScheduler by lazy {
         WorkManagerNotificationScheduler(
             workManager = WorkManager.getInstance(this),
-            alertWorkerClass = NotificationBoundaryWorker::class.java,
-            summaryWorkerClass = NotificationBoundaryWorker::class.java
+            alertWorkerClass = net.droopia.hluweather.notifications.WeatherAlertWorker::class.java,
+            summaryWorkerClass = net.droopia.hluweather.notifications.DailySummaryWorker::class.java
         )
     }
 

@@ -24,7 +24,10 @@ fun HluNavHost(
     weatherViewModel: WeatherViewModel? = null,
     darkTheme: Boolean = false,
     weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit)? = null,
-    locationPickerMapContent: (@Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit)? = null
+    locationPickerMapContent: (@Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit)? = null,
+    notificationsPermissionGranted: Boolean = true,
+    onNotificationPermissionRequest: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
@@ -81,9 +84,17 @@ fun HluNavHost(
                 onWindUnitChange = settingsViewModel::setWindUnit,
                 onDistanceUnitChange = settingsViewModel::setDistanceUnit,
                 onPrecipitationUnitChange = settingsViewModel::setPrecipitationUnit,
-                onWeatherAlertsChange = settingsViewModel::setWeatherAlerts,
-                onDailySummaryChange = settingsViewModel::setDailySummary,
+                onWeatherAlertsChange = { enabled ->
+                    settingsViewModel.setWeatherAlerts(enabled)
+                    if (enabled) onNotificationPermissionRequest()
+                },
+                onDailySummaryChange = { enabled ->
+                    settingsViewModel.setDailySummary(enabled)
+                    if (enabled) onNotificationPermissionRequest()
+                },
                 onDailySummaryTimeChange = settingsViewModel::setDailySummaryTime,
+                notificationsPermissionGranted = notificationsPermissionGranted,
+                onOpenNotificationSettings = onOpenNotificationSettings,
                 onClearCacheClick = settingsViewModel::clearCache
             )
         }

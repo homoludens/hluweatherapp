@@ -97,6 +97,22 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun enabled_notifications_show_a_system_settings_recovery_action_when_blocked() {
+        var settingsClicks = 0
+        renderSettings(
+            state = { testSettingsState.copy(weatherAlerts = true) },
+            notificationsPermissionGranted = false,
+            onOpenNotificationSettings = { settingsClicks++ }
+        )
+
+        scrollTo(5)
+        composeRule.onNodeWithText("Notifications are blocked").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_notification_permission").performClick()
+
+        assertEquals(1, settingsClicks)
+    }
+
+    @Test
     fun provider_and_appearance_controls_report_changes() {
         val state = mutableStateOf(testSettingsState)
 
@@ -235,6 +251,8 @@ class SettingsScreenTest {
         onWeatherAlertsChange: (Boolean) -> Unit = {},
         onDailySummaryChange: (Boolean) -> Unit = {},
         onDailySummaryTimeChange: (LocalTime) -> Unit = {},
+        notificationsPermissionGranted: Boolean = true,
+        onOpenNotificationSettings: () -> Unit = {},
         onClearCacheClick: () -> Unit = {}
     ) {
         composeRule.setContent {
@@ -256,6 +274,8 @@ class SettingsScreenTest {
                     onWeatherAlertsChange = onWeatherAlertsChange,
                     onDailySummaryChange = onDailySummaryChange,
                     onDailySummaryTimeChange = onDailySummaryTimeChange,
+                    notificationsPermissionGranted = notificationsPermissionGranted,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
                     onClearCacheClick = onClearCacheClick
                 )
             }

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HluWeatherApp</string>
+    <string name="notifications_blocked_title">Notifications are blocked</string>
+    <string name="notifications_blocked_summary">Allow notifications in system settings to receive weather updates.</string>
+    <string name="notifications_open_settings">Allow notifications</string>
 </resources>

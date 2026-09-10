@@ -1,8 +1,6 @@
 package net.droopia.hluweather.notifications
 
-import android.content.Context
 import androidx.work.Constraints
-import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ListenableWorker
@@ -10,7 +8,6 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
-import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDateTime
@@ -169,11 +166,3 @@ fun delayUntil(summaryTime: LocalTime, now: LocalDateTime, timeZone: TimeZone): 
 const val LOCATION_ID_INPUT = "notification.location_id"
 const val PROVIDER_INPUT = "notification.provider"
 const val SUMMARY_TIME_INPUT = "notification.summary_time"
-
-/** Scheduling boundary used until Task 3 supplies the real delivery workers. */
-class NotificationBoundaryWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(appContext, workerParams) {
-    override suspend fun doWork(): Result = Result.success()
-}

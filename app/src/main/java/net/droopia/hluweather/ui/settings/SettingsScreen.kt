@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.R
 import kotlinx.datetime.LocalTime
 
 @Composable
@@ -88,6 +90,8 @@ fun SettingsScreen(
     onDailySummaryChange: (Boolean) -> Unit,
     onDailySummaryTimeChange: (LocalTime) -> Unit,
     onClearCacheClick: () -> Unit,
+    notificationsPermissionGranted: Boolean = true,
+    onOpenNotificationSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -262,6 +266,22 @@ fun SettingsScreen(
                     time = state.dailySummaryTime,
                     onTimeChange = onDailySummaryTimeChange
                 )
+                if ((state.weatherAlerts || state.dailySummary) && !notificationsPermissionGranted) {
+                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Text(
+                        text = stringResource(R.string.notifications_blocked_title),
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    ClickableSettingsRow(
+                        icon = Icons.Outlined.Notifications,
+                        title = stringResource(R.string.notifications_open_settings),
+                        subtitle = stringResource(R.string.notifications_blocked_summary),
+                        tag = "settings_notification_permission",
+                        onClick = onOpenNotificationSettings
+                    )
+                }
             }
         }
 
@@ -660,11 +680,18 @@ private fun formatSummaryTime(time: LocalTime): String =
     "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}"
 
 @Composable
-private fun ClickableSettingsRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+private fun ClickableSettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    tag: String? = null,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .then(if (tag == null) Modifier else Modifier.testTag(tag))
             .padding(horizontal = 18.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
