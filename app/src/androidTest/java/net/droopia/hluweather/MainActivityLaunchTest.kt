@@ -4,9 +4,9 @@ import androidx.test.core.app.ActivityScenario
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-class ReleaseSmokeTest {
+class MainActivityLaunchTest {
     @Test
-    fun launch_reaches_weather_or_location_setup_without_crashing() {
+    fun launching_main_activity_does_not_finish_immediately() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { assertFalse(it.isFinishing) }
         }

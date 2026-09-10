@@ -1,13 +1,19 @@
 package net.droopia.hluweather.notifications
 
+import android.Manifest
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.core.content.ContextCompat
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -15,34 +21,104 @@ import org.junit.runner.RunWith
 class NotificationDeviceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val manager = context.getSystemService(NotificationManager::class.java)
+    private val testId = System.nanoTime().toString()
+    private val testWeatherChannelId = "device_test_weather_$testId"
+    private val testSummaryChannelId = "device_test_summary_$testId"
+    private val testNotificationId = testId.hashCode()
 
     @Test
     fun notification_channels_are_created_with_expected_importance() {
-        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        NotificationChannels.create(context)
+        try {
+            NotificationChannels.create(context, testWeatherChannelId, testSummaryChannelId)
 
-        assertEquals(
-            NotificationManager.IMPORTANCE_LOW,
-            manager.getNotificationChannel(NotificationChannels.WEATHER_ALERTS_CHANNEL_ID)?.importance
-        )
-        assertEquals(
-            NotificationManager.IMPORTANCE_LOW,
-            manager.getNotificationChannel(NotificationChannels.DAILY_SUMMARY_CHANNEL_ID)?.importance
-        )
+            assertEquals(
+                NotificationManager.IMPORTANCE_LOW,
+                manager.getNotificationChannel(testWeatherChannelId)?.importance
+            )
+            assertEquals(
+                NotificationManager.IMPORTANCE_LOW,
+                manager.getNotificationChannel(testSummaryChannelId)?.importance
+            )
+        } finally {
+            deleteTestChannels()
+        }
     }
 
     @Test
     fun published_summary_contains_a_tap_action() {
-        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        assumeTrue(AndroidNotificationPermissionChecker.isGranted(context))
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        assertNotificationDeliveryPermission()
 
-        val publisher = AndroidWeatherNotificationPublisher(context)
-        publisher.publishDailySummary("Daily weather summary", "Belgrade: Clear, current 20.0°C.")
+        try {
+            val publisher = AndroidWeatherNotificationPublisher(
+                context = context,
+                weatherAlertsChannelId = testWeatherChannelId,
+                dailySummaryChannelId = testSummaryChannelId,
+                dailySummaryNotificationId = testNotificationId
+            )
+            publisher.publishDailySummary("Daily weather summary", "Belgrade: Clear, current 20.0°C.")
 
-        val notification = manager.activeNotifications
-            .first { it.notification.channelId == NotificationChannels.DAILY_SUMMARY_CHANNEL_ID }
-        assertNotNull(notification.notification.contentIntent)
-        manager.cancel(notification.id)
+            val notification = manager.activeNotifications
+                .firstOrNull { it.id == testNotificationId }
+            assertNotNull("The notification published by this test was not found", notification)
+            assertEquals(testSummaryChannelId, notification!!.notification.channelId)
+            assertEquals(
+                "Daily weather summary",
+                notification.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
+            )
+            assertNotNull(notification.notification.contentIntent)
+        } finally {
+            manager.cancel(testNotificationId)
+            deleteTestChannels()
+        }
+    }
+
+    @Test
+    fun notification_permission_is_an_explicit_delivery_prerequisite() {
+        assertNotificationDeliveryPermission()
+    }
+
+    @Test
+    fun denied_notification_permission_can_be_restored_for_delivery() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+        val wasGranted = hasPostNotificationsPermission()
+        try {
+            setPostNotificationsPermission(granted = false)
+            assertFalse(hasPostNotificationsPermission())
+
+            setPostNotificationsPermission(granted = true)
+            assertTrue(hasPostNotificationsPermission())
+        } finally {
+            setPostNotificationsPermission(granted = wasGranted)
+        }
+    }
+
+    private fun assertNotificationDeliveryPermission() {
+        assertTrue(
+            "Notification delivery prerequisite is not met; grant notification permission and enable app notifications",
+            AndroidNotificationPermissionChecker.isGranted(context)
+        )
+    }
+
+    private fun hasPostNotificationsPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun setPostNotificationsPermission(granted: Boolean) {
+        val action = if (granted) "grant" else "revoke"
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("pm $action ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}")
+            .close()
+    }
+
+    private fun deleteTestChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.deleteNotificationChannel(testWeatherChannelId)
+            manager.deleteNotificationChannel(testSummaryChannelId)
+        }
     }
 }

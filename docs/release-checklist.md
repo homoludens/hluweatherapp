@@ -23,7 +23,7 @@
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.HluWeatherApplicationTest --tests net.droopia.hluweather.ReleaseResourceSourceTest
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.HluWeatherApplicationTest --tests net.droopia.hluweather.ReleaseResourceSourceTest
   ```
 
   Result: `BUILD SUCCESSFUL`; 2 targeted test classes completed without
@@ -34,7 +34,7 @@
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew test
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew test
   ```
 
   Result: `BUILD SUCCESSFUL`; `:app:test` completed with 28 actionable tasks
@@ -45,7 +45,7 @@
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew assembleDebug assembleRelease lintDebug lintRelease
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew assembleDebug assembleRelease lintDebug lintRelease
   ```
 
   Result: `BUILD SUCCESSFUL`; 94 actionable tasks, including `assembleDebug`,
@@ -54,8 +54,8 @@
   APK paths:
 
   ```text
-  /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/debug/app-debug.apk
-  /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  app/build/outputs/apk/debug/app-debug.apk
+  app/build/outputs/apk/release/app-release-unsigned.apk
   ```
 
 - [x] Signing matrix for no credentials, partial credentials, project
@@ -64,17 +64,17 @@
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./scripts/verify-release-signing-matrix.sh
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./scripts/verify-release-signing-matrix.sh
   ```
 
   Result:
 
   ```text
-  Signing matrix uses temporary keystore outside repository: /tmp/hluweather-signing-matrix.T5NTz9/release.jks
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS signed release: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  Signing matrix uses a temporary keystore outside the repository under /tmp.
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS signed release: app/build/outputs/apk/release/app-release.apk
   ```
 
   The script creates and removes its keystore outside the repository under
@@ -85,7 +85,7 @@
   Command:
 
   ```text
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
   ```
 
   Result:
@@ -106,7 +106,7 @@
   Command:
 
   ```text
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release-unsigned.apk
   ```
 
   Expected result for the intentionally unsigned local fallback: exit code
@@ -117,7 +117,7 @@
   Command:
 
   ```text
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/aapt dump badging /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk
   ```
 
   Relevant output:
@@ -128,11 +128,14 @@
 
 ## Device Verification
 
-The local environment has no connected device or available AVD. These checks
-remain blocking and intentionally unchecked.
+The local environment detected a connected Android device (`M2012K11AG`, API
+33), but it was unusable for verification because installation was user-
+restricted (`INSTALL_FAILED_USER_RESTRICTED`). No AVD was available.
 
 - [ ] `connectedDebugAndroidTest` launch and navigation smoke test.
-- [ ] Install and launch the signed APK on a device.
+- [ ] Install and launch a signed release APK manually on an unrestricted
+  device. `connectedDebugAndroidTest` installs the debug APK and does not prove
+  signed-release execution.
 - [ ] TalkBack labels and actions.
 - [ ] Large-font layout and text wrapping.
 - [ ] Light/dark contrast.
@@ -159,15 +162,19 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:compileDebugAndroidTestKotlin
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew :app:compileDebugAndroidTestKotlin
   ```
 
-  Result: `BUILD SUCCESSFUL in 3s`; 24 actionable tasks, 7 executed and 17
+  Result: `BUILD SUCCESSFUL in 4s`; 24 actionable tasks, 3 executed and 21
   up-to-date.
 
-- [x] `ReleaseSmokeTest` contains the ActivityScenario launch assertion.
-- [x] `NotificationDeviceTest` checks notification channel creation and the
-  published notification tap action when notification permission is available.
+- [x] `MainActivityLaunchTest` checks only that `MainActivity` does not finish
+  immediately after launch; it does not assert settings navigation or a signed
+  release execution.
+- [x] `NotificationDeviceTest` uses isolated test-owned channels and a test-owned
+  notification ID, cleans them up in `finally`, proves the exact published
+  notification, makes delivery permission an explicit prerequisite, and covers
+  Android 13+ permission denial/recovery separately.
 - [x] Existing Robolectric/unit coverage was reviewed for the remaining
   deterministic seams:
   `SettingsScreenTest` covers blocked-notification settings recovery,
@@ -186,10 +193,10 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
   ```
 
-  Result: `BUILD SUCCESSFUL in 57s`; 102 actionable tasks, 9 executed and 93
+  Result: `BUILD SUCCESSFUL in 46s`; 102 actionable tasks, 6 executed and 96
   up-to-date. `testDebugUnitTest`, `lintDebug`, `lintRelease`, `assembleDebug`,
   and `assembleRelease` completed successfully.
 
@@ -198,10 +205,11 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew test
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew test
   ```
 
-  Result: `BUILD SUCCESSFUL in 3s`; 28 actionable tasks completed without test
+  Result: `BUILD SUCCESSFUL in 1m 1s`; 28 actionable tasks, 8 executed and 20
+  up-to-date, completed without test
   failures.
 
 - [x] Four-case signing matrix.
@@ -209,21 +217,21 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./scripts/verify-release-signing-matrix.sh
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./scripts/verify-release-signing-matrix.sh
   ```
 
   Result:
 
   ```text
-  Signing matrix uses temporary keystore outside repository: /tmp/hluweather-signing-matrix.EJpo6T/release.jks
+  Signing matrix uses a temporary keystore outside the repository under /tmp.
   Case: no credentials
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
   Case: partial credentials
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
   Case: project properties only
-  PASS no-signing fallback: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
   Case: all four environment values
-  PASS signed release: /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  PASS signed release: app/build/outputs/apk/release/app-release.apk
   ```
 
   The temporary keystore was outside the repository and removed by the script.
@@ -233,7 +241,7 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
   ```
 
   Result: `Verifies`; v2 `true`; v1, v3, v3.1, v4, and SourceStamp `false`; one
@@ -244,8 +252,8 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  env -u HLUWEATHER_STORE_FILE -u HLUWEATHER_STORE_PASSWORD -u HLUWEATHER_KEY_ALIAS -u HLUWEATHER_KEY_PASSWORD ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:clean :app:assembleRelease
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/apksigner verify --verbose /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release-unsigned.apk
+  env -u HLUWEATHER_STORE_FILE -u HLUWEATHER_STORE_PASSWORD -u HLUWEATHER_KEY_ALIAS -u HLUWEATHER_KEY_PASSWORD ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew :app:clean :app:assembleRelease
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release-unsigned.apk
   ```
 
   Build result: `BUILD SUCCESSFUL in 40s`; 48 actionable tasks, 47 executed
@@ -257,7 +265,7 @@ Verification date: `2026-09-10`.
   Command:
 
   ```text
-  /home/homoludens/Android/Sdk/build-tools/36.0.0/aapt dump badging /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk
   ```
 
   Relevant output:
@@ -272,9 +280,9 @@ Verification date: `2026-09-10`.
 - [x] Release APK paths recorded.
 
   ```text
-  /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/debug/app-debug.apk
-  /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/app-release.apk
-  /home/homoludens/projekti/hluweatherapp/.worktrees/plan-3-2-release-hardening/app/build/outputs/apk/release/output-metadata.json
+  app/build/outputs/apk/debug/app-debug.apk
+  app/build/outputs/apk/release/app-release.apk
+  app/build/outputs/apk/release/output-metadata.json
   ```
 
 ### Device Results
@@ -282,15 +290,19 @@ Verification date: `2026-09-10`.
 - [ ] Connected instrumentation tests. The exact command was attempted:
 
   ```text
-  ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease connectedDebugAndroidTest
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew connectedDebugAndroidTest
   ```
 
-  The device was detected as `M2012K11AG`, API `33`, but the Gradle task stayed
-  at `Tests 0/3 completed` until the 300-second command timeout. Direct adb
-  installation returned `INSTALL_FAILED_USER_RESTRICTED: Install canceled by
-  user`; no instrumentation assertion result was obtained.
-- [ ] Signed install and launch. Blocked by the same device installation
-  restriction.
+  The device was detected as `M2012K11AG`, API `33`, but it was unusable because
+  installation was user-restricted in the earlier direct adb attempt:
+  `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`. A later bounded
+  retry reached installation but failed in `41s` with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did
+  not match; test-APK cleanup also returned `DELETE_FAILED_INTERNAL_ERROR`.
+  It started `0` tests, so no instrumentation assertion result was obtained.
+  The task installs the debug APK, not the signed release APK.
+- [ ] Signed release install and launch. Blocked by the same device
+  installation restriction.
 - [ ] TalkBack labels and actions. Manual device check remains open.
 - [ ] Large-font layout and text wrapping. Automated constrained-font coverage
   passed; manual device check remains open.
