@@ -484,7 +484,8 @@ private fun AddLocationRow(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "Add location", role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) {}
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -694,7 +695,8 @@ private fun ClickableSettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = title, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) {}
             .then(if (tag == null) Modifier else Modifier.testTag(tag))
             .padding(horizontal = 18.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically

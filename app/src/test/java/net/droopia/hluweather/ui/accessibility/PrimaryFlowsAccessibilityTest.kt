@@ -108,6 +108,46 @@ class PrimaryFlowsAccessibilityTest {
     }
 
     @Test
+    fun settings_action_rows_merge_labels_and_expose_button_role() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                SettingsScreen(
+                    state = SettingsUiState(
+                        locations = listOf(WeatherLocation("svilajnac", "Svilajnac", 44.238, 21.197)),
+                        selectedLocationId = "svilajnac"
+                    ),
+                    onBackClick = {},
+                    onProviderChange = {},
+                    onProviderInfoClick = {},
+                    onTrackMeChange = {},
+                    onLocationSelect = {},
+                    onLocationMenuClick = {},
+                    onAddLocationClick = {},
+                    onThemeChange = {},
+                    onTemperatureUnitChange = {},
+                    onWindUnitChange = {},
+                    onDistanceUnitChange = {},
+                    onPrecipitationUnitChange = {},
+                    onWeatherAlertsChange = {},
+                    onDailySummaryChange = {},
+                    onDailySummaryTimeChange = {},
+                    onClearCacheClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Add Location")
+            .assertHasClickAction()
+            .assertButtonRole()
+            .assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(6)
+        composeRule.onNodeWithText("Clear cache")
+            .assertHasClickAction()
+            .assertButtonRole()
+            .assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
     fun large_font_scale_is_preserved_and_settings_text_wraps_without_ellipsis() {
         var capturedFontScale = 0f
 
@@ -146,4 +186,7 @@ class PrimaryFlowsAccessibilityTest {
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertSwitchRole() =
         assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+
+    private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertButtonRole() =
+        assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
 }
