@@ -2,6 +2,7 @@ package net.droopia.hluweather
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -12,6 +13,7 @@ import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.notifications.NotificationScheduler
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,12 +40,39 @@ class HluWeatherApplicationTest {
             .getApplicationContext<HluWeatherApplication>()
         val applicationInfo = application.applicationInfo
         val icon = applicationInfo.icon
+        val roundIcon = R.mipmap.ic_launcher_round
         val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
 
+        assertNotEquals(0, icon)
+        assertNotEquals(0, roundIcon)
         assertEquals("ic_launcher", application.resources.getResourceEntryName(icon))
         assertEquals("mipmap", application.resources.getResourceTypeName(icon))
+        assertEquals("ic_launcher_round", application.resources.getResourceEntryName(roundIcon))
+        assertEquals("mipmap", application.resources.getResourceTypeName(roundIcon))
+        assertEquals("adaptive-icon", application.resources.getXml(icon).rootElementName())
+        assertEquals("adaptive-icon", application.resources.getXml(roundIcon).rootElementName())
         assertEquals(32, packageInfo.versionCode)
         assertEquals("3.2.0", packageInfo.versionName)
+    }
+
+    @Test
+    fun release_signing_uses_environment_values_only() {
+        val buildScript = File("app/build.gradle.kts").takeIf { it.isFile }
+            ?: File("build.gradle.kts")
+
+        assertTrue(buildScript.isFile)
+        val source = buildScript.readText()
+        listOf(
+            "HLUWEATHER_STORE_FILE",
+            "HLUWEATHER_STORE_PASSWORD",
+            "HLUWEATHER_KEY_ALIAS",
+            "HLUWEATHER_KEY_PASSWORD"
+        ).forEach { name ->
+            assertTrue(source.contains("\"$name\""))
+        }
+        assertTrue(source.contains("providers.environmentVariable"))
+        assertTrue(source.contains("releaseSigningValues.all { !it.isNullOrBlank() }"))
+        assertTrue(!source.contains("providers.gradleProperty"))
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -89,4 +118,11 @@ class HluWeatherApplicationTest {
             activeLocation: ActiveLocation.Saved
         ) = Unit
     }
+}
+
+private fun org.xmlpull.v1.XmlPullParser.rootElementName(): String {
+    while (next() != org.xmlpull.v1.XmlPullParser.START_TAG) {
+        // Advance past the XML declaration and whitespace.
+    }
+    return name
 }

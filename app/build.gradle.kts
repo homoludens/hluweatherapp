@@ -4,15 +4,23 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val releaseSigningValues = listOf(
+val releaseSigningEnvironmentNames = listOf(
     "HLUWEATHER_STORE_FILE",
     "HLUWEATHER_STORE_PASSWORD",
     "HLUWEATHER_KEY_ALIAS",
     "HLUWEATHER_KEY_PASSWORD"
-).map { name ->
-    providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orNull
+)
+val releaseSigningValues = releaseSigningEnvironmentNames.map { name ->
+    providers.environmentVariable(name).orNull
 }
 val hasReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+val releaseSigningStoreFile = releaseSigningValues.firstOrNull()?.let(::file)
+
+if (hasReleaseSigning) {
+    check(releaseSigningStoreFile?.isFile == true) {
+        "${releaseSigningEnvironmentNames.first()} must point to an existing keystore file"
+    }
+}
 
 android {
     namespace = "net.droopia.hluweather"
