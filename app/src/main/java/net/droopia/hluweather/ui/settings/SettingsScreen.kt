@@ -1,5 +1,6 @@
 package net.droopia.hluweather.ui.settings
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,7 +37,6 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Thermostat
@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import kotlinx.datetime.LocalTime
 
 @Composable
 fun SettingsScreen(
@@ -84,7 +86,7 @@ fun SettingsScreen(
     onPrecipitationUnitChange: (PrecipitationUnit) -> Unit,
     onWeatherAlertsChange: (Boolean) -> Unit,
     onDailySummaryChange: (Boolean) -> Unit,
-    onTripAlertsChange: (Boolean) -> Unit,
+    onDailySummaryTimeChange: (LocalTime) -> Unit,
     onClearCacheClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -256,13 +258,9 @@ fun SettingsScreen(
                     onCheckedChange = onDailySummaryChange
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
-                ToggleRow(
-                    icon = Icons.Outlined.Route,
-                    title = "Trip alerts",
-                    subtitle = "Weather alerts along planned routes",
-                    checked = state.tripAlerts,
-                    tag = "settings_trip_alerts",
-                    onCheckedChange = onTripAlertsChange
+                SummaryTimeRow(
+                    time = state.dailySummaryTime,
+                    onTimeChange = onDailySummaryTimeChange
                 )
             }
         }
@@ -617,6 +615,48 @@ private fun ToggleRow(
         Switch(checked, onCheckedChange, modifier = Modifier.testTag(tag))
     }
 }
+
+@Composable
+private fun SummaryTimeRow(time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute -> onTimeChange(LocalTime(hour, minute)) },
+                    time.hour,
+                    time.minute,
+                    true
+                ).show()
+            }
+            .testTag("settings_daily_summary_time")
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Outlined.WbTwilight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Daily summary time", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Best effort; delivery may be delayed by Android.",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            formatSummaryTime(time),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+private fun formatSummaryTime(time: LocalTime): String =
+    "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}"
 
 @Composable
 private fun ClickableSettingsRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {

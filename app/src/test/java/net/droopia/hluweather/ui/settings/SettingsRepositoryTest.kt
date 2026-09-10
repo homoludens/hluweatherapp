@@ -6,9 +6,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -17,6 +20,15 @@ class SettingsRepositoryTest {
 
     @get:Rule
     val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun notification_defaults_are_opt_in_with_an_eight_am_summary() {
+        val settings = PersistedSettings()
+
+        assertFalse(settings.weatherAlerts)
+        assertFalse(settings.dailySummary)
+        assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
+    }
 
     @Test
     fun saves_and_reads_the_complete_persisted_settings_snapshot() = runTest {
@@ -35,12 +47,16 @@ class SettingsRepositoryTest {
             precipitationUnit = PrecipitationUnit.INCH,
             weatherAlerts = false,
             dailySummary = true,
-            tripAlerts = true
+            dailySummaryTime = LocalTime(7, 30)
         )
 
         repository.save(expected)
 
         assertEquals(expected, repository.settings.first())
+        assertEquals(
+            "07:30",
+            dataStore.data.first()[stringPreferencesKey("settings.daily_summary_time")]
+        )
     }
 
     @Test
@@ -98,7 +114,6 @@ class SettingsRepositoryTest {
             it[stringPreferencesKey("settings.track_me_enabled")] = "not-a-boolean"
             it[booleanPreferencesKey("settings.weather_alerts")] = false
             it[booleanPreferencesKey("settings.daily_summary")] = true
-            it[booleanPreferencesKey("settings.trip_alerts")] = true
             it[booleanPreferencesKey("settings.theme_mode")] = true
         }
 
@@ -106,10 +121,27 @@ class SettingsRepositoryTest {
             PersistedSettings(
                 provider = WeatherProvider.MET_NO,
                 weatherAlerts = false,
-                dailySummary = true,
-                tripAlerts = true
+                dailySummary = true
             ),
             DataStoreSettingsRepository(dataStore).settings.first()
         )
+    }
+
+    @Test
+    fun malformed_summary_time_uses_the_default_without_affecting_other_fields() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.weather_alerts")] = true
+            it[stringPreferencesKey("settings.daily_summary_time")] = "not-a-time"
+        }
+
+        val settings = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertTrue(settings.weatherAlerts)
+        assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
     }
 }

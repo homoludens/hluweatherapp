@@ -83,7 +83,7 @@ fun HluNavHost(
                 onPrecipitationUnitChange = settingsViewModel::setPrecipitationUnit,
                 onWeatherAlertsChange = settingsViewModel::setWeatherAlerts,
                 onDailySummaryChange = settingsViewModel::setDailySummary,
-                onTripAlertsChange = settingsViewModel::setTripAlerts,
+                onDailySummaryTimeChange = settingsViewModel::setDailySummaryTime,
                 onClearCacheClick = settingsViewModel::clearCache
             )
         }

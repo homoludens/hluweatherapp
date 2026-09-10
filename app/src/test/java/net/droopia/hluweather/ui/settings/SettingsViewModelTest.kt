@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -124,7 +125,7 @@ class SettingsViewModelTest {
             precipitationUnit = PrecipitationUnit.INCH,
             weatherAlerts = false,
             dailySummary = false,
-            tripAlerts = true
+            dailySummaryTime = LocalTime(9, 15)
         )
         val repository = InMemorySettingsRepository(initial)
         val viewModel = SettingsViewModel(
@@ -136,6 +137,17 @@ class SettingsViewModelTest {
 
         assertTrue(viewModel.state.value.dailySummary)
         assertEquals(initial.copy(trackMeEnabled = false, dailySummary = true), repository.saved)
+    }
+
+    @Test
+    fun changing_daily_summary_time_updates_state_and_persists_it() {
+        val repository = InMemorySettingsRepository()
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
+
+        viewModel.setDailySummaryTime(LocalTime(7, 30))
+
+        assertEquals(LocalTime(7, 30), viewModel.state.value.dailySummaryTime)
+        assertEquals(LocalTime(7, 30), repository.saved?.dailySummaryTime)
     }
 
     @Test

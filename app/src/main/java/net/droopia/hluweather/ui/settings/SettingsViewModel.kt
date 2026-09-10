@@ -134,8 +134,8 @@ class SettingsViewModel(
         updateSettings { it.copy(dailySummary = enabled) }
     }
 
-    fun setTripAlerts(enabled: Boolean) {
-        updateSettings { it.copy(tripAlerts = enabled) }
+    fun setDailySummaryTime(time: kotlinx.datetime.LocalTime) {
+        updateSettings { it.copy(dailySummaryTime = time) }
     }
 
     fun clearCache() {
@@ -192,7 +192,7 @@ private fun PersistedSettings.toUiState(
         precipitationUnit = precipitationUnit,
         weatherAlerts = weatherAlerts,
         dailySummary = dailySummary,
-        tripAlerts = tripAlerts
+        dailySummaryTime = dailySummaryTime
     )
 
 private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
@@ -206,7 +206,7 @@ private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     precipitationUnit = precipitationUnit,
     weatherAlerts = weatherAlerts,
     dailySummary = dailySummary,
-    tripAlerts = tripAlerts
+    dailySummaryTime = dailySummaryTime
 )
 
 private data class SettingsSnapshot(

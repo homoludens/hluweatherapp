@@ -3,6 +3,7 @@ package net.droopia.hluweather.ui.settings
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import kotlinx.datetime.LocalTime
 
 enum class TemperatureUnit {
     CELSIUS,
@@ -34,7 +35,7 @@ data class SettingsUiState(
     val windUnit: WindUnit = WindUnit.KMH,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
-    val weatherAlerts: Boolean = true,
+    val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
-    val tripAlerts: Boolean = false
+    val dailySummaryTime: LocalTime = LocalTime(8, 0)
 )

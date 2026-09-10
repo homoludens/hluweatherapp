@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.applicationDataStore
@@ -24,9 +25,9 @@ data class PersistedSettings(
     val windUnit: WindUnit = WindUnit.KMH,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
-    val weatherAlerts: Boolean = true,
+    val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
-    val tripAlerts: Boolean = false
+    val dailySummaryTime: LocalTime = LocalTime(8, 0)
 )
 
 interface SettingsRepository {
@@ -59,7 +60,9 @@ class DataStoreSettingsRepository(
                 precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
                 weatherAlerts = preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts,
                 dailySummary = preferences.getBooleanOrNull(dailySummaryKey) ?: defaults.dailySummary,
-                tripAlerts = preferences.getBooleanOrNull(tripAlertsKey) ?: defaults.tripAlerts
+                dailySummaryTime = preferences.getStringOrNull(dailySummaryTimeKey)
+                    ?.let(::parseSummaryTime)
+                    ?: defaults.dailySummaryTime
             )
         }
 
@@ -73,9 +76,17 @@ class DataStoreSettingsRepository(
             preferences[precipitationUnitKey] = settings.precipitationUnit.name
             preferences[weatherAlertsKey] = settings.weatherAlerts
             preferences[dailySummaryKey] = settings.dailySummary
-            preferences[tripAlertsKey] = settings.tripAlerts
+            preferences[dailySummaryTimeKey] = settings.dailySummaryTime.toPreferenceValue()
         }
     }
+
+    private fun parseSummaryTime(value: String): LocalTime? =
+        runCatching { LocalTime.parse(value) }
+            .getOrNull()
+            ?.takeIf { it.toPreferenceValue() == value }
+
+    private fun LocalTime.toPreferenceValue(): String =
+        "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
 
     private inline fun <reified T : Enum<T>> Preferences.enum(
         key: Preferences.Key<String>,
@@ -102,4 +113,4 @@ private val distanceUnitKey = stringPreferencesKey("settings.distance_unit")
 private val precipitationUnitKey = stringPreferencesKey("settings.precipitation_unit")
 private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")
 private val dailySummaryKey = booleanPreferencesKey("settings.daily_summary")
-private val tripAlertsKey = booleanPreferencesKey("settings.trip_alerts")
+private val dailySummaryTimeKey = stringPreferencesKey("settings.daily_summary_time")

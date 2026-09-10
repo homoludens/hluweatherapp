@@ -28,6 +28,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalTime
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -63,6 +64,17 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Notifications").assertIsDisplayed()
         scrollTo(6)
         composeRule.onNodeWithText("Data & Cache").assertIsDisplayed()
+    }
+
+    @Test
+    fun notifications_show_best_effort_summary_time_without_trip_alerts() {
+        renderSettings()
+
+        scrollTo(5)
+        composeRule.onNodeWithText("Daily summary time").assertIsDisplayed()
+        composeRule.onNodeWithText("08:00").assertIsDisplayed()
+        composeRule.onNodeWithText("Best effort; delivery may be delayed by Android.").assertIsDisplayed()
+        composeRule.onNodeWithText("Trip alerts").assertDoesNotExist()
     }
 
     @Test
@@ -127,7 +139,6 @@ class SettingsScreenTest {
         var precipitation: PrecipitationUnit? = null
         var weatherAlerts: Boolean? = null
         var dailySummary: Boolean? = null
-        var tripAlerts: Boolean? = null
         var selectedLocation: WeatherLocation? = null
         var locationMenu: WeatherLocation? = null
         var addLocationClicks = 0
@@ -144,7 +155,6 @@ class SettingsScreenTest {
             onPrecipitationUnitChange = { precipitation = it },
             onWeatherAlertsChange = { weatherAlerts = it },
             onDailySummaryChange = { dailySummary = it },
-            onTripAlertsChange = { tripAlerts = it },
             onClearCacheClick = { clearCacheClicks++ }
         )
 
@@ -158,7 +168,6 @@ class SettingsScreenTest {
         scrollTo(5)
         composeRule.onNodeWithTag("settings_weather_alerts").performClick()
         composeRule.onNodeWithTag("settings_daily_summary").performClick()
-        composeRule.onNodeWithTag("settings_trip_alerts").performClick()
 
         scrollTo(2)
         composeRule.onNodeWithTag("settings_location_belgrade").performClick()
@@ -172,9 +181,8 @@ class SettingsScreenTest {
         assertEquals(WindUnit.MPH, wind)
         assertEquals(DistanceUnit.MILES, distance)
         assertEquals(PrecipitationUnit.INCH, precipitation)
-        assertEquals(false, weatherAlerts)
+        assertEquals(true, weatherAlerts)
         assertEquals(true, dailySummary)
-        assertEquals(true, tripAlerts)
         assertEquals("belgrade", selectedLocation?.id)
         assertEquals("belgrade", locationMenu?.id)
         assertEquals(1, addLocationClicks)
@@ -207,7 +215,7 @@ class SettingsScreenTest {
         onPrecipitationUnitChange: (PrecipitationUnit) -> Unit = {},
         onWeatherAlertsChange: (Boolean) -> Unit = {},
         onDailySummaryChange: (Boolean) -> Unit = {},
-        onTripAlertsChange: (Boolean) -> Unit = {},
+        onDailySummaryTimeChange: (LocalTime) -> Unit = {},
         onClearCacheClick: () -> Unit = {}
     ) {
         composeRule.setContent {
@@ -228,7 +236,7 @@ class SettingsScreenTest {
                     onPrecipitationUnitChange = onPrecipitationUnitChange,
                     onWeatherAlertsChange = onWeatherAlertsChange,
                     onDailySummaryChange = onDailySummaryChange,
-                    onTripAlertsChange = onTripAlertsChange,
+                    onDailySummaryTimeChange = onDailySummaryTimeChange,
                     onClearCacheClick = onClearCacheClick
                 )
             }
