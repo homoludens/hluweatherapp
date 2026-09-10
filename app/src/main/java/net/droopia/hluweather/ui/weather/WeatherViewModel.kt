@@ -39,6 +39,7 @@ data class WeatherUiState(
     val forecast: WeatherForecast? = null,
     val isStale: Boolean = false,
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     val forecastMode: ForecastMode = ForecastMode.HOURLY,
     val selectedDayIndex: Int = 0,
@@ -177,6 +178,7 @@ class WeatherViewModel(
                     forecast = null,
                     isStale = false,
                     isLoading = false,
+                    isRefreshing = false,
                     error = null,
                     selectedDayIndex = 0,
                     trackMeStatus = it.trackMeStatus
@@ -207,6 +209,7 @@ class WeatherViewModel(
                     activeLocation = currentLocation,
                     locations = request.locations,
                     isLoading = false,
+                    isRefreshing = false,
                     error = null
                 )
             }
@@ -215,16 +218,39 @@ class WeatherViewModel(
 
         _state.update {
             it.copy(
-                isLoading = true,
                 activeLocation = currentLocation,
                 locations = request.locations,
-                forecast = null,
+                isLoading = it.forecast == null,
+                isRefreshing = false,
                 isStale = false,
                 error = null,
                 selectedDayIndex = 0
             )
         }
         try {
+            if (!refreshRequested) {
+                val cached = repository.getCachedForecast(request.provider, request.activeLocation!!)
+                if (requestGeneration != request.generation) return
+                if (cached != null) {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            forecast = cached.forecast,
+                            isStale = false,
+                            error = null
+                        )
+                    }
+                }
+            }
+            _state.update {
+                it.copy(
+                    isLoading = it.forecast == null,
+                    isRefreshing = true,
+                    isStale = false,
+                    error = null
+                )
+            }
             val forecast = repository.getForecast(request.provider, request.activeLocation!!)
             if (requestGeneration == request.generation &&
                 _state.value.activeLocation == currentLocation
@@ -232,6 +258,7 @@ class WeatherViewModel(
                 _state.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         forecast = forecast.forecast,
                         isStale = forecast.isStale,
                         error = null
@@ -252,10 +279,12 @@ class WeatherViewModel(
             if (requestGeneration != request.generation) return
             Log.e("WeatherViewModel", "Weather request failed", error)
             _state.update {
+                val hasForecast = it.forecast != null
                 it.copy(
                     isLoading = false,
-                    isStale = false,
-                    error = error.message ?: "Weather request failed"
+                    isRefreshing = false,
+                    isStale = hasForecast,
+                    error = if (hasForecast) null else error.message ?: "Weather request failed"
                 )
             }
         }

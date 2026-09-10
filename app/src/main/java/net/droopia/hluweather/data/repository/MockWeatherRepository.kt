@@ -30,6 +30,11 @@ class MockWeatherRepository(
         )
     }
 
+    override suspend fun getCachedForecast(
+        provider: WeatherProvider,
+        location: ActiveLocation
+    ): ForecastLoad? = null
+
     override suspend fun clearCache() = Unit
 }
 

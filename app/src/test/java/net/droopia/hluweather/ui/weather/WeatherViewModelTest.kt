@@ -84,6 +84,123 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun fresh_cache_is_shown_before_network_refresh_completes() = runTest {
+        val cachedForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val freshForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val networkResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = ForecastLoad(cachedForecast),
+            networkResults = listOf(networkResult)
+        )
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+
+        assertEquals(cachedForecast, viewModel.state.value.forecast)
+        assertTrue(viewModel.state.value.isRefreshing)
+        assertFalse(viewModel.state.value.isLoading)
+        assertEquals(1, repository.networkRequests)
+
+        networkResult.complete(ForecastLoad(freshForecast))
+        advanceUntilIdle()
+
+        assertEquals(freshForecast, viewModel.state.value.forecast)
+        assertFalse(viewModel.state.value.isRefreshing)
+    }
+
+    @Test
+    fun refresh_skips_cache_and_keeps_current_forecast_until_network_completes() = runTest {
+        val cachedForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val refreshedForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(3L))
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = ForecastLoad(cachedForecast),
+            networkResults = listOf(
+                CompletableDeferred(ForecastLoad(initialForecast)),
+                refreshResult
+            )
+        )
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+
+        assertEquals(1, repository.cacheReads)
+        assertEquals(2, repository.networkRequests)
+        assertEquals(initialForecast, viewModel.state.value.forecast)
+        assertTrue(viewModel.state.value.isRefreshing)
+        assertFalse(viewModel.state.value.isLoading)
+
+        refreshResult.complete(ForecastLoad(refreshedForecast))
+        advanceUntilIdle()
+
+        assertEquals(refreshedForecast, viewModel.state.value.forecast)
+        assertFalse(viewModel.state.value.isRefreshing)
+        assertFalse(viewModel.state.value.isLoading)
+    }
+
+    @Test
+    fun refresh_failure_keeps_current_forecast_and_marks_it_stale() = runTest {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = null,
+            networkResults = listOf(
+                CompletableDeferred(ForecastLoad(initialForecast)),
+                refreshResult
+            )
+        )
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        assertTrue(viewModel.state.value.isRefreshing)
+        refreshResult.completeExceptionally(IllegalStateException("offline"))
+        advanceUntilIdle()
+
+        assertEquals(initialForecast, viewModel.state.value.forecast)
+        assertTrue(viewModel.state.value.isStale)
+        assertFalse(viewModel.state.value.isRefreshing)
+        assertFalse(viewModel.state.value.isLoading)
+        assertNull(viewModel.state.value.error)
+    }
+
+    @Test
+    fun no_cache_keeps_initial_loading_until_network_completes() = runTest {
+        val networkResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = null,
+            networkResults = listOf(networkResult)
+        )
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+
+        assertTrue(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.isRefreshing)
+        assertNull(viewModel.state.value.forecast)
+
+        networkResult.complete(ForecastLoad(buildMockForecast(Svilajnac)))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isLoading)
+        assertFalse(viewModel.state.value.isRefreshing)
+    }
+
+    @Test
     fun changes_forecast_mode() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
@@ -555,6 +672,29 @@ class WeatherViewModelTest {
                 requests += Request(provider, weatherLocation)
             }
         }
+
+        override suspend fun clearCache() = Unit
+    }
+
+    private class CacheFirstRecordingRepository(
+        private val cached: ForecastLoad?,
+        private val networkResults: List<CompletableDeferred<ForecastLoad>>
+    ) : WeatherRepository {
+        var cacheReads = 0
+        var networkRequests = 0
+
+        override suspend fun getCachedForecast(
+            provider: WeatherProvider,
+            location: ActiveLocation
+        ): ForecastLoad? {
+            cacheReads++
+            return cached
+        }
+
+        override suspend fun getForecast(
+            provider: WeatherProvider,
+            location: ActiveLocation
+        ): ForecastLoad = networkResults[networkRequests++].await()
 
         override suspend fun clearCache() = Unit
     }
