@@ -2,6 +2,9 @@ package net.droopia.hluweather.data.repository
 
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.cache.ForecastCacheKey
 import net.droopia.hluweather.data.cache.ForecastCacheStore
 import net.droopia.hluweather.data.model.ActiveLocation
@@ -12,7 +15,8 @@ import net.droopia.hluweather.data.model.WeatherProvider
 
 class CachingWeatherRepository(
     private val sources: Map<WeatherProvider, WeatherSource>,
-    private val cache: ForecastCacheStore
+    private val cache: ForecastCacheStore,
+    private val now: () -> Instant = { Clock.System.now() }
 ) : WeatherRepository {
 
     init {
@@ -30,6 +34,28 @@ class CachingWeatherRepository(
         ),
         cache = cache
     )
+
+    override suspend fun getCachedForecast(
+        provider: WeatherProvider,
+        location: ActiveLocation
+    ): ForecastLoad? {
+        val key = ForecastCacheKey(provider, location.cacheLocationKey())
+        val cached = try {
+            cache.get(key)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            return null
+        } ?: return null
+
+        if (cached.provider != key.provider ||
+            !location.matchesCachedLocation(key, cached.location) ||
+            now() - cached.fetchedAt > 1.hours
+        ) {
+            return null
+        }
+        return ForecastLoad(cached, isStale = false)
+    }
 
     override suspend fun getForecast(
         provider: WeatherProvider,

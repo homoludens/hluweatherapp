@@ -17,5 +17,9 @@ interface WeatherSource {
 
 interface WeatherRepository {
     suspend fun getForecast(provider: WeatherProvider, location: ActiveLocation): ForecastLoad
+    suspend fun getCachedForecast(
+        provider: WeatherProvider,
+        location: ActiveLocation
+    ): ForecastLoad? = null
     suspend fun clearCache()
 }

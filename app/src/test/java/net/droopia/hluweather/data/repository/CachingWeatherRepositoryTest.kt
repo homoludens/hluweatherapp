@@ -5,6 +5,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.test.runTest
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.cache.ForecastCacheKey
 import net.droopia.hluweather.data.cache.ForecastCacheStore
@@ -44,6 +47,95 @@ class CachingWeatherRepositoryTest {
             forecast,
             cache.get(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"))
         )
+    }
+
+    @Test
+    fun cache_read_accepts_entries_up_to_one_hour_old() = runTest {
+        val now = Instant.parse("2026-09-10T12:00:00Z")
+
+        listOf(
+            now - 59.minutes,
+            now - 1.hours
+        ).forEach { fetchedAt ->
+            val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+            val cache = InMemoryCache()
+            val cachedForecast = forecast(WeatherProvider.OPEN_METEO, fetchedAt.toString())
+            cache.put(
+                ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"),
+                cachedForecast
+            )
+            val repository = CachingWeatherRepository(
+                sources = mapOf(WeatherProvider.OPEN_METEO to source),
+                cache = cache,
+                now = { now }
+            )
+
+            val load = repository.getCachedForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(Svilajnac)
+            )
+
+            assertEquals(cachedForecast, load?.forecast)
+            assertEquals(false, load?.isStale)
+            assertEquals(0, source.calls)
+        }
+    }
+
+    @Test
+    fun cache_read_rejects_entries_older_than_one_hour() = runTest {
+        val now = Instant.parse("2026-09-10T12:00:00Z")
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"),
+            forecast(WeatherProvider.OPEN_METEO, (now - 1.hours - 1.seconds).toString())
+        )
+        val repository = CachingWeatherRepository(
+            sources = mapOf(WeatherProvider.OPEN_METEO to source),
+            cache = cache,
+            now = { now }
+        )
+
+        assertEquals(
+            null,
+            repository.getCachedForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(Svilajnac)
+            )
+        )
+        assertEquals(0, source.calls)
+    }
+
+    @Test
+    fun cache_read_rejects_different_provider_or_saved_location() = runTest {
+        val now = Instant.parse("2026-09-10T12:00:00Z")
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac"),
+            forecast(WeatherProvider.OPEN_METEO, (now - 1.minutes).toString())
+        )
+        val repository = CachingWeatherRepository(
+            sources = mapOf(WeatherProvider.OPEN_METEO to source),
+            cache = cache,
+            now = { now }
+        )
+
+        assertEquals(
+            null,
+            repository.getCachedForecast(
+                WeatherProvider.MET_NO,
+                ActiveLocation.Saved(Svilajnac)
+            )
+        )
+        assertEquals(
+            null,
+            repository.getCachedForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(Svilajnac.copy(latitude = 44.9))
+            )
+        )
+        assertEquals(0, source.calls)
     }
 
     @Test
