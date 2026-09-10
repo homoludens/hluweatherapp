@@ -269,6 +269,7 @@ class PrimaryFlowsAccessibilityTest {
         assertBoundsWithin(settings, "Precipitation")
         assertBoundsWithin(settings, "in")
         settings.performScrollToIndex(5)
+        assertBoundsWithin(settings, "Best effort; delivery may be delayed by Android.")
         assertBoundsWithin(settings, "Thunderstorm alerts only")
     }
 
@@ -320,8 +321,12 @@ class PrimaryFlowsAccessibilityTest {
         text: String
     ) {
         val containerBounds = container.getUnclippedBoundsInRoot()
-        val bounds = composeRule.onNodeWithText(text).getUnclippedBoundsInRoot()
+        val textNode = composeRule.onNodeWithText(text)
+        textNode.assertIsDisplayed()
+        val bounds = textNode.getUnclippedBoundsInRoot()
         assertTrue("$text must fit within the constrained settings width", bounds.left >= containerBounds.left)
         assertTrue("$text must fit within the constrained settings width", bounds.right <= containerBounds.right)
+        assertTrue("$text must fit within the constrained settings height", bounds.top >= containerBounds.top)
+        assertTrue("$text must fit within the constrained settings height", bounds.bottom <= containerBounds.bottom)
     }
 }
