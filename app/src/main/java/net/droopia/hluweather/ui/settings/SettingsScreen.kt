@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -660,6 +661,9 @@ private fun SummaryTimeRow(time: LocalTime, onTimeChange: (LocalTime) -> Unit) {
                     time.minute,
                     true
                 ).show()
+            }
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Daily summary time, ${formatSummaryTime(time)}"
             }
             .testTag("settings_daily_summary_time")
             .padding(horizontal = 18.dp, vertical = 10.dp),

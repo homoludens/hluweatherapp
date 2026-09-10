@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -83,6 +84,15 @@ class LocationPickerScreenTest {
         assertEquals("BelgradeNew location", repository.added.single().name)
         assertEquals(1, backClicks)
         assertEquals(1, saved)
+    }
+
+    @Test
+    fun location_picker_actions_are_exposed_to_accessibility_services() {
+        render()
+
+        composeRule.onNodeWithContentDescription("Back").assertHasClickAction()
+        composeRule.onNodeWithText("Use my location").assertHasClickAction()
+        composeRule.onNodeWithText("Save").assertHasClickAction()
     }
 
     private fun render(

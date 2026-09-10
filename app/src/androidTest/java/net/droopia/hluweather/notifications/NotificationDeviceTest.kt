@@ -1,6 +1,7 @@
 package net.droopia.hluweather.notifications
 
 import android.Manifest
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
@@ -11,6 +12,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.core.content.ContextCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkManager
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import net.droopia.hluweather.MainActivity
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -55,6 +63,9 @@ class NotificationDeviceTest {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         assertNotificationDeliveryPermission()
 
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val monitor = instrumentation.addMonitor(MainActivity::class.java.name, null, false)
+        var launchedActivity: Activity? = null
         try {
             val publisher = AndroidWeatherNotificationPublisher(
                 context = context,
@@ -75,8 +86,17 @@ class NotificationDeviceTest {
                 "Daily weather summary",
                 notification.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
             )
-            assertNotNull(notification.notification.contentIntent)
+            val contentIntent = notification.notification.contentIntent
+            assertNotNull(contentIntent)
+            contentIntent!!.send()
+            launchedActivity = monitor.waitForActivityWithTimeout(5_000)
+            assertNotNull("Notification tap did not launch MainActivity", launchedActivity)
+            assertFalse(launchedActivity!!.isFinishing)
         } finally {
+            launchedActivity?.let { activity ->
+                instrumentation.runOnMainSync { activity.finish() }
+            }
+            instrumentation.removeMonitor(monitor)
             manager.cancel(testNotificationTag, testNotificationId)
             deleteTestChannels()
         }
@@ -108,6 +128,36 @@ class NotificationDeviceTest {
                 hasPostNotificationsPermission()
             )
             restorationFailure?.let { throw it }
+        }
+    }
+
+    @Test
+    fun daily_summary_delivery_is_scheduled_with_the_selected_location() {
+        val workManager = WorkManager.getInstance(context)
+        val location = WeatherLocation("device-test-belgrade", "Belgrade", 44.8176, 20.4633)
+        val settings = PersistedSettings(
+            selectedLocationId = location.id,
+            dailySummary = true,
+            dailySummaryTime = LocalTime(8, 0)
+        )
+        workManager.cancelUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME).result.get()
+
+        try {
+            WorkManagerNotificationScheduler(
+                workManager = workManager,
+                alertWorkerClass = WeatherAlertWorker::class.java,
+                summaryWorkerClass = DailySummaryWorker::class.java,
+                clock = FixedClock,
+                timeZone = TimeZone.UTC
+            ).reconcile(settings, ActiveLocation.Saved(location))
+
+            val scheduled = workManager
+                .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+                .get()
+                .single()
+            assertTrue(scheduled.tags.contains("notification.schedule.summary.OPEN_METEO.${location.id}.08:00"))
+        } finally {
+            workManager.cancelUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME).result.get()
         }
     }
 
@@ -152,5 +202,8 @@ class NotificationDeviceTest {
     private companion object {
         const val SHELL_EXIT_STATUS_MARKER = "NOTIFICATION_TEST_EXIT_STATUS"
         const val TEST_NOTIFICATION_ID = 2_000_001
+        val FixedClock = object : kotlin.time.Clock {
+            override fun now() = kotlin.time.Instant.parse("2026-09-10T00:00:00Z")
+        }
     }
 }

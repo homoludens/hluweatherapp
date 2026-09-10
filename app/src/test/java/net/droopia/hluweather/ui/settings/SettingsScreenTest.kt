@@ -3,6 +3,8 @@ package net.droopia.hluweather.ui.settings
 import android.app.TimePickerDialog
 import android.content.DialogInterface
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -10,6 +12,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.runtime.mutableStateOf
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ThemeMode
@@ -95,6 +101,17 @@ class SettingsScreenTest {
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
 
         assertEquals(LocalTime(9, 15), selectedTime)
+    }
+
+    @Test
+    fun summary_time_row_exposes_one_merged_action() {
+        renderSettings()
+
+        scrollTo(5)
+        composeRule.onNodeWithTag("settings_daily_summary_time")
+            .assertHasClickAction()
+            .assertContentDescriptionEquals("Daily summary time, 08:00")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
     }
 
     @Test

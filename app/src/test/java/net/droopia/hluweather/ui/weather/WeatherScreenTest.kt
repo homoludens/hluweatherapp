@@ -18,8 +18,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
@@ -345,6 +352,33 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithText("Add location").assertIsDisplayed()
         composeRule.onNodeWithText("Manage locations").assertIsDisplayed()
+    }
+
+    @Test
+    fun large_font_weather_screen_keeps_the_current_card_within_the_screen_width() {
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1.5f)) {
+                HluWeatherTheme(darkTheme = false) {
+                    Box(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .fillMaxHeight()
+                    ) {
+                        WeatherScreen(viewModel = viewModel, onSettingsClick = {})
+                    }
+                }
+            }
+        }
+
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        composeRule.onAllNodesWithText("21°C").fetchSemanticsNodes().forEach { node ->
+            assertTrue(
+                "Current temperature must fit at 1.5x font scale",
+                node.boundsInRoot.left >= root.left && node.boundsInRoot.right <= root.right
+            )
+        }
     }
 
     @Test

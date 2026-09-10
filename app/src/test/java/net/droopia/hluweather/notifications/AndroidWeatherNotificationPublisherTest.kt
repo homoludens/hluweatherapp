@@ -36,8 +36,8 @@ class AndroidWeatherNotificationPublisherTest {
             .getSystemService(NotificationManager::class.java)
             .activeNotifications
             .single()
-        assertEquals(event.key.hashCode(), notification.id)
-        assertEquals(null, notification.tag)
+        assertEquals(1000, notification.id)
+        assertEquals(event.key, notification.tag)
         val postedNotification = notification.notification
         assertNotNull(postedNotification.contentIntent)
         assertNotNull(postedNotification.contentIntent!!.creatorPackage)

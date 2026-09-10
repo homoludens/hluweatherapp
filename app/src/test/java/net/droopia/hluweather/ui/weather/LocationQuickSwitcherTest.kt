@@ -1,9 +1,15 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -54,6 +60,20 @@ class LocationQuickSwitcherTest {
         composeRule.onNodeWithText("Track Me").performClick()
 
         assertTrue(trackMeClicked)
+    }
+
+    @Test
+    fun location_rows_expose_merged_radio_actions() {
+        renderSwitcher()
+
+        composeRule.onNodeWithText("Svilajnac")
+            .assertHasClickAction()
+            .assertContentDescriptionEquals("Select location, Svilajnac")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        composeRule.onNodeWithText("Track Me")
+            .assertHasClickAction()
+            .assertContentDescriptionEquals("Select location, Track Me")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
     }
 
     private fun renderSwitcher(

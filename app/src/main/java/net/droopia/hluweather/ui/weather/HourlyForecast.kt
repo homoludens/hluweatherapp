@@ -294,8 +294,7 @@ internal fun ForecastRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = weather.condition.label(),
-                maxLines = 1
+                text = weather.condition.label()
             )
         }
 

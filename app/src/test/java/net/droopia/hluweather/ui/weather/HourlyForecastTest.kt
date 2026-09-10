@@ -1,5 +1,12 @@
 package net.droopia.hluweather.ui.weather
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -7,15 +14,20 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextLayoutResult
 import java.util.TimeZone
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Before
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -133,5 +145,32 @@ class HourlyForecastTest {
 
         composeRule.onAllNodesWithText("63°F").onFirst().assertIsDisplayed()
         composeRule.onAllNodesWithText("0 in").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun large_font_hourly_condition_wraps_inside_the_weather_column() {
+        val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+            .copy(condition = WeatherCondition.PARTLY_CLOUDY)
+
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                HluWeatherTheme(darkTheme = false) {
+                    Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .width(320.dp)
+                            .fillMaxHeight()
+                            .testTag("hourly_row_width")
+                    ) {
+                        ForecastRow(hour, java.time.ZoneId.of("UTC"))
+                    }
+                }
+            }
+        }
+
+        val node = composeRule.onNodeWithText("Partly cloudy").fetchSemanticsNode()
+        val results = mutableListOf<TextLayoutResult>()
+        assertTrue("Condition must expose a text layout result", node.config.contains(SemanticsActions.GetTextLayoutResult))
+        assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) == true)
+        assertFalse("Condition must wrap rather than truncate at 2x font scale", results.single().hasVisualOverflow)
     }
 }

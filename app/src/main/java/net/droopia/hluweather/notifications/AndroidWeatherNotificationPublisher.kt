@@ -18,7 +18,8 @@ class AndroidWeatherNotificationPublisher(
     override fun publishAlert(event: WeatherAlertEvent, title: String, body: String) {
         publish(
             channelId = weatherAlertsChannelId,
-            notificationId = event.key.hashCode(),
+            notificationId = WEATHER_ALERT_NOTIFICATION_ID,
+            notificationTag = event.key,
             title = title,
             body = body
         )
@@ -28,12 +29,19 @@ class AndroidWeatherNotificationPublisher(
         publish(
             channelId = dailySummaryChannelId,
             notificationId = dailySummaryNotificationId,
+            notificationTag = notificationTag,
             title = title,
             body = body
         )
     }
 
-    private fun publish(channelId: String, notificationId: Int, title: String, body: String) {
+    private fun publish(
+        channelId: String,
+        notificationId: Int,
+        notificationTag: String?,
+        title: String,
+        body: String
+    ) {
         NotificationChannels.create(context, weatherAlertsChannelId, dailySummaryChannelId)
         val notification = Notification.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -59,6 +67,7 @@ class AndroidWeatherNotificationPublisher(
     }
 
     private companion object {
+        const val WEATHER_ALERT_NOTIFICATION_ID = 1000
         const val DAILY_SUMMARY_NOTIFICATION_ID = 1001
     }
 }

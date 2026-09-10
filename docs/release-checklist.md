@@ -16,6 +16,23 @@
   unsigned local fallback.
 - No keystore or signing secret is committed.
 
+## Privacy And Location
+
+- [x] The manifest requests only foreground coarse/fine location; it does not
+  declare `ACCESS_BACKGROUND_LOCATION`.
+- [x] Closed-app weather alerts and daily summaries use the selected saved
+  location and never initiate a device-location request.
+- [ ] Complete the distribution privacy disclosure for the selected store,
+  including the app's foreground location and network weather-provider use.
+
+## Test Network Isolation
+
+- [x] Unit and Robolectric tests are network-free. Repository tests use Ktor's
+  mock client or in-memory fakes; no unit test depends on a live weather,
+  geocoding, map, or tile endpoint.
+- [x] Device tests exercise controlled Android services only. Map rendering and
+  live provider checks remain manual, unchecked device verification items.
+
 ## Local Verification
 
 - [x] Focused metadata and resource tests.
