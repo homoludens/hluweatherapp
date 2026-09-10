@@ -1,5 +1,8 @@
 package net.droopia.hluweather.ui.weather
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
@@ -8,13 +11,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
+import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
@@ -24,13 +30,16 @@ import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ui.settings.PersistedSettings
+import net.droopia.hluweather.ui.settings.DataStoreSettingsRepository
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -39,15 +48,20 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.junit.rules.TemporaryFolder
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class WeatherViewModelTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     @Before
     fun setup() {
@@ -168,6 +182,46 @@ class WeatherViewModelTest {
 
         assertEquals(WeatherProvider.MET_NO, repository.requests.last().provider)
         assertEquals(Svilajnac, repository.requests.last().location)
+    }
+
+    @Test
+    fun cache_only_persistence_does_not_restart_weather_load() = runTest {
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { temporaryFolder.newFile("weather.preferences_pb") }
+        )
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.weather_alerts_migrated")] = true
+        }
+        val settingsEmissions = mutableListOf<PersistedSettings>()
+        val dataStoreSettingsRepository = DataStoreSettingsRepository(dataStore)
+        val settingsRepository = object : SettingsRepository {
+            override val settings = dataStoreSettingsRepository.settings.onEach {
+                settingsEmissions += it
+            }
+
+            override suspend fun save(settings: PersistedSettings) {
+                dataStoreSettingsRepository.save(settings)
+            }
+        }
+        val source = RecordingWeatherSource()
+        val repository = CachingWeatherRepository(
+            sources = mapOf(WeatherProvider.OPEN_METEO to source),
+            cache = ForecastCache(dataStore)
+        )
+
+        val viewModel = WeatherViewModel(
+            repository,
+            settingsRepository,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        viewModel.state.first { it.forecast != null }
+        advanceUntilIdle()
+
+        assertEquals(1, settingsEmissions.size)
+        assertEquals(1, source.requests)
+        assertFalse(viewModel.state.value.isLoading)
+        assertNotNull(viewModel.state.value.forecast)
     }
 
     @Test
@@ -501,6 +555,14 @@ class WeatherViewModelTest {
         }
 
         override suspend fun clearCache() = Unit
+    }
+
+    private class RecordingWeatherSource : WeatherSource {
+        override val provider = WeatherProvider.OPEN_METEO
+        var requests = 0
+
+        override suspend fun getForecast(location: WeatherLocation): WeatherForecast =
+            buildMockForecast(location, Instant.fromEpochSeconds(requests++.toLong()))
     }
 
     private class DeferredWeatherRepository(
