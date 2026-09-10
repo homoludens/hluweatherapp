@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -62,7 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.ThemeMode
@@ -423,6 +424,9 @@ private fun TrackMeRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .toggleable(value = enabled, role = Role.Switch, onValueChange = onChange)
+            .semantics(mergeDescendants = true) {}
+            .testTag("settings_track_me")
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -438,8 +442,7 @@ private fun TrackMeRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
         }
         Switch(
             checked = enabled,
-            onCheckedChange = onChange,
-            modifier = Modifier.testTag("settings_track_me")
+            onCheckedChange = null
         )
     }
 }
@@ -617,6 +620,9 @@ private fun ToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .semantics(mergeDescendants = true) {}
+            .testTag(tag)
             .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -626,13 +632,11 @@ private fun ToggleRow(
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Switch(checked, onCheckedChange, modifier = Modifier.testTag(tag))
+        Switch(checked, onCheckedChange = null, modifier = Modifier)
     }
 }
 

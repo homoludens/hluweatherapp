@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -32,7 +34,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,11 +53,12 @@ fun WeatherHero(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
+    val fontScale = LocalDensity.current.fontScale
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(if (compact) 96.dp else 240.dp)
+            .height(if (compact) 96.dp else 240.dp * fontScale.coerceAtLeast(1f))
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -118,10 +124,17 @@ fun WeatherHero(
                         )
                     }
 
-                    IconButton(onClick = onSettingsClick) {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .semantics {
+                                contentDescription = "Settings"
+                            }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = null,
                             tint = colors.heroText
                         )
                     }
@@ -178,11 +191,13 @@ private fun WeatherNavButton(
     val colors = LocalHluColors.current
 
     Surface(
-        modifier = Modifier.selectable(
-            selected = selected,
-            role = Role.Tab,
-            onClick = onClick
-        ),
+        modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick
+            ),
         shape = RoundedCornerShape(28.dp),
         color = if (selected) colors.navSelected else Color.Transparent
     ) {

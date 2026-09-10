@@ -61,7 +61,7 @@ class ThemeTest {
     }
 
     @Test
-    fun theme_caps_large_system_font_scale() {
+    fun theme_preserves_large_system_font_scale() {
         var capturedFontScale = 0f
 
         composeRule.setContent {
@@ -74,7 +74,7 @@ class ThemeTest {
             }
         }
 
-        assertEquals(1f, capturedFontScale, 0f)
+        assertEquals(1.5f, capturedFontScale, 0f)
     }
 
     @Composable

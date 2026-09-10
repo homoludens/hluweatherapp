@@ -1,15 +1,34 @@
 package net.droopia.hluweather.ui.map
 
-import kotlinx.datetime.Instant
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
+import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
+import kotlinx.datetime.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration.Companion.minutes
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WeatherMapTest {
+
+    @get:Rule
+    val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
     fun selects_the_dark_open_free_map_style() {
@@ -66,5 +85,18 @@ class WeatherMapTest {
         assertFalse(shouldRefresh(lastPoint, movedOneKm, lastFetch, beforeTimeThreshold))
         assertTrue(shouldRefresh(lastPoint, movedOneKm, lastFetch, atTimeThreshold))
         assertFalse(shouldRefresh(lastPoint, movedOneKm, atTimeThreshold.minus(29.minutes), atTimeThreshold))
+    }
+
+    @Test
+    fun map_recenter_action_is_labeled_and_meets_touch_target() {
+        composeRule.setContent {
+            WeatherMapRecenterButton(onClick = {})
+        }
+
+        composeRule.onNodeWithTag("weather_map_recenter")
+            .assertHeightIsAtLeast(48.dp)
+            .assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Recenter map")
+            .assertContentDescriptionEquals("Recenter map")
     }
 }

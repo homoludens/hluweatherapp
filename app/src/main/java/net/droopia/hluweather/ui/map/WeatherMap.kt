@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MyLocation
@@ -23,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
@@ -165,10 +169,16 @@ fun WeatherMap(
                 Surface(
                     modifier = Modifier
                         .placedAt(marker.location.toGeoPoint().toPosition(), Alignment.BottomCenter)
-                        .size(if (marker.isActive) 44.dp else 36.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .clickable {
+                        .clickable(
+                            onClickLabel = "Show weather for ${marker.location.name}",
+                            role = Role.Button
+                        ) {
                             selectWeatherMapLocation(locations, marker.location.id, onLocationClick)
+                        }
+                        .semantics {
+                            contentDescription = "Weather for ${marker.location.name}"
                         }
                         .testTag("weather_map_marker_${marker.location.id}"),
                     shape = CircleShape,
@@ -189,7 +199,7 @@ fun WeatherMap(
                     )
                 }
             }
-            IconButton(
+            WeatherMapRecenterButton(
                 onClick = {
                     recenterWeatherMap {
                         scope.launch {
@@ -207,10 +217,7 @@ fun WeatherMap(
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
-                    .testTag("weather_map_recenter")
-            ) {
-                Icon(Icons.Outlined.MyLocation, contentDescription = "Recenter map")
-            }
+            )
         }
 
         val loadState = mapState.style.loadState
@@ -225,6 +232,24 @@ fun WeatherMap(
                 color = MaterialTheme.colorScheme.error
             )
         }
+    }
+}
+
+@Composable
+internal fun WeatherMapRecenterButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics {
+                contentDescription = "Recenter map"
+            }
+            .testTag("weather_map_recenter")
+    ) {
+        Icon(Icons.Outlined.MyLocation, contentDescription = null)
     }
 }
 
