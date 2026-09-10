@@ -27,6 +27,7 @@ class NotificationDeviceTest {
     private val testId = System.nanoTime().toString()
     private val testWeatherChannelId = "device_test_weather_$testId"
     private val testSummaryChannelId = "device_test_summary_$testId"
+    private val testNotificationTag = "device_test_notification_$testId"
     private val testNotificationId = TEST_NOTIFICATION_ID
 
     @Test
@@ -59,21 +60,24 @@ class NotificationDeviceTest {
                 context = context,
                 weatherAlertsChannelId = testWeatherChannelId,
                 dailySummaryChannelId = testSummaryChannelId,
+                notificationTag = testNotificationTag,
                 dailySummaryNotificationId = testNotificationId
             )
             publisher.publishDailySummary("Daily weather summary", "Belgrade: Clear, current 20.0°C.")
 
             val notification = manager.activeNotifications
-                .firstOrNull { it.id == testNotificationId }
+                .firstOrNull { it.tag == testNotificationTag && it.id == testNotificationId }
             assertNotNull("The notification published by this test was not found", notification)
-            assertEquals(testSummaryChannelId, notification!!.notification.channelId)
+            assertEquals(testNotificationTag, notification!!.tag)
+            assertEquals(testNotificationId, notification.id)
+            assertEquals(testSummaryChannelId, notification.notification.channelId)
             assertEquals(
                 "Daily weather summary",
                 notification.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
             )
             assertNotNull(notification.notification.contentIntent)
         } finally {
-            manager.cancel(testNotificationId)
+            manager.cancel(testNotificationTag, testNotificationId)
             deleteTestChannels()
         }
     }

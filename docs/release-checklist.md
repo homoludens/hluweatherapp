@@ -129,15 +129,18 @@
 ## Device Verification
 
 The local environment detected a connected Android device (`M2012K11AG`, API
-33), but it was unusable for verification. The initial direct adb installation
-returned `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`; a later
-bounded retry reached installation but returned
+33), but it was unusable for debug verification. The initial direct adb attempt
+for the `connectedDebugAndroidTest` debug APK returned
+`INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`; a later bounded
+retry of that debug APK installation returned
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did not
-match. No AVD was available.
+match. These outcomes were from debug APK attempts only; no signed-release
+installation was attempted. No AVD was available.
 
 - [ ] `connectedDebugAndroidTest` activity-launch smoke test.
 - [ ] Install and launch a signed release APK manually on an unrestricted
-  device. `connectedDebugAndroidTest` installs the debug APK and does not prove
+  device. This remains unattempted; the recorded installation errors belong to
+  the `connectedDebugAndroidTest` debug APK attempts and do not prove
   signed-release execution.
 - [ ] TalkBack labels and actions.
 - [ ] Large-font layout and text wrapping.
@@ -297,17 +300,17 @@ Verification date: `2026-09-10`.
   ```
 
   The device was detected as `M2012K11AG`, API `33`, but it was unusable because
-  installation was user-restricted in the earlier direct adb attempt:
+  the debug APK installation was blocked in the earlier direct adb attempt:
   `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`. A later bounded
-  retry reached installation but failed in `41s` with
+  retry of the debug APK installation failed in `41s` with
   `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did
   not match; test-APK cleanup also returned `DELETE_FAILED_INTERNAL_ERROR`.
   It started `0` tests, so no instrumentation assertion result was obtained.
-  The task installs the debug APK, not the signed release APK.
-- [ ] Signed release install and launch. Not completed: the initial install
-  returned `INSTALL_FAILED_USER_RESTRICTED`, and the later retry returned
-  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the existing app signature did
-  not match.
+  `connectedDebugAndroidTest` installs the debug APK, not the signed release
+  APK.
+- [ ] Signed release install and launch. Not attempted. No signed-release
+  installation command was run; the two installation errors above came only
+  from debug APK attempts.
 - [ ] TalkBack labels and actions. Manual device check remains open.
 - [ ] Large-font layout and text wrapping. Automated constrained-font coverage
   passed; manual device check remains open.

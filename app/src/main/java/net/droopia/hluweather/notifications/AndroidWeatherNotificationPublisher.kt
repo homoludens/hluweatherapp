@@ -11,7 +11,8 @@ class AndroidWeatherNotificationPublisher(
     private val context: Context,
     private val weatherAlertsChannelId: String = NotificationChannels.WEATHER_ALERTS_CHANNEL_ID,
     private val dailySummaryChannelId: String = NotificationChannels.DAILY_SUMMARY_CHANNEL_ID,
-    private val dailySummaryNotificationId: Int = DAILY_SUMMARY_NOTIFICATION_ID
+    private val dailySummaryNotificationId: Int = DAILY_SUMMARY_NOTIFICATION_ID,
+    private val notificationTag: String? = null
 ) : WeatherNotificationPublisher {
 
     override fun publishAlert(event: WeatherAlertEvent, title: String, body: String) {
@@ -49,7 +50,12 @@ class AndroidWeatherNotificationPublisher(
             )
             .setAutoCancel(true)
             .build()
-        context.getSystemService(NotificationManager::class.java).notify(notificationId, notification)
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        if (notificationTag == null) {
+            notificationManager.notify(notificationId, notification)
+        } else {
+            notificationManager.notify(notificationTag, notificationId, notification)
+        }
     }
 
     private companion object {
