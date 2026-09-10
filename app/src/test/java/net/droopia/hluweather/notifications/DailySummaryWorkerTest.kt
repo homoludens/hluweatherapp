@@ -29,6 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.IOException
+import kotlin.time.Clock
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -114,11 +115,74 @@ class DailySummaryWorkerTest {
         assertTrue(scheduler.successors.isEmpty())
     }
 
+    @Test
+    fun summary_uses_delivery_clock_date_in_forecast_timezone() = runBlocking {
+        val publisher = SummaryPublisher()
+        val forecast = summaryForecast().copy(
+            fetchedAt = Instant.parse("2026-09-09T23:30:00Z"),
+            daily = listOf(day(LocalDate(2026, 9, 10)))
+        )
+
+        val result = build(
+            settings = PersistedSettings(selectedLocationId = location.id, dailySummary = true),
+            weather = SummaryWeatherRepository(ForecastLoad(forecast)),
+            publisher = publisher,
+            clock = FixedSummaryClock(Instant.parse("2026-09-10T00:30:00Z"))
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+        assertEquals(1, publisher.summaries.size)
+        assertTrue(publisher.summaries.single().contains("25.0"))
+    }
+
+    @Test
+    fun summary_with_no_delivery_day_succeeds_without_posting() = runBlocking {
+        val publisher = SummaryPublisher()
+        val scheduler = SummaryScheduler()
+        val result = build(
+            settings = PersistedSettings(selectedLocationId = location.id, dailySummary = true),
+            weather = SummaryWeatherRepository(
+                ForecastLoad(summaryForecast().copy(daily = listOf(day(LocalDate(2026, 9, 11)))))
+            ),
+            publisher = publisher,
+            scheduler = scheduler,
+            clock = FixedSummaryClock(Instant.parse("2026-09-10T07:00:00Z"))
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+        assertTrue(publisher.summaries.isEmpty())
+        assertEquals(1, scheduler.successors.size)
+    }
+
+    @Test
+    fun summary_uses_configured_units_and_preserves_unknown_precipitation() = runBlocking {
+        val publisher = SummaryPublisher()
+        val result = build(
+            settings = PersistedSettings(
+                selectedLocationId = location.id,
+                dailySummary = true,
+                temperatureUnit = net.droopia.hluweather.ui.settings.TemperatureUnit.FAHRENHEIT,
+                precipitationUnit = net.droopia.hluweather.ui.settings.PrecipitationUnit.INCH
+            ),
+            weather = SummaryWeatherRepository(
+                ForecastLoad(summaryForecast().copy(daily = listOf(day(LocalDate(2026, 9, 10), null))))
+            ),
+            publisher = publisher,
+            clock = FixedSummaryClock(Instant.parse("2026-09-10T07:00:00Z"))
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+        assertTrue(publisher.summaries.single().contains("77.0°F"))
+        assertTrue(publisher.summaries.single().contains("precipitation unavailable"))
+        assertTrue(!publisher.summaries.single().contains("0.0"))
+    }
+
     private fun build(
         settings: PersistedSettings,
         weather: SummaryWeatherRepository,
         publisher: SummaryPublisher = SummaryPublisher(),
-        scheduler: SummaryScheduler = SummaryScheduler()
+        scheduler: SummaryScheduler = SummaryScheduler(),
+        clock: Clock = FixedSummaryClock(Instant.parse("2026-09-10T07:00:00Z"))
     ): DailySummaryWorker = TestListenableWorkerBuilder.from(context, DailySummaryWorker::class.java)
         .setWorkerFactory(
             AppWorkerFactory(
@@ -129,7 +193,8 @@ class DailySummaryWorkerTest {
                     publisher = publisher,
                     stateRepository = SummaryStateRepository(),
                     scheduler = scheduler,
-                    permissionChecker = NotificationPermissionChecker { true }
+                    permissionChecker = NotificationPermissionChecker { true },
+                    clock = clock
                 )
             )
         )
@@ -155,6 +220,20 @@ class DailySummaryWorkerTest {
         moonPhase = 0.0,
         timezone = "Europe/Belgrade"
     )
+
+    private fun day(date: LocalDate, precipitation: Double? = 4.5) = DayForecast(
+        date,
+        WeatherCondition.RAIN,
+        12.0,
+        25.0,
+        precipitation,
+        null,
+        null
+    )
+}
+
+private class FixedSummaryClock(private val instant: Instant) : Clock {
+    override fun now(): Instant = instant
 }
 
 private class SummarySettingsRepository(
@@ -168,7 +247,7 @@ private class SummaryLocationRepository(
     saved: List<WeatherLocation>
 ) : LocationRepository {
     override val locations: Flow<List<WeatherLocation>> = flowOf(saved)
-    override val activeLocation: Flow<ActiveLocation?> = flowOf(null)
+    override val activeLocation: Flow<ActiveLocation?> = flowOf(ActiveLocation.Saved(saved.first()))
     override val locationMode: Flow<LocationMode> = flowOf(LocationMode.SAVED_LOCATION)
     override suspend fun add(location: WeatherLocation) = Unit
     override suspend fun update(location: WeatherLocation) = Unit
@@ -201,8 +280,8 @@ private class SummaryPublisher : WeatherNotificationPublisher {
 
 private class SummaryScheduler : NotificationScheduler {
     val successors = mutableListOf<PersistedSettings>()
-    override fun reconcile(settings: PersistedSettings) = Unit
-    override fun enqueueNextDailySummary(settings: PersistedSettings) {
+    override fun reconcile(settings: PersistedSettings, activeLocation: ActiveLocation?) = Unit
+    override fun enqueueNextDailySummary(settings: PersistedSettings, activeLocation: ActiveLocation.Saved) {
         successors += settings
     }
 }

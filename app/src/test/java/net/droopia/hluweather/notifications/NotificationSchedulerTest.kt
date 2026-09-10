@@ -14,6 +14,8 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -95,7 +97,7 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), savedLocation
         )
 
         val alert = workManager.getWorkInfosForUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME).get()
@@ -114,7 +116,7 @@ class NotificationSchedulerTest {
             PersistedSettings(
                 selectedLocationId = "belgrade",
                 weatherAlerts = true
-            )
+            ), savedLocation
         )
 
         val work = workManager
@@ -133,14 +135,14 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), savedLocation
         )
 
         scheduler.reconcile(
             PersistedSettings(
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), null
         )
 
         assertTrue(
@@ -161,12 +163,12 @@ class NotificationSchedulerTest {
             dailySummary = true
         )
 
-        scheduler.reconcile(settings)
+        scheduler.reconcile(settings, savedLocation)
         val first = workManager
             .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
             .get().single().id
 
-        scheduler.reconcile(settings)
+        scheduler.reconcile(settings, savedLocation)
         val second = workManager
             .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
             .get().single().id
@@ -181,7 +183,7 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 dailySummary = true,
                 dailySummaryTime = LocalTime(8, 0)
-            )
+            ), savedLocation
         )
         val first = workManager
             .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
@@ -192,7 +194,7 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 dailySummary = true,
                 dailySummaryTime = LocalTime(9, 0)
-            )
+            ), savedLocation
         )
         val second = workManager
             .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
@@ -202,18 +204,28 @@ class NotificationSchedulerTest {
     }
 
     @Test
-    fun summary_successor_is_available_through_scheduler_interface() = runBlocking {
+    fun summary_successor_is_appended_without_cancelling_current_work() = runBlocking {
+        scheduler.reconcile(
+            PersistedSettings(selectedLocationId = "belgrade", dailySummary = true),
+            savedLocation
+        )
+        val current = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get().single()
         val interfaceScheduler: NotificationScheduler = scheduler
 
         interfaceScheduler.enqueueNextDailySummary(
-            PersistedSettings(selectedLocationId = "belgrade", dailySummary = true)
+            PersistedSettings(selectedLocationId = "wrong", dailySummary = true),
+            savedLocation
         )
 
-        assertEquals(
-            androidx.work.WorkInfo.State.ENQUEUED,
-            workManager.getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
-                .get().single().state
-        )
+        val work = workManager
+            .getWorkInfosForUniqueWork(NotificationScheduler.DAILY_SUMMARY_WORK_NAME)
+            .get()
+        assertEquals(2, work.size)
+        assertEquals(androidx.work.WorkInfo.State.ENQUEUED, current.state)
+        assertTrue(work.none { it.state == androidx.work.WorkInfo.State.CANCELLED })
+        assertTrue("notification.schedule.summary.OPEN_METEO.belgrade.08:00" in work.last().tags)
     }
 
     @Test
@@ -223,14 +235,14 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), savedLocation
         )
         scheduler.reconcile(
             PersistedSettings(
                 selectedLocationId = "belgrade",
                 weatherAlerts = false,
                 dailySummary = true
-            )
+            ), savedLocation
         )
 
         val alert = workManager.getWorkInfosForUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME).get()
@@ -247,7 +259,7 @@ class NotificationSchedulerTest {
                 selectedLocationId = "belgrade",
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), savedLocation
         )
         scheduler.reconcile(
             PersistedSettings(
@@ -255,7 +267,7 @@ class NotificationSchedulerTest {
                 trackMeEnabled = true,
                 weatherAlerts = true,
                 dailySummary = true
-            )
+            ), ActiveLocation.Current(net.droopia.hluweather.data.model.GeoPoint(44.8, 20.4))
         )
 
         val alert = workManager.getWorkInfosForUniqueWork(NotificationScheduler.WEATHER_ALERT_WORK_NAME).get()
@@ -285,5 +297,9 @@ class NotificationSchedulerTest {
     class TestSummaryWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
         override fun doWork(): Result = Result.success()
     }
+
+    private val savedLocation = ActiveLocation.Saved(
+        WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
+    )
 
 }

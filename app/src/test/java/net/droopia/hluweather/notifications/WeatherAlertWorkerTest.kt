@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.IOException
+import net.droopia.hluweather.data.repository.WeatherRepositoryException
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Clock
 
@@ -69,7 +70,9 @@ class WeatherAlertWorkerTest {
         ).doWork()
         val missingResult = worker(
             settings = PersistedSettings(selectedLocationId = "missing", weatherAlerts = true),
-            weatherRepository = weather
+            weatherRepository = weather,
+            savedLocations = emptyList(),
+            activeSaved = null
         ).doWork()
 
         assertEquals(androidx.work.ListenableWorker.Result.success(), trackMeResult)
@@ -167,16 +170,70 @@ class WeatherAlertWorkerTest {
         assertTrue(state.marked.isEmpty())
     }
 
+    @Test
+    fun active_saved_location_is_used_instead_of_the_settings_mirror() = runBlocking {
+        val selected = WeatherLocation("selected", "Selected", 1.0, 2.0)
+        val active = WeatherLocation("active", "Active", 3.0, 4.0)
+        val weather = RecordingWeatherRepository(
+            ForecastLoad(forecast(hours = listOf(hour(now + 1.hours, WeatherCondition.THUNDERSTORM))))
+        )
+
+        val result = build(
+            NotificationWorkerDependencies(
+                settingsRepository = TestSettingsRepository(
+                    PersistedSettings(
+                        selectedLocationId = selected.id,
+                        weatherAlerts = true
+                    )
+                ),
+                locationRepository = TestLocationRepository(listOf(active), LocationMode.SAVED_LOCATION, active),
+                weatherRepository = weather,
+                publisher = RecordingPublisher(),
+                stateRepository = RecordingStateRepository(),
+                scheduler = RecordingScheduler(),
+                permissionChecker = NotificationPermissionChecker { true },
+                clock = FixedClock(now)
+            )
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+        assertEquals(active.id, (weather.lastLocation as ActiveLocation.Saved).location.id)
+    }
+
+    @Test
+    fun malformed_forecast_fails_without_retrying() = runBlocking {
+        val result = worker(
+            settings = PersistedSettings(selectedLocationId = location.id, weatherAlerts = true),
+            weatherRepository = RecordingWeatherRepository(error = WeatherRepositoryException("Unable to map weather data"))
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.failure(), result)
+    }
+
+    @Test
+    fun transient_forecast_failure_retries() = runBlocking {
+        val result = worker(
+            settings = PersistedSettings(selectedLocationId = location.id, weatherAlerts = true),
+            weatherRepository = RecordingWeatherRepository(error = IOException("network unavailable"))
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.retry(), result)
+    }
+
     private fun worker(
         settings: PersistedSettings,
         locationMode: LocationMode = LocationMode.SAVED_LOCATION,
         weatherRepository: RecordingWeatherRepository,
         publisher: RecordingPublisher = RecordingPublisher(),
-        permissionGranted: Boolean = true
+        permissionGranted: Boolean = true,
+        savedLocations: List<WeatherLocation> = listOf(location),
+        activeSaved: WeatherLocation? = location
     ): WeatherAlertWorker = build(
         dependencies(
             settings = settings,
             locationMode = locationMode,
+            savedLocations = savedLocations,
+            activeSaved = activeSaved,
             weatherRepository = weatherRepository,
             publisher = publisher,
             permissionGranted = permissionGranted
@@ -191,13 +248,15 @@ class WeatherAlertWorkerTest {
     private fun dependencies(
         settings: PersistedSettings,
         locationMode: LocationMode = LocationMode.SAVED_LOCATION,
+        savedLocations: List<WeatherLocation> = listOf(location),
+        activeSaved: WeatherLocation? = location,
         weatherRepository: RecordingWeatherRepository,
         publisher: RecordingPublisher,
         state: RecordingStateRepository = RecordingStateRepository(),
         permissionGranted: Boolean = true
     ) = NotificationWorkerDependencies(
         settingsRepository = TestSettingsRepository(settings),
-        locationRepository = TestLocationRepository(listOf(location), locationMode),
+            locationRepository = TestLocationRepository(savedLocations, locationMode, activeSaved),
         weatherRepository = weatherRepository,
         publisher = publisher,
         stateRepository = state,
@@ -229,7 +288,7 @@ class WeatherAlertWorkerTest {
     )
 }
 
-private class FixedClock(private val instant: Instant) : Clock {
+    private class FixedClock(private val instant: Instant) : Clock {
     override fun now(): Instant = instant
 }
 
@@ -242,10 +301,13 @@ private class TestSettingsRepository(
 
 private class TestLocationRepository(
     saved: List<WeatherLocation>,
-    mode: LocationMode
+    mode: LocationMode,
+    activeSaved: WeatherLocation? = saved.firstOrNull()
 ) : LocationRepository {
     override val locations: Flow<List<WeatherLocation>> = flowOf(saved)
-    override val activeLocation: Flow<ActiveLocation?> = flowOf(null)
+    override val activeLocation: Flow<ActiveLocation?> = flowOf(
+        if (mode == LocationMode.SAVED_LOCATION) activeSaved?.let(ActiveLocation::Saved) else null
+    )
     override val locationMode: Flow<LocationMode> = flowOf(mode)
     override suspend fun add(location: WeatherLocation) = Unit
     override suspend fun update(location: WeatherLocation) = Unit
@@ -260,8 +322,10 @@ private class RecordingWeatherRepository(
     private val error: Throwable? = null
 ) : WeatherRepository {
     var calls = 0
+    var lastLocation: ActiveLocation? = null
     override suspend fun getForecast(provider: WeatherProvider, location: ActiveLocation): ForecastLoad {
         calls++
+        lastLocation = location
         error?.let { throw it }
         return result ?: error("forecast result not configured")
     }
@@ -293,6 +357,6 @@ private class RecordingStateRepository : NotificationStateRepository {
 }
 
 private class RecordingScheduler : NotificationScheduler {
-    override fun reconcile(settings: PersistedSettings) = Unit
-    override fun enqueueNextDailySummary(settings: PersistedSettings) = Unit
+    override fun reconcile(settings: PersistedSettings, activeLocation: ActiveLocation?) = Unit
+    override fun enqueueNextDailySummary(settings: PersistedSettings, activeLocation: ActiveLocation.Saved) = Unit
 }

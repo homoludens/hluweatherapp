@@ -57,15 +57,19 @@ class HluWeatherApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        if (!WorkManager.isInitialized()) {
+            WorkManager.initialize(this, workManagerConfiguration)
+        }
         NotificationChannels.create(this)
         applicationScope.launch {
             combine(
                 settingsRepository.settings,
-                locationRepository.activeLocation,
-                locationRepository.locationMode
-            ) { settings, activeLocation, locationMode ->
-                notificationSettingsForReconciliation(settings, activeLocation, locationMode)
-            }.collect(notificationScheduler::reconcile)
+                locationRepository.activeLocation
+            ) { settings, activeLocation ->
+                settings to activeLocation
+            }.collect { (settings, activeLocation) ->
+                notificationScheduler.reconcile(settings, activeLocation)
+            }
         }
     }
 

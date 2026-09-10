@@ -30,7 +30,7 @@ class NotificationStateRepositoryTest {
     }
 
     @Test
-    fun only_the_last_event_is_kept_for_each_provider_and_location() = runTest {
+    fun multiple_event_periods_are_retained_for_each_provider_and_location() = runTest {
         val repository = repository(backgroundScope)
         val first = event(WeatherProvider.OPEN_METEO, "belgrade", 1_780_000_000)
         val second = event(WeatherProvider.OPEN_METEO, "belgrade", 1_780_000_900)
@@ -38,7 +38,7 @@ class NotificationStateRepositoryTest {
         repository.markDelivered(first.key)
         repository.markDelivered(second.key)
 
-        assertFalse(repository.wasDelivered(first.key))
+        assertTrue(repository.wasDelivered(first.key))
         assertTrue(repository.wasDelivered(second.key))
     }
 

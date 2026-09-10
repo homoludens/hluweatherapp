@@ -16,13 +16,15 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.ui.settings.PersistedSettings
 import kotlin.time.Clock
 import kotlin.time.Duration
 
 interface NotificationScheduler {
-    fun reconcile(settings: net.droopia.hluweather.ui.settings.PersistedSettings)
+    fun reconcile(settings: PersistedSettings, activeLocation: ActiveLocation?)
 
-    fun enqueueNextDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings)
+    fun enqueueNextDailySummary(settings: PersistedSettings, activeLocation: ActiveLocation.Saved)
 
     companion object {
         const val WEATHER_ALERT_WORK_NAME = "weather_alerts"
@@ -38,21 +40,21 @@ class WorkManagerNotificationScheduler(
     private val timeZone: TimeZone = TimeZone.currentSystemDefault()
 ) : NotificationScheduler {
 
-    override fun reconcile(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
-        if (settings.trackMeEnabled || settings.selectedLocationId == null) {
+    override fun reconcile(settings: PersistedSettings, activeLocation: ActiveLocation?) {
+        val canonicalSettings = settings.forSavedLocation(activeLocation) ?: run {
             cancelWeatherAlerts()
             cancelDailySummary()
             return
         }
 
-        if (settings.weatherAlerts) {
-            enqueueWeatherAlerts(settings)
+        if (canonicalSettings.weatherAlerts) {
+            enqueueWeatherAlerts(canonicalSettings)
         } else {
             cancelWeatherAlerts()
         }
 
-        if (settings.dailySummary) {
-            enqueueDailySummary(settings)
+        if (canonicalSettings.dailySummary) {
+            enqueueDailySummary(canonicalSettings, ExistingWorkPolicy.REPLACE, preserveMatchingIdentity = true)
         } else {
             cancelDailySummary()
         }
@@ -61,9 +63,10 @@ class WorkManagerNotificationScheduler(
     fun delayUntil(summaryTime: LocalTime, now: LocalDateTime): Duration =
         delayUntil(summaryTime, now, timeZone)
 
-    override fun enqueueNextDailySummary(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
-        if (!settings.trackMeEnabled && settings.selectedLocationId != null && settings.dailySummary) {
-            enqueueDailySummary(settings, replaceExisting = true)
+    override fun enqueueNextDailySummary(settings: PersistedSettings, activeLocation: ActiveLocation.Saved) {
+        val canonicalSettings = settings.forSavedLocation(activeLocation) ?: return
+        if (canonicalSettings.dailySummary) {
+            enqueueDailySummary(canonicalSettings, ExistingWorkPolicy.APPEND, preserveMatchingIdentity = false)
         }
     }
 
@@ -92,10 +95,11 @@ class WorkManagerNotificationScheduler(
     }
 
     private fun enqueueDailySummary(
-        settings: net.droopia.hluweather.ui.settings.PersistedSettings,
-        replaceExisting: Boolean = false
+        settings: PersistedSettings,
+        existingWorkPolicy: ExistingWorkPolicy,
+        preserveMatchingIdentity: Boolean
     ) {
-        if (!replaceExisting && hasPendingWork(
+        if (preserveMatchingIdentity && hasPendingWork(
                 NotificationScheduler.DAILY_SUMMARY_WORK_NAME,
                 summaryScheduleIdentity(settings)
             )
@@ -112,12 +116,12 @@ class WorkManagerNotificationScheduler(
             .build()
         workManager.enqueueUniqueWork(
             NotificationScheduler.DAILY_SUMMARY_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
+            existingWorkPolicy,
             request
         )
     }
 
-    private fun settingsInput(settings: net.droopia.hluweather.ui.settings.PersistedSettings) = workDataOf(
+    private fun settingsInput(settings: PersistedSettings) = workDataOf(
         LOCATION_ID_INPUT to settings.selectedLocationId,
         PROVIDER_INPUT to settings.provider.name,
         SUMMARY_TIME_INPUT to settings.dailySummaryTime.toString()
@@ -128,10 +132,10 @@ class WorkManagerNotificationScheduler(
             !workInfo.state.isFinished && identity in workInfo.tags
         }
 
-    private fun alertScheduleIdentity(settings: net.droopia.hluweather.ui.settings.PersistedSettings): String =
+    private fun alertScheduleIdentity(settings: PersistedSettings): String =
         "notification.schedule.alert.${settings.provider.name}.${settings.selectedLocationId}"
 
-    private fun summaryScheduleIdentity(settings: net.droopia.hluweather.ui.settings.PersistedSettings): String =
+    private fun summaryScheduleIdentity(settings: PersistedSettings): String =
         "notification.schedule.summary.${settings.provider.name}.${settings.selectedLocationId}.${settings.dailySummaryTime}"
 
     private fun cancelWeatherAlerts() {
@@ -150,6 +154,14 @@ class WorkManagerNotificationScheduler(
             .build()
     }
 }
+
+private fun PersistedSettings.forSavedLocation(activeLocation: ActiveLocation?): PersistedSettings? =
+    (activeLocation as? ActiveLocation.Saved)?.let { active ->
+        copy(
+            selectedLocationId = active.location.id,
+            trackMeEnabled = false
+        )
+    }
 
 fun delayUntil(summaryTime: LocalTime, now: LocalDateTime, timeZone: TimeZone): Duration {
     if (now.time == summaryTime) return Duration.ZERO

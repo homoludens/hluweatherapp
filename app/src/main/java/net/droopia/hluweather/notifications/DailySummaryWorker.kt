@@ -1,6 +1,7 @@
 package net.droopia.hluweather.notifications
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
@@ -12,7 +13,8 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.label
-import java.io.IOException
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import java.util.Locale
 
 class DailySummaryWorker(
@@ -36,70 +38,108 @@ class DailySummaryWorker(
             val settings = dependencies.settingsRepository.settings.first()
             if (!settings.dailySummary) return Result.success()
 
-            val location = dependencies.savedLocation(settings.selectedLocationId)
+            val location = dependencies.locationRepository.activeLocation.first() as? ActiveLocation.Saved
                 ?: return Result.success()
             if (!dependencies.permissionChecker.isGranted(applicationContext)) {
-                dependencies.scheduler.enqueueNextDailySummary(settings)
+                dependencies.scheduler.enqueueNextDailySummary(settings, location)
                 return Result.success()
             }
 
             val forecast = try {
                 dependencies.weatherRepository.getForecast(
                     settings.provider,
-                    ActiveLocation.Saved(location)
+                    location
                 ).forecast
-            } catch (error: IOException) {
-                return Result.retry()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                Log.e(TAG, "Unable to load summary forecast for ${location.location.id}/${settings.provider}", error)
+                return if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
+            }
+
+            val body = forecast.summaryBody(
+                deliveryTime = dependencies.clock.now(),
+                temperatureUnit = settings.temperatureUnit,
+                precipitationUnit = settings.precipitationUnit
+            ) ?: run {
+                Log.w(TAG, "No forecast day for summary delivery in ${forecast.timezone}")
+                dependencies.scheduler.enqueueNextDailySummary(settings, location)
+                return Result.success()
             }
 
             try {
                 dependencies.publisher.publishDailySummary(
                     title = "Daily weather summary",
-                    body = forecast.summaryBody()
+                    body = body
                 )
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
+                Log.e(TAG, "Unable to post daily summary for ${location.location.id}", error)
                 return Result.failure()
             }
-            dependencies.scheduler.enqueueNextDailySummary(settings)
+            dependencies.scheduler.enqueueNextDailySummary(settings, location)
             Result.success()
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            if (error is IOException) Result.retry() else Result.failure()
+            Log.e(
+                TAG,
+                "Terminal daily summary worker failure for " +
+                    "${inputData.getString(LOCATION_ID_INPUT)}/${inputData.getString(PROVIDER_INPUT)}",
+                error
+            )
+            if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
         }
+    }
+
+    private companion object {
+        const val TAG = "DailySummaryWorker"
     }
 }
 
-internal fun WeatherForecast.summaryBody(): String {
-    val day = dayForSummary()
-    val precipitation = day?.precipitation ?: 0.0
+internal fun WeatherForecast.summaryBody(
+    deliveryTime: kotlinx.datetime.Instant,
+    temperatureUnit: TemperatureUnit,
+    precipitationUnit: PrecipitationUnit
+): String? {
+    val day = dayForSummary(deliveryTime) ?: return null
     return buildString {
         append(location.name)
         append(": ")
         append(current.condition.label())
         append(", current ")
-        append(current.temperature.asNotificationNumber())
-        append("°C. ")
-        if (day != null) {
-            append("High ")
-            append(day.temperatureMax.asNotificationNumber())
-            append("°C, low ")
-            append(day.temperatureMin.asNotificationNumber())
-            append("°C, precipitation ")
-            append(precipitation.asNotificationNumber())
-            append(" mm.")
+        append(current.temperature.asNotificationTemperature(temperatureUnit))
+        append(". High ")
+        append(day.temperatureMax.asNotificationTemperature(temperatureUnit))
+        append(", low ")
+        append(day.temperatureMin.asNotificationTemperature(temperatureUnit))
+        append(", precipitation ")
+        if (day.precipitation == null) {
+            append("unavailable.")
         } else {
-            append("No daily forecast available.")
+            append(day.precipitation.asNotificationPrecipitation(precipitationUnit))
+            append(".")
         }
     }
 }
 
-private fun WeatherForecast.dayForSummary(): DayForecast? {
+private fun WeatherForecast.dayForSummary(deliveryTime: kotlinx.datetime.Instant): DayForecast? {
     val date = runCatching {
-        fetchedAt.toLocalDateTime(TimeZone.of(timezone)).date
+        deliveryTime.toLocalDateTime(TimeZone.of(timezone)).date
     }.getOrNull()
-    return daily.firstOrNull { it.date == date } ?: daily.firstOrNull()
+    return daily.firstOrNull { it.date == date }
 }
 
-private fun Double.asNotificationNumber(): String =
-    String.format(Locale.US, "%.1f", this)
+private fun Double.asNotificationTemperature(unit: TemperatureUnit): String {
+    val converted = if (unit == TemperatureUnit.FAHRENHEIT) this * 9 / 5 + 32 else this
+    val symbol = if (unit == TemperatureUnit.FAHRENHEIT) "F" else "C"
+    return "${converted.asNotificationNumber(1)}°$symbol"
+}
+
+private fun Double.asNotificationPrecipitation(unit: PrecipitationUnit): String {
+    val converted = if (unit == PrecipitationUnit.INCH) this / 25.4 else this
+    val decimals = if (unit == PrecipitationUnit.INCH) 2 else 1
+    val symbol = if (unit == PrecipitationUnit.INCH) "in" else "mm"
+    return "${converted.asNotificationNumber(decimals)} $symbol"
+}
+
+private fun Double.asNotificationNumber(decimals: Int): String =
+    String.format(Locale.US, "%.${decimals}f", this)

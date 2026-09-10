@@ -1,6 +1,7 @@
 package net.droopia.hluweather.notifications
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
@@ -10,7 +11,6 @@ import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
-import java.io.IOException
 import kotlin.time.Duration.Companion.hours
 
 class WeatherAlertWorker(
@@ -36,15 +36,17 @@ class WeatherAlertWorker(
                 return Result.success()
             }
 
-            val location = dependencies.savedLocation(settings.selectedLocationId)
+            val location = dependencies.locationRepository.activeLocation.first() as? ActiveLocation.Saved
                 ?: return Result.success()
             val forecast = try {
                 dependencies.weatherRepository.getForecast(
                     settings.provider,
-                    ActiveLocation.Saved(location)
+                    location
                 )
-            } catch (error: IOException) {
-                return Result.retry()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                Log.e(TAG, "Unable to load alert forecast for ${location.location.id}/${settings.provider}", error)
+                return if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
             }
 
             val now = dependencies.clock.now()
@@ -54,19 +56,30 @@ class WeatherAlertWorker(
                     dependencies.publisher.publishAlert(
                         event = event,
                         title = "Thunderstorm alert",
-                        body = "${location.name}: thunderstorm possible at ${event.periodStart}."
+                        body = "${location.location.name}: thunderstorm possible at ${event.periodStart}."
                     )
                     dependencies.stateRepository.markDelivered(event.key)
                 } catch (error: Exception) {
                     if (error is kotlinx.coroutines.CancellationException) throw error
+                    Log.e(TAG, "Unable to post alert ${event.key}", error)
                     return Result.failure()
                 }
             }
             Result.success()
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            if (error is IOException) Result.retry() else Result.failure()
+            Log.e(
+                TAG,
+                "Terminal weather alert worker failure for " +
+                    "${inputData.getString(LOCATION_ID_INPUT)}/${inputData.getString(PROVIDER_INPUT)}",
+                error
+            )
+            if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
         }
+    }
+
+    private companion object {
+        const val TAG = "WeatherAlertWorker"
     }
 }
 

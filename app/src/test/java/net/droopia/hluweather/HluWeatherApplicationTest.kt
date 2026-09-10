@@ -1,6 +1,8 @@
 package net.droopia.hluweather
 
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.WorkManager
+import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
@@ -22,6 +24,8 @@ class HluWeatherApplicationTest {
             .getApplicationContext<HluWeatherApplication>()
 
         assertTrue(application.weatherRepository is CachingWeatherRepository)
+        assertTrue(WorkManager.isInitialized())
+        assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
     }
 
     @Test

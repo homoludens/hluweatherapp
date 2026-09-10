@@ -9,10 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.flow.first
 import net.droopia.hluweather.HluWeatherApplication
-import net.droopia.hluweather.data.model.LocationMode
-import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.settings.SettingsRepository
@@ -76,9 +73,3 @@ internal fun HluWeatherApplication.notificationWorkerDependencies() = Notificati
     stateRepository = notificationStateRepository,
     scheduler = notificationScheduler
 )
-
-internal suspend fun NotificationWorkerDependencies.savedLocation(id: String?): WeatherLocation? {
-    val mode = locationRepository.locationMode.first()
-    if (mode == LocationMode.TRACK_ME || id == null) return null
-    return locationRepository.locations.first().firstOrNull { it.id == id }
-}
