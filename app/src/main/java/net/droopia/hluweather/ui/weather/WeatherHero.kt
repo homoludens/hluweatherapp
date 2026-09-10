@@ -174,7 +174,8 @@ private fun NavigationTabs(
                 icon = icon,
                 selected = selected == mode,
                 compact = compact,
-                onClick = { onSelected(mode) }
+                onClick = { onSelected(mode) },
+                modifier = Modifier.weight(1f, fill = false)
             )
         }
     }
@@ -186,12 +187,14 @@ private fun WeatherNavButton(
     icon: ImageVector,
     selected: Boolean,
     compact: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
 
     Surface(
         modifier = Modifier
+            .then(modifier)
             .defaultMinSize(minHeight = 48.dp)
             .selectable(
                 selected = selected,

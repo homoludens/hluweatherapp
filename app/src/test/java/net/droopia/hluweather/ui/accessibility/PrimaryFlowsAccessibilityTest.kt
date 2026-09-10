@@ -1,7 +1,11 @@
 package net.droopia.hluweather.ui.accessibility
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -12,6 +16,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -33,6 +38,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
@@ -148,6 +154,125 @@ class PrimaryFlowsAccessibilityTest {
     }
 
     @Test
+    fun unit_selector_options_meet_touch_target() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                SettingsScreen(
+                    state = SettingsUiState(),
+                    onBackClick = {},
+                    onProviderChange = {},
+                    onProviderInfoClick = {},
+                    onTrackMeChange = {},
+                    onLocationSelect = {},
+                    onLocationMenuClick = {},
+                    onAddLocationClick = {},
+                    onThemeChange = {},
+                    onTemperatureUnitChange = {},
+                    onWindUnitChange = {},
+                    onDistanceUnitChange = {},
+                    onPrecipitationUnitChange = {},
+                    onWeatherAlertsChange = {},
+                    onDailySummaryChange = {},
+                    onDailySummaryTimeChange = {},
+                    onClearCacheClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(4)
+        listOf(
+            "settings_temperature_celsius",
+            "settings_temperature_fahrenheit",
+            "settings_wind_kmh",
+            "settings_wind_mph",
+            "settings_distance_km",
+            "settings_distance_miles",
+            "settings_precipitation_mm",
+            "settings_precipitation_inch"
+        ).forEach { tag ->
+            composeRule.onNodeWithTag(tag)
+                .assertHasClickAction()
+                .assertHeightIsAtLeast(48.dp)
+        }
+    }
+
+    @Test
+    fun large_font_weather_hero_stays_inside_constrained_width() {
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1.5f)) {
+                HluWeatherTheme(darkTheme = false) {
+                    Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .width(320.dp)
+                            .fillMaxHeight()
+                            .testTag("hero_width")
+                    ) {
+                        WeatherHero(
+                            selected = ForecastMode.HOURLY,
+                            onSelected = {},
+                            onSettingsClick = {}
+                        )
+                    }
+                }
+            }
+        }
+
+        val container = composeRule.onNodeWithTag("hero_width")
+            .getUnclippedBoundsInRoot()
+        listOf("HluWeatherApp", "Simple weather. Clear view.", "Hourly", "Daily", "Map")
+            .forEach { text ->
+                composeRule.onNodeWithText(text).assertIsDisplayed()
+                val bounds = composeRule.onNodeWithText(text).getUnclippedBoundsInRoot()
+                assertTrue("$text must fit within the constrained hero", bounds.left >= container.left)
+                assertTrue("$text must fit within the constrained hero", bounds.right <= container.right)
+                assertTrue("$text must fit within the constrained hero", bounds.top >= container.top)
+                assertTrue("$text must fit within the constrained hero", bounds.bottom <= container.bottom)
+            }
+    }
+
+    @Test
+    fun large_font_settings_content_wraps_inside_constrained_width() {
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1.5f)) {
+                HluWeatherTheme(darkTheme = false) {
+                    Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .width(320.dp)
+                            .fillMaxHeight()
+                    ) {
+                        SettingsScreen(
+                            state = SettingsUiState(weatherAlerts = true),
+                            onBackClick = {},
+                            onProviderChange = {},
+                            onProviderInfoClick = {},
+                            onTrackMeChange = {},
+                            onLocationSelect = {},
+                            onLocationMenuClick = {},
+                            onAddLocationClick = {},
+                            onThemeChange = {},
+                            onTemperatureUnitChange = {},
+                            onWindUnitChange = {},
+                            onDistanceUnitChange = {},
+                            onPrecipitationUnitChange = {},
+                            onWeatherAlertsChange = {},
+                            onDailySummaryChange = {},
+                            onDailySummaryTimeChange = {},
+                            onClearCacheClick = {}
+                        )
+                    }
+                }
+            }
+        }
+
+        val settings = composeRule.onNodeWithTag("settings_scroll")
+        settings.performScrollToIndex(4)
+        assertBoundsWithin(settings, "Precipitation")
+        assertBoundsWithin(settings, "in")
+        settings.performScrollToIndex(5)
+        assertBoundsWithin(settings, "Thunderstorm alerts only")
+    }
+
+    @Test
     fun large_font_scale_is_preserved_and_settings_text_wraps_without_ellipsis() {
         var capturedFontScale = 0f
 
@@ -189,4 +314,14 @@ class PrimaryFlowsAccessibilityTest {
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertButtonRole() =
         assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+
+    private fun assertBoundsWithin(
+        container: androidx.compose.ui.test.SemanticsNodeInteraction,
+        text: String
+    ) {
+        val containerBounds = container.getUnclippedBoundsInRoot()
+        val bounds = composeRule.onNodeWithText(text).getUnclippedBoundsInRoot()
+        assertTrue("$text must fit within the constrained settings width", bounds.left >= containerBounds.left)
+        assertTrue("$text must fit within the constrained settings width", bounds.right <= containerBounds.right)
+    }
 }

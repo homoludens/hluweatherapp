@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -595,6 +596,7 @@ private fun TwoOptionSelector(
 private fun SelectorOption(text: String, selected: Boolean, tag: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .testTag(tag),
         shape = RoundedCornerShape(22.dp),
