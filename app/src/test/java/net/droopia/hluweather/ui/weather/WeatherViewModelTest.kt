@@ -191,6 +191,31 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun track_me_altitude_is_forwarded_and_altitude_changes_refetch_weather() = runTest {
+        val point = GeoPoint(44.8176, 20.4633)
+        val locations = TestLocationRepository(null).also {
+            it.mode.value = LocationMode.TRACK_ME
+        }
+        val repository = RecordingWeatherRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            locations,
+            now = { Instant.fromEpochSeconds(1_000L) }
+        )
+
+        locations.emitActive(ActiveLocation.Current(point, altitude = 100))
+        advanceUntilIdle()
+        locations.emitActive(ActiveLocation.Current(point, altitude = 101))
+        advanceUntilIdle()
+
+        assertEquals(2, repository.requests.size)
+        assertEquals(100, repository.requests.first().location.altitude)
+        assertEquals(101, repository.requests.last().location.altitude)
+        assertEquals(101, viewModel.state.value.activeLocation?.altitude)
+    }
+
+    @Test
     fun no_active_location_does_not_request_weather() = runTest {
         val repository = RecordingWeatherRepository()
         val viewModel = WeatherViewModel(

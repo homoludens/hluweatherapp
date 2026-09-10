@@ -295,6 +295,31 @@ class CachingWeatherRepositoryTest {
     }
 
     @Test
+    fun live_forecast_with_mismatched_embedded_provider_is_rejected_before_caching() = runTest {
+        val cache = InMemoryCache()
+        val repository = repository(
+            FakeSource(
+                WeatherProvider.OPEN_METEO,
+                forecast(WeatherProvider.MET_NO)
+            ),
+            cache
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(Svilajnac)
+            )
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertTrue(error is WeatherRepositoryException)
+        assertTrue(cache.entries().isEmpty())
+    }
+
+    @Test
     fun edited_saved_location_coordinates_do_not_use_old_cache_when_offline() = runTest {
         val oldLocation = Svilajnac
         val editedLocation = oldLocation.copy(latitude = 44.9, longitude = 20.6)
@@ -383,6 +408,83 @@ class CachingWeatherRepositoryTest {
 
         assertTrue(load.isStale)
         assertEquals(cachedForecast, load.forecast)
+    }
+
+    @Test
+    fun current_location_stale_cache_requires_matching_altitude_including_nullability() = runTest {
+        val requestedPoint = GeoPoint(44.81761, 20.46331)
+        val liveFailure = WeatherRepositoryException("offline")
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "current:44.818:20.463"),
+            forecast(WeatherProvider.OPEN_METEO).copy(
+                location = WeatherLocation(
+                    id = "current",
+                    name = "Current location",
+                    latitude = requestedPoint.latitude,
+                    longitude = requestedPoint.longitude,
+                    altitude = null
+                )
+            )
+        )
+        val repository = repository(
+            FakeSource(
+                WeatherProvider.OPEN_METEO,
+                forecast(WeatherProvider.OPEN_METEO),
+                liveFailure
+            ),
+            cache
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Current(requestedPoint, altitude = 100)
+            )
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
+
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "current:44.818:20.463"),
+            forecast(WeatherProvider.OPEN_METEO).copy(
+                location = WeatherLocation(
+                    id = "current",
+                    name = "Current location",
+                    latitude = requestedPoint.latitude,
+                    longitude = requestedPoint.longitude,
+                    altitude = 100
+                )
+            )
+        )
+        val matchingLoad = repository.getForecast(
+            WeatherProvider.OPEN_METEO,
+            ActiveLocation.Current(requestedPoint, altitude = 100)
+        )
+
+        assertTrue(matchingLoad.isStale)
+        assertEquals(100, matchingLoad.forecast.location.altitude)
+
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "current:44.818:20.463"),
+            forecast(WeatherProvider.OPEN_METEO).copy(
+                location = matchingLoad.forecast.location
+            )
+        )
+        error = null
+        try {
+            repository.getForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Current(requestedPoint)
+            )
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
     }
 
     @Test

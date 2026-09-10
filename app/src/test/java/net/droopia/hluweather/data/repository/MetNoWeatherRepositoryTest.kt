@@ -194,6 +194,44 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
+    fun getForecast_transitions_to_next_six_hours_and_aggregates_daily_values() = runTest {
+        val forecast = repository(
+            response = responseWithTimeseries(
+                timeSeries(
+                    symbol = "clearsky_day",
+                    temperature = 20.0,
+                    precipitation = 0.25
+                ),
+                timeSeries(
+                    symbol = null,
+                    time = "2026-09-10T01:00:00Z",
+                    temperature = 5.0,
+                    precipitation = null,
+                    next6Symbol = "rain_night",
+                    next6Precipitation = 1.0
+                ),
+                timeSeries(
+                    symbol = "cloudy_day",
+                    time = "2026-09-10T23:00:00Z",
+                    temperature = 8.0,
+                    precipitation = 2.5
+                )
+            ),
+            clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
+        ).getForecast(location)
+
+        assertEquals(WeatherCondition.RAIN, forecast.hourly[1].condition)
+        assertEquals(1.0, forecast.hourly[1].precipitation, 0.0)
+        assertEquals(2, forecast.daily.size)
+        assertEquals(5.0, forecast.daily[0].temperatureMin, 0.0)
+        assertEquals(20.0, forecast.daily[0].temperatureMax, 0.0)
+        assertEquals(1.25, forecast.daily[0].precipitation!!, 0.0)
+        assertEquals(8.0, forecast.daily[1].temperatureMin, 0.0)
+        assertEquals(8.0, forecast.daily[1].temperatureMax, 0.0)
+        assertEquals(2.5, forecast.daily[1].precipitation!!, 0.0)
+    }
+
+    @Test
     fun getForecast_preserves_a_reported_zero_daily_precipitation() = runTest {
         val forecast = repository(
             response = responseWithTimeseries(timeSeries("clearsky_day", precipitation = 0.0)),

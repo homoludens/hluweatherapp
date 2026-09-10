@@ -72,6 +72,7 @@ class WeatherViewModel(
     private val _state = MutableStateFlow(WeatherUiState(isLoading = true))
     private var requestGeneration = 0L
     private var lastCurrentFetchPoint: GeoPoint? = null
+    private var lastCurrentFetchAltitude: Int? = null
     private var lastCurrentFetchAt: Instant? = null
     private var lastLoadedLocationKey: String? = null
     private var lastLoadedProvider: WeatherProvider? = null
@@ -91,6 +92,7 @@ class WeatherViewModel(
             ) { settings, activeLocation, locations, locationMode, _ ->
                 if (locationMode != observedLocationMode) {
                     lastCurrentFetchPoint = null
+                    lastCurrentFetchAltitude = null
                     lastCurrentFetchAt = null
                     observedLocationMode = locationMode
                 }
@@ -143,6 +145,7 @@ class WeatherViewModel(
 
     fun selectLocation(location: WeatherLocation) {
         lastCurrentFetchPoint = null
+        lastCurrentFetchAltitude = null
         lastCurrentFetchAt = null
         viewModelScope.launch {
             locationRepository.selectSaved(location.id)
@@ -183,16 +186,21 @@ class WeatherViewModel(
         }
 
         val currentPoint = (request.activeLocation as? ActiveLocation.Current)?.point
+        val currentAltitude = (request.activeLocation as? ActiveLocation.Current)?.altitude
         val locationKey = currentPoint?.let { "current" } ?: currentLocation.savedLocationKey()
         val refreshRequested = request.refresh != handledRefresh
         val providerChanged = request.provider != lastLoadedProvider
         val locationChanged = currentPoint == null && locationKey != lastLoadedLocationKey
-        val currentNeedsRefresh = currentPoint != null && shouldRefresh(
-            lastCurrentFetchPoint,
-            currentPoint,
-            lastCurrentFetchAt,
-            now()
-        )
+        val currentAltitudeChanged = currentPoint != null &&
+            lastCurrentFetchPoint != null &&
+            currentAltitude != lastCurrentFetchAltitude
+        val currentNeedsRefresh =
+            currentAltitudeChanged || (currentPoint != null && shouldRefresh(
+                lastCurrentFetchPoint,
+                currentPoint,
+                lastCurrentFetchAt,
+                now()
+            ))
         if (!refreshRequested && !providerChanged && !locationChanged && !currentNeedsRefresh) {
             _state.update {
                 it.copy(
@@ -234,6 +242,7 @@ class WeatherViewModel(
                 lastLoadedProvider = request.provider
                 if (currentPoint != null && !forecast.isStale) {
                     lastCurrentFetchPoint = currentPoint
+                    lastCurrentFetchAltitude = currentAltitude
                     lastCurrentFetchAt = now()
                 }
             }

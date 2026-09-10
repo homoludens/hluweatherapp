@@ -59,6 +59,11 @@ class CachingWeatherRepository(
             }
             throw error
         }
+        if (forecast.provider != provider) {
+            throw WeatherRepositoryException(
+                "Weather provider ${provider.title} returned ${forecast.provider.title}"
+            )
+        }
         try {
             cache.put(key, forecast)
         } catch (error: CancellationException) {
@@ -115,5 +120,6 @@ private fun ActiveLocation.matchesCachedLocation(
         cachedLocation.altitude == location.altitude
     is ActiveLocation.Current -> cachedLocation.id == "current" &&
         currentCacheLocationKey(GeoPoint(cachedLocation.latitude, cachedLocation.longitude)) ==
-        key.locationKey
+        key.locationKey &&
+        cachedLocation.altitude == altitude
 }
