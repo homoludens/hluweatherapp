@@ -1,10 +1,15 @@
 package net.droopia.hluweather.ui.settings
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
@@ -146,6 +151,14 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun io_read_fallback_does_not_attempt_weather_alerts_migration_write() = runTest {
+        val dataStore = IoFailingDataStore()
+
+        assertEquals(PersistedSettings(), DataStoreSettingsRepository(dataStore).settings.first())
+        assertEquals(0, dataStore.updateDataCalls)
+    }
+
+    @Test
     fun legacy_enabled_weather_alerts_are_migrated_to_disabled_once() = runTest {
         val file = temporaryFolder.newFile("settings.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(
@@ -249,5 +262,18 @@ class SettingsRepositoryTest {
         }
 
         assertEquals(LocalTime(8, 0), DataStoreSettingsRepository(dataStore).settings.first().dailySummaryTime)
+    }
+
+    private class IoFailingDataStore : DataStore<Preferences> {
+        var updateDataCalls = 0
+
+        override val data: Flow<Preferences> = flow {
+            throw java.io.IOException("read failed")
+        }
+
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+            updateDataCalls++
+            return transform(emptyPreferences())
+        }
     }
 }

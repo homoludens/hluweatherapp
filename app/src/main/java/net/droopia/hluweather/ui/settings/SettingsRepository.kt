@@ -41,6 +41,7 @@ class DataStoreSettingsRepository(
 ) : SettingsRepository {
 
     override val settings: Flow<PersistedSettings> = dataStore.data
+        .onEach(::migrateLegacyWeatherAlerts)
         .catch { exception ->
             if (exception is IOException) {
                 emit(emptyPreferences())
@@ -48,7 +49,6 @@ class DataStoreSettingsRepository(
                 throw exception
             }
         }
-        .onEach(::migrateLegacyWeatherAlerts)
         .map { preferences ->
             val defaults = PersistedSettings()
             PersistedSettings(
