@@ -10,7 +10,9 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -34,7 +36,6 @@ import net.droopia.hluweather.data.repository.locationRepository
 import net.droopia.hluweather.notifications.AndroidWeatherNotificationPublisher
 import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
-import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.notifications.DataStoreNotificationStateRepository
 import net.droopia.hluweather.notifications.NotificationChannels
 import net.droopia.hluweather.notifications.NotificationScheduler
@@ -61,16 +62,12 @@ class HluWeatherApplication : Application(), Configuration.Provider {
             WorkManager.initialize(this, workManagerConfiguration)
         }
         NotificationChannels.create(this)
-        applicationScope.launch {
-            combine(
-                settingsRepository.settings,
-                locationRepository.activeLocation
-            ) { settings, activeLocation ->
-                settings to activeLocation
-            }.collect { (settings, activeLocation) ->
-                notificationScheduler.reconcile(settings, activeLocation)
-            }
-        }
+        startNotificationReconciliation(
+            scope = applicationScope,
+            settings = settingsRepository.settings,
+            activeLocation = locationRepository.activeLocation,
+            scheduler = notificationScheduler
+        )
     }
 
     private val httpClient: HttpClient by lazy {
@@ -130,11 +127,15 @@ class HluWeatherApplication : Application(), Configuration.Provider {
     }
 }
 
-internal fun notificationSettingsForReconciliation(
-    settings: PersistedSettings,
-    activeLocation: ActiveLocation?,
-    locationMode: LocationMode
-): PersistedSettings = settings.copy(
-    selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id,
-    trackMeEnabled = locationMode == LocationMode.TRACK_ME
-)
+internal fun startNotificationReconciliation(
+    scope: CoroutineScope,
+    settings: Flow<PersistedSettings>,
+    activeLocation: Flow<ActiveLocation?>,
+    scheduler: NotificationScheduler
+): Job = scope.launch {
+    combine(settings, activeLocation) { persistedSettings, canonicalLocation ->
+        persistedSettings to canonicalLocation
+    }.collect { (persistedSettings, canonicalLocation) ->
+        scheduler.reconcile(persistedSettings, canonicalLocation)
+    }
+}

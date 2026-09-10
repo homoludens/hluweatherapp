@@ -141,8 +141,72 @@ class SettingsRepositoryTest {
 
         val settings = DataStoreSettingsRepository(dataStore).settings.first()
 
-        assertTrue(settings.weatherAlerts)
+        assertFalse(settings.weatherAlerts)
         assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
+    }
+
+    @Test
+    fun legacy_enabled_weather_alerts_are_migrated_to_disabled_once() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.weather_alerts")] = true
+        }
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        assertFalse(repository.settings.first().weatherAlerts)
+        assertFalse(repository.settings.first().weatherAlerts)
+        assertEquals(
+            false,
+            dataStore.data.first()[booleanPreferencesKey("settings.weather_alerts")]
+        )
+        assertEquals(
+            true,
+            dataStore.data.first()[booleanPreferencesKey("settings.weather_alerts_migrated")]
+        )
+    }
+
+    @Test
+    fun legacy_disabled_weather_alerts_are_marked_migrated_and_stay_disabled() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.weather_alerts")] = false
+        }
+
+        assertFalse(DataStoreSettingsRepository(dataStore).settings.first().weatherAlerts)
+        assertEquals(
+            true,
+            dataStore.data.first()[booleanPreferencesKey("settings.weather_alerts_migrated")]
+        )
+    }
+
+    @Test
+    fun explicit_new_weather_alert_values_are_preserved() = runTest {
+        val enabledFile = temporaryFolder.newFile("enabled.preferences_pb")
+        val enabledDataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { enabledFile }
+        )
+        val enabledRepository = DataStoreSettingsRepository(enabledDataStore)
+        enabledRepository.save(PersistedSettings(weatherAlerts = true))
+
+        val disabledFile = temporaryFolder.newFile("disabled.preferences_pb")
+        val disabledDataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { disabledFile }
+        )
+        val disabledRepository = DataStoreSettingsRepository(disabledDataStore)
+        disabledRepository.save(PersistedSettings(weatherAlerts = false))
+
+        assertTrue(enabledRepository.settings.first().weatherAlerts)
+        assertFalse(disabledRepository.settings.first().weatherAlerts)
     }
 
     @Test

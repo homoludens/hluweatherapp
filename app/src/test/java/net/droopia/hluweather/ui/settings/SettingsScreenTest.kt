@@ -77,6 +77,7 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Daily summary time").assertIsDisplayed()
         composeRule.onNodeWithText("08:00").assertIsDisplayed()
         composeRule.onNodeWithText("Best effort; delivery may be delayed by Android.").assertIsDisplayed()
+        composeRule.onNodeWithText("Thunderstorm alerts only").assertIsDisplayed()
         composeRule.onNodeWithText("Trip alerts").assertDoesNotExist()
     }
 

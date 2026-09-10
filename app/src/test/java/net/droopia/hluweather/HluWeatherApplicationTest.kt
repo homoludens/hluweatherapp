@@ -2,12 +2,16 @@ package net.droopia.hluweather
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
-import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
+import net.droopia.hluweather.notifications.NotificationScheduler
 import net.droopia.hluweather.ui.settings.PersistedSettings
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,24 +32,47 @@ class HluWeatherApplicationTest {
         assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun startup_reconciliation_uses_canonical_location_mode_over_settings_mirror() {
-        val settings = PersistedSettings(trackMeEnabled = true)
-
-        val reconciled = notificationSettingsForReconciliation(
-            settings = settings,
-            activeLocation = ActiveLocation.Saved(
-                net.droopia.hluweather.data.model.WeatherLocation(
-                    id = "belgrade",
-                    name = "Belgrade",
-                    latitude = 44.8176,
-                    longitude = 20.4633
-                )
-            ),
-            locationMode = LocationMode.SAVED_LOCATION
+    fun startup_collector_passes_canonical_location_and_settings_to_scheduler() = runTest {
+        val settings = PersistedSettings(
+            selectedLocationId = "stale-settings-location",
+            trackMeEnabled = true,
+            weatherAlerts = true,
+            dailySummary = true
         )
+        val savedLocation = ActiveLocation.Saved(
+            net.droopia.hluweather.data.model.WeatherLocation(
+                id = "belgrade",
+                name = "Belgrade",
+                latitude = 44.8176,
+                longitude = 20.4633
+            )
+        )
+        val scheduler = RecordingNotificationScheduler()
 
-        assertFalse(reconciled.trackMeEnabled)
-        assertTrue(reconciled.selectedLocationId == "belgrade")
+        val reconciliation = startNotificationReconciliation(
+            scope = this,
+            settings = MutableStateFlow(settings),
+            activeLocation = MutableStateFlow<ActiveLocation?>(savedLocation),
+            scheduler = scheduler
+        )
+        runCurrent()
+
+        assertEquals(listOf(settings to savedLocation), scheduler.reconciliations)
+        reconciliation.cancel()
+    }
+
+    private class RecordingNotificationScheduler : NotificationScheduler {
+        val reconciliations = mutableListOf<Pair<PersistedSettings, ActiveLocation?>>()
+
+        override fun reconcile(settings: PersistedSettings, activeLocation: ActiveLocation?) {
+            reconciliations += settings to activeLocation
+        }
+
+        override fun enqueueNextDailySummary(
+            settings: PersistedSettings,
+            activeLocation: ActiveLocation.Saved
+        ) = Unit
     }
 }

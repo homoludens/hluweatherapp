@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -47,6 +48,7 @@ class DataStoreSettingsRepository(
                 throw exception
             }
         }
+        .onEach(::migrateLegacyWeatherAlerts)
         .map { preferences ->
             val defaults = PersistedSettings()
             PersistedSettings(
@@ -58,7 +60,11 @@ class DataStoreSettingsRepository(
                 windUnit = preferences.enum(windUnitKey, defaults.windUnit),
                 distanceUnit = preferences.enum(distanceUnitKey, defaults.distanceUnit),
                 precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
-                weatherAlerts = preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts,
+                weatherAlerts = if (preferences[weatherAlertsMigrationKey] == true) {
+                    preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts
+                } else {
+                    defaults.weatherAlerts
+                },
                 dailySummary = preferences.getBooleanOrNull(dailySummaryKey) ?: defaults.dailySummary,
                 dailySummaryTime = preferences.getStringOrNull(dailySummaryTimeKey)
                     ?.let(::parseSummaryTime)
@@ -75,8 +81,22 @@ class DataStoreSettingsRepository(
             preferences[distanceUnitKey] = settings.distanceUnit.name
             preferences[precipitationUnitKey] = settings.precipitationUnit.name
             preferences[weatherAlertsKey] = settings.weatherAlerts
+            preferences[weatherAlertsMigrationKey] = true
             preferences[dailySummaryKey] = settings.dailySummary
             preferences[dailySummaryTimeKey] = settings.dailySummaryTime.toPreferenceValue()
+        }
+    }
+
+    private suspend fun migrateLegacyWeatherAlerts(preferences: Preferences) {
+        if (preferences[weatherAlertsMigrationKey] == true) return
+
+        dataStore.edit { mutablePreferences ->
+            if (mutablePreferences[weatherAlertsMigrationKey] != true) {
+                if (mutablePreferences[weatherAlertsKey] == true) {
+                    mutablePreferences[weatherAlertsKey] = false
+                }
+                mutablePreferences[weatherAlertsMigrationKey] = true
+            }
         }
     }
 
@@ -112,5 +132,6 @@ private val windUnitKey = stringPreferencesKey("settings.wind_unit")
 private val distanceUnitKey = stringPreferencesKey("settings.distance_unit")
 private val precipitationUnitKey = stringPreferencesKey("settings.precipitation_unit")
 private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")
+private val weatherAlertsMigrationKey = booleanPreferencesKey("settings.weather_alerts_migrated")
 private val dailySummaryKey = booleanPreferencesKey("settings.daily_summary")
 private val dailySummaryTimeKey = stringPreferencesKey("settings.daily_summary_time")

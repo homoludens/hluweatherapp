@@ -247,7 +247,7 @@ fun SettingsScreen(
                 ToggleRow(
                     icon = Icons.Outlined.NotificationImportant,
                     title = "Weather alerts",
-                    subtitle = "Severe weather, rain, snow and more",
+                    subtitle = "Thunderstorm alerts only",
                     checked = state.weatherAlerts,
                     tag = "settings_weather_alerts",
                     onCheckedChange = onWeatherAlertsChange
