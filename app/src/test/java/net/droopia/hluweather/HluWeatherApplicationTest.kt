@@ -32,6 +32,20 @@ class HluWeatherApplicationTest {
         assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
     }
 
+    @Test
+    fun application_uses_branded_launcher_metadata() {
+        val application = ApplicationProvider
+            .getApplicationContext<HluWeatherApplication>()
+        val applicationInfo = application.applicationInfo
+        val icon = applicationInfo.icon
+        val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
+
+        assertEquals("ic_launcher", application.resources.getResourceEntryName(icon))
+        assertEquals("mipmap", application.resources.getResourceTypeName(icon))
+        assertEquals(32, packageInfo.versionCode)
+        assertEquals("3.2.0", packageInfo.versionName)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun startup_collector_passes_canonical_location_and_settings_to_scheduler() = runTest {

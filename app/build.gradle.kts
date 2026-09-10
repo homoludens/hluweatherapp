@@ -4,6 +4,16 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val releaseSigningValues = listOf(
+    "HLUWEATHER_STORE_FILE",
+    "HLUWEATHER_STORE_PASSWORD",
+    "HLUWEATHER_KEY_ALIAS",
+    "HLUWEATHER_KEY_PASSWORD"
+).map { name ->
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orNull
+}
+val hasReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+
 android {
     namespace = "net.droopia.hluweather"
     compileSdk = 37
@@ -12,13 +22,27 @@ android {
         applicationId = "net.droopia.hluweather"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 32
+        versionName = "3.2.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningValues[0]!!)
+                storePassword = releaseSigningValues[1]
+                keyAlias = releaseSigningValues[2]
+                keyPassword = releaseSigningValues[3]
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
