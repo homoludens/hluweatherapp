@@ -280,6 +280,7 @@ internal fun ForecastRow(
             modifier = Modifier
                 .weight(0.72f)
                 .then(timeTestTag?.let(Modifier::testTag) ?: Modifier),
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
 
@@ -294,13 +295,15 @@ internal fun ForecastRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = weather.condition.label()
+                text = weather.condition.label(),
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
 
         Text(
             text = weather.temperature.temperatureValueText(temperatureUnit),
             modifier = Modifier.weight(0.8f),
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
 
@@ -312,12 +315,14 @@ internal fun ForecastRow(
 
         Text(
             text = weather.humidity.percentText(),
-            modifier = Modifier.weight(0.8f)
+            modifier = Modifier.weight(0.8f),
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Text(
             text = weather.precipitation.precipitationText(precipitationUnit),
-            modifier = Modifier.weight(0.9f)
+            modifier = Modifier.weight(0.9f),
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

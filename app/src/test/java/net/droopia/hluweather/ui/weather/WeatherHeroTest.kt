@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -8,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -87,18 +90,26 @@ class WeatherHeroTest {
     }
 
     @Test
-    fun regular_hero_has_no_decorative_moon() {
+    fun regular_hero_does_not_paint_the_old_decorative_moon() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherHero(
                     selected = ForecastMode.HOURLY,
                     onSelected = {},
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    modifier = androidx.compose.ui.Modifier.testTag("weather_hero")
                 )
             }
         }
 
-        composeRule.onNodeWithTag("weather_hero_moon").assertDoesNotExist()
+        val heroImage = composeRule.onNodeWithTag("weather_hero").captureToImage()
+        val moonCenterX = heroImage.width - with(composeRule.density) { 106.dp.roundToPx() }
+        val moonCenterY = with(composeRule.density) { 106.dp.roundToPx() }
+
+        assertEquals(
+            false,
+            heroImage.pixelColor(moonCenterX, moonCenterY) == Color(0xFFFFF0BD)
+        )
     }
 
     @Test
@@ -121,5 +132,11 @@ class WeatherHeroTest {
             .height
 
         assertEquals(96.dp, with(composeRule.density) { heroHeight.toDp() })
+    }
+
+    private fun ImageBitmap.pixelColor(x: Int, y: Int): Color {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return Color(pixels[y * width + x])
     }
 }

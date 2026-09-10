@@ -216,8 +216,6 @@ class WeatherViewModel(
             return
         }
 
-        if (refreshRequested) handledRefresh = request.refresh
-
         _state.update {
             it.copy(
                 activeLocation = currentLocation,
@@ -279,6 +277,7 @@ class WeatherViewModel(
             throw error
         } catch (error: Throwable) {
             if (requestGeneration != request.generation) return
+            handledRefresh = request.refresh
             Log.e("WeatherViewModel", "Weather request failed", error)
             _state.update {
                 val hasForecast = it.forecast != null

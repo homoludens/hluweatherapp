@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -17,12 +18,21 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.material3.LocalContentColor
 import java.util.TimeZone
+import java.time.ZoneId
 import kotlinx.datetime.Instant
+import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.WeatherCondition
+import net.droopia.hluweather.data.model.label
+import net.droopia.hluweather.data.percentText
+import net.droopia.hluweather.data.precipitationText
+import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -172,5 +182,56 @@ class HourlyForecastTest {
         assertTrue("Condition must expose a text layout result", node.config.contains(SemanticsActions.GetTextLayoutResult))
         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) == true)
         assertFalse("Condition must wrap rather than truncate at 2x font scale", results.single().hasVisualOverflow)
+    }
+
+    @Test
+    fun dark_theme_hourly_body_values_use_readable_foreground_colors() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val firstHour = forecast.hourly.first()
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = true) {
+                CompositionLocalProvider(LocalContentColor provides Color.Magenta) {
+                    HourlyForecast(
+                        forecast = forecast,
+                        selectedDayIndex = 0,
+                        onDaySelected = {}
+                    )
+                }
+            }
+        }
+
+        val bodyTexts = listOf(
+            firstHour.time.hourText(ZoneId.of(forecast.timezone)),
+            firstHour.condition.label(),
+            firstHour.temperature.temperatureValueText(TemperatureUnit.CELSIUS),
+            firstHour.dewPoint.temperatureValueText(TemperatureUnit.CELSIUS),
+            firstHour.humidity.percentText(),
+            firstHour.precipitation.precipitationText(PrecipitationUnit.MM)
+        )
+
+        bodyTexts.forEach { text ->
+            val image = composeRule.onAllNodesWithText(text).onFirst().captureToImage()
+            assertTrue("$text should have a readable dark-theme foreground", image.hasReadableForeground())
+            assertFalse("$text should not inherit the magenta test content color", image.containsColor(Color.Magenta))
+        }
+    }
+
+    private fun ImageBitmap.containsColor(expected: Color): Boolean {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return pixels.any { Color(it) == expected }
+    }
+
+    private fun ImageBitmap.hasReadableForeground(): Boolean {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return pixels.any {
+            val color = Color(it)
+            color.red > 0.6f && color.green > 0.6f && color.blue > 0.6f
+        }
     }
 }

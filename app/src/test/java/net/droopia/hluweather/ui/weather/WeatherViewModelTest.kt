@@ -209,7 +209,75 @@ class WeatherViewModelTest {
     }
 
     @Test
-    fun cancelled_refresh_is_handled_before_provider_change() = runTest {
+    fun failed_refresh_is_handled_before_location_change() = runTest {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val newLocation = WeatherLocation("belgrade", "Belgrade", 44.81, 20.46)
+        val refreshResult = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(
+            cached = ForecastLoad(initialForecast),
+            networkResults = listOf(
+                CompletableDeferred(ForecastLoad(initialForecast)),
+                refreshResult,
+                CompletableDeferred(
+                    ForecastLoad(buildMockForecast(newLocation, Instant.fromEpochSeconds(2L)))
+                )
+            )
+        )
+        val locations = TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            locations
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        refreshResult.completeExceptionally(IllegalStateException("offline"))
+        advanceUntilIdle()
+
+        locations.emitActive(ActiveLocation.Saved(newLocation))
+        advanceUntilIdle()
+
+        assertEquals(2, repository.cacheReads)
+        assertEquals(3, repository.networkRequests)
+        assertEquals(newLocation, viewModel.state.value.forecast?.location)
+    }
+
+    @Test
+    fun superseded_refresh_still_attempts_network_for_the_same_input() = runTest {
+        val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val refreshedForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val refreshRequest = PendingRequest(
+            onCancellation = Result.success(initialForecast)
+        )
+        val replacementRequest = PendingRequest()
+        val repository = CancellationAwareWeatherRepository(
+            PendingRequest().also { it.result.complete(initialForecast) },
+            refreshRequest,
+            replacementRequest
+        )
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            settings,
+            TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        )
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+        settings.emit(settings.settings.value.copy(weatherAlerts = true))
+        advanceUntilIdle()
+
+        assertEquals(3, repository.networkRequests)
+        replacementRequest.result.complete(refreshedForecast)
+        advanceUntilIdle()
+
+        assertEquals(refreshedForecast, viewModel.state.value.forecast)
+    }
+
+    @Test
+    fun cancelled_refresh_remains_pending_before_provider_change() = runTest {
         val initialForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
         val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
         val refreshRequest = PendingRequest()
@@ -232,7 +300,8 @@ class WeatherViewModelTest {
         settings.emit(provider = WeatherProvider.MET_NO)
         advanceUntilIdle()
 
-        assertEquals(2, repository.cacheReads)
+        assertEquals(1, repository.cacheReads)
+        assertEquals(3, repository.networkRequests)
         providerRequest.result.complete(newForecast)
         advanceUntilIdle()
     }
@@ -789,6 +858,8 @@ class WeatherViewModelTest {
     ) : WeatherRepository {
         private var requestIndex = 0
         var cacheReads = 0
+        val networkRequests: Int
+            get() = requestIndex
 
         override suspend fun getCachedForecast(
             provider: WeatherProvider,
@@ -834,6 +905,10 @@ class WeatherViewModelTest {
 
         suspend fun emit(provider: WeatherProvider) {
             state.emit(state.value.copy(provider = provider))
+        }
+
+        suspend fun emit(settings: PersistedSettings) {
+            state.emit(settings)
         }
 
         override suspend fun save(settings: PersistedSettings) {
