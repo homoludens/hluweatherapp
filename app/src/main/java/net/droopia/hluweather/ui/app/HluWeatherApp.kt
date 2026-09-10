@@ -15,8 +15,8 @@ import net.droopia.hluweather.ui.weather.WeatherViewModel
 @Composable
 fun HluWeatherApp(
     weatherViewModel: WeatherViewModel? = null,
-    weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, () -> Unit) -> Unit)? = null,
-    locationPickerMapContent: (@Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit)? = null
+    weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit)? = null,
+    locationPickerMapContent: (@Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit)? = null
 ) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
     val state = settingsViewModel.state.collectAsStateWithLifecycle().value
@@ -31,6 +31,7 @@ fun HluWeatherApp(
         HluNavHost(
             settingsViewModel = settingsViewModel,
             weatherViewModel = weatherViewModel,
+            darkTheme = darkTheme,
             weatherMapContent = weatherMapContent,
             locationPickerMapContent = locationPickerMapContent
         )

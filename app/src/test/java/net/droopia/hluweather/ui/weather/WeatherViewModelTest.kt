@@ -341,6 +341,38 @@ class WeatherViewModelTest {
         tracking.cancel()
     }
 
+    @Test
+    fun reentering_track_me_requires_a_fresh_fix() = runTest {
+        val currentPoint = GeoPoint(44.8176, 20.4633)
+        val savedLocation = WeatherLocation("saved", "Saved", 45.0, 22.0)
+        val locations = TestLocationRepository(null).also { it.mode.value = LocationMode.TRACK_ME }
+        val repository = RecordingWeatherRepository()
+        val viewModel = WeatherViewModel(
+            repository,
+            TestSettingsRepository(),
+            locations,
+            now = { Instant.fromEpochSeconds(1_000L) }
+        )
+
+        locations.emitActive(ActiveLocation.Current(currentPoint))
+        advanceUntilIdle()
+        repository.requests.clear()
+        locations.mode.emit(LocationMode.SAVED_LOCATION)
+        locations.emitActive(ActiveLocation.Saved(savedLocation))
+        advanceUntilIdle()
+        repository.requests.clear()
+        locations.mode.emit(LocationMode.TRACK_ME)
+        locations.emitActive(null)
+        advanceUntilIdle()
+        locations.emitActive(ActiveLocation.Current(currentPoint))
+        advanceUntilIdle()
+
+        assertEquals(1, repository.requests.size)
+        assertEquals(currentPoint.latitude, repository.requests.last().location.latitude, 0.0001)
+        assertEquals(currentPoint.longitude, repository.requests.last().location.longitude, 0.0001)
+        viewModel.clearTrackMeStatus()
+    }
+
     private class RecordingWeatherRepository : WeatherRepository {
         val requests = mutableListOf<Request>()
 

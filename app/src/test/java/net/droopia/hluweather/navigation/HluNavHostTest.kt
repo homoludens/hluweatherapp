@@ -57,7 +57,7 @@ class HluNavHostTest {
             HluWeatherTheme(darkTheme = false) {
                 HluNavHost(
                     weatherViewModel = weatherViewModel,
-                    locationPickerMapContent = { _, _ -> Box(Modifier.fillMaxSize()) }
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
                 )
             }
         }
@@ -76,7 +76,7 @@ class HluNavHostTest {
             HluWeatherTheme(darkTheme = false) {
                 HluNavHost(
                     weatherViewModel = weatherViewModel,
-                    locationPickerMapContent = { _, _ -> Box(Modifier.fillMaxSize()) }
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
                 )
             }
         }

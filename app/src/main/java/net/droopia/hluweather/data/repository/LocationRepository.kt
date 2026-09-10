@@ -132,12 +132,15 @@ class DataStoreLocationRepository(
     }
 
     override suspend fun selectSaved(id: String) {
+        var selected = false
         dataStore.edit { preferences ->
             if (preferences.decodeLocations().any { it.id == id }) {
                 preferences[selectedLocationIdKey] = id
                 preferences[locationModeKey] = LocationMode.SAVED_LOCATION.name
+                selected = true
             }
         }
+        if (selected) currentLocation.value = null
     }
 
     override suspend fun setTrackMe(enabled: Boolean) {

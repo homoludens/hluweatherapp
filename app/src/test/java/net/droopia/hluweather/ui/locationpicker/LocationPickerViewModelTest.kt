@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.locationpicker
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -216,6 +217,23 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun stale_gps_result_cannot_replace_a_newer_request() = runTest {
+        val oldPoint = GeoPoint(44.8176, 20.4633)
+        val newPoint = GeoPoint(45.6495, 13.7768)
+        val gps = DeferredDeviceLocationSource()
+        val viewModel = picker(gps = gps)
+
+        viewModel.onGpsClick()
+        viewModel.onGpsClick()
+        gps.second.complete(GpsResult.Success(newPoint, null))
+        advanceUntilIdle()
+        gps.first.complete(GpsResult.Success(oldPoint, null))
+        advanceUntilIdle()
+
+        assertEquals(newPoint, viewModel.state.value.point)
+    }
+
+    @Test
     fun delete_only_deletes_in_edit_mode() = runTest {
         val existing = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
         val repository = FakeLocationRepository(listOf(existing))
@@ -266,6 +284,15 @@ class LocationPickerViewModelTest {
         override suspend fun currentLocation(): GpsResult {
             throw CancellationException("cancelled")
         }
+    }
+
+    private class DeferredDeviceLocationSource : DeviceLocationSource {
+        val first = CompletableDeferred<GpsResult>()
+        val second = CompletableDeferred<GpsResult>()
+        private var calls = 0
+
+        override suspend fun currentLocation(): GpsResult =
+            if (calls++ == 0) first.await() else second.await()
     }
 
     private class FakeReverseGeocoder : ReverseGeocoder {

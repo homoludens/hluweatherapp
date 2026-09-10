@@ -22,8 +22,9 @@ import net.droopia.hluweather.ui.weather.WeatherViewModel
 fun HluNavHost(
     settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
     weatherViewModel: WeatherViewModel? = null,
-    weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, () -> Unit) -> Unit)? = null,
-    locationPickerMapContent: (@Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit)? = null
+    darkTheme: Boolean = false,
+    weatherMapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit)? = null,
+    locationPickerMapContent: (@Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit)? = null
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
@@ -39,7 +40,8 @@ fun HluNavHost(
                         ?: viewModel(factory = WeatherViewModel.Factory),
                     onSettingsClick = { navController.navigate("settings") },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
-                    trackMeSelected = settingsState.trackMeEnabled
+                    trackMeSelected = settingsState.trackMeEnabled,
+                    darkTheme = darkTheme
                 )
             } else {
                 WeatherScreen(
@@ -48,6 +50,7 @@ fun HluNavHost(
                     onSettingsClick = { navController.navigate("settings") },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
+                    darkTheme = darkTheme,
                     mapContent = weatherMapContent
                 )
             }
@@ -96,7 +99,8 @@ fun HluNavHost(
                     viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
                     onBackClick = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() },
-                    onDeleted = { navController.popBackStack() }
+                    onDeleted = { navController.popBackStack() },
+                    darkTheme = darkTheme
                 )
             } else {
                 LocationPickerScreen(
@@ -104,6 +108,7 @@ fun HluNavHost(
                     onBackClick = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() },
                     onDeleted = { navController.popBackStack() },
+                    darkTheme = darkTheme,
                     mapContent = locationPickerMapContent
                 )
             }

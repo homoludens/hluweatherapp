@@ -95,7 +95,7 @@ class LocationPickerScreenTest {
                     viewModel = viewModel,
                     onBackClick = onBackClick,
                     onSaved = onSaved,
-                    mapContent = { _, _ ->
+                    mapContent = { _, _, _ ->
                         Box(Modifier.fillMaxSize().testTag("location_picker_map"))
                     }
                 )

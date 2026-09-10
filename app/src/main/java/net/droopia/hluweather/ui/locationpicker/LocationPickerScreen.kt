@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -52,11 +51,12 @@ fun LocationPickerScreen(
     onBackClick: () -> Unit,
     onSaved: () -> Unit = onBackClick,
     onDeleted: () -> Unit = onBackClick,
+    darkTheme: Boolean = false,
     modifier: Modifier = Modifier,
-    mapContent: @Composable (GeoPoint, (GeoPoint) -> Unit) -> Unit = { point, onCameraIdle ->
+    mapContent: @Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit = { point, mapDarkTheme, onCameraIdle ->
         WeatherMap(
             center = point,
-            darkTheme = isSystemInDarkTheme(),
+            darkTheme = mapDarkTheme,
             onMapClick = onCameraIdle,
             onCameraIdle = onCameraIdle,
             onRecenterClick = viewModel::onGpsClick
@@ -120,7 +120,7 @@ fun LocationPickerScreen(
                     .fillMaxWidth()
                     .height(320.dp)
             ) {
-                mapContent(state.point, viewModel::onCameraIdle)
+                mapContent(state.point, darkTheme, viewModel::onCameraIdle)
             }
 
             Card(

@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.DataStoreSettingsRepository
@@ -147,6 +148,19 @@ class LocationRepositoryTest {
         repository.selectSaved("belgrade")
 
         assertEquals("belgrade", (repository.activeLocation.first() as ActiveLocation.Saved).location.id)
+    }
+
+    @Test
+    fun selecting_saved_location_clears_the_previous_current_fix() = runTest {
+        val repository = repository(backgroundScope)
+        repository.add(belgrade)
+        repository.setTrackMe(true)
+        repository.setCurrentLocation(GeoPoint(44.8176, 20.4633))
+
+        repository.selectSaved("belgrade")
+        repository.setTrackMe(true)
+
+        assertNull(repository.activeLocation.first())
     }
 
     private fun repository(

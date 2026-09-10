@@ -272,13 +272,16 @@ class WeatherScreenTest {
     @Test
     fun switches_to_map_content() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        var mapDarkTheme = false
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
                     onSettingsClick = {},
-                    mapContent = { _, _, _, _ ->
+                    darkTheme = true,
+                    mapContent = { _, _, _, darkTheme, _ ->
+                        mapDarkTheme = darkTheme
                         Text("Map", Modifier.testTag("weather_map"))
                     }
                 )
@@ -287,6 +290,7 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithText("Map").performClick()
         composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
+        assertEquals(true, mapDarkTheme)
     }
 
     @Test

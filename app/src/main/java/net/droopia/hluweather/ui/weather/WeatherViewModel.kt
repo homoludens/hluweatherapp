@@ -75,6 +75,7 @@ class WeatherViewModel(
     private var lastLoadedLocationKey: String? = null
     private var lastLoadedProvider: WeatherProvider? = null
     private var handledRefresh = 0
+    private var observedLocationMode: LocationMode? = null
 
     val state = _state.asStateFlow()
 
@@ -84,13 +85,20 @@ class WeatherViewModel(
                 settingsRepository.settings,
                 locationRepository.activeLocation,
                 locationRepository.locations,
+                locationRepository.locationMode,
                 refreshes
-            ) { settings, activeLocation, locations, _ ->
+            ) { settings, activeLocation, locations, locationMode, _ ->
+                if (locationMode != observedLocationMode) {
+                    lastCurrentFetchPoint = null
+                    lastCurrentFetchAt = null
+                    observedLocationMode = locationMode
+                }
                 WeatherLoadRequest(
                     generation = ++requestGeneration,
                     provider = settings.provider,
                     activeLocation = activeLocation,
                     locations = locations,
+                    locationMode = locationMode,
                     refresh = refreshes.value
                 )
             }.collectLatest { request ->
@@ -133,6 +141,8 @@ class WeatherViewModel(
     }
 
     fun selectLocation(location: WeatherLocation) {
+        lastCurrentFetchPoint = null
+        lastCurrentFetchAt = null
         viewModelScope.launch {
             locationRepository.selectSaved(location.id)
         }
@@ -259,6 +269,7 @@ private data class WeatherLoadRequest(
     val provider: WeatherProvider,
     val activeLocation: ActiveLocation?,
     val locations: List<WeatherLocation>,
+    val locationMode: LocationMode,
     val refresh: Int
 )
 

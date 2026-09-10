@@ -48,13 +48,15 @@ class WeatherMapTest {
     @Test
     fun refreshes_after_five_kilometers_or_thirty_minutes() {
         val lastPoint = GeoPoint(44.8176, 20.4633)
-        val movedFiveKm = GeoPoint(44.8625, 20.4633)
+        val movedBeyondFiveKm = GeoPoint(44.8650, 20.4633)
         val movedOneKm = GeoPoint(44.8266, 20.4633)
         val lastFetch = Instant.parse("2026-09-10T10:00:00Z")
-        val now = Instant.parse("2026-09-10T10:30:00Z")
+        val beforeTimeThreshold = Instant.parse("2026-09-10T10:15:00Z")
+        val atTimeThreshold = Instant.parse("2026-09-10T10:30:00Z")
 
-        assertTrue(shouldRefresh(lastPoint, movedFiveKm, lastFetch, now))
-        assertTrue(shouldRefresh(lastPoint, movedOneKm, lastFetch, now))
-        assertFalse(shouldRefresh(lastPoint, movedOneKm, now.minus(29.minutes), now))
+        assertTrue(shouldRefresh(lastPoint, movedBeyondFiveKm, lastFetch, beforeTimeThreshold))
+        assertFalse(shouldRefresh(lastPoint, movedOneKm, lastFetch, beforeTimeThreshold))
+        assertTrue(shouldRefresh(lastPoint, movedOneKm, lastFetch, atTimeThreshold))
+        assertFalse(shouldRefresh(lastPoint, movedOneKm, atTimeThreshold.minus(29.minutes), atTimeThreshold))
     }
 }

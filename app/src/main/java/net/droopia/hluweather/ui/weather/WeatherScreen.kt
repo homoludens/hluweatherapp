@@ -4,7 +4,6 @@ import android.Manifest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,14 +69,15 @@ fun WeatherScreen(
     onSettingsClick: () -> Unit = {},
     onTrackMeClick: () -> Unit = {},
     trackMeSelected: Boolean = false,
+    darkTheme: Boolean = false,
     modifier: Modifier = Modifier,
-    mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, () -> Unit) -> Unit =
-        { mapLocation, locations, activeLocationId, onRecenterClick ->
+    mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
+        { mapLocation, locations, activeLocationId, mapDarkTheme, onRecenterClick ->
             WeatherMap(
                 locations = locations,
                 activeLocationId = activeLocationId,
                 center = GeoPoint(mapLocation.latitude, mapLocation.longitude),
-                darkTheme = isSystemInDarkTheme(),
+                darkTheme = mapDarkTheme,
                 onLocationClick = viewModel::selectLocation,
                 onRecenterClick = onRecenterClick
             )
@@ -204,7 +204,8 @@ fun WeatherScreen(
                                 mapContent(
                                     location,
                                     state.locations,
-                                    location.id.takeUnless { it == "current" }
+                                    location.id.takeUnless { it == "current" },
+                                    darkTheme
                                 ) {
                                     if (!trackMeSelected) onTrackMeClick()
                                 }

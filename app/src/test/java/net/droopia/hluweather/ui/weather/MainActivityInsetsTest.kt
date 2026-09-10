@@ -42,7 +42,7 @@ class MainActivityInsetsTest {
         composeRule.setContent {
             HluWeatherApp(
                 weatherViewModel = weatherViewModel,
-                weatherMapContent = { _, _, _, _ ->
+                weatherMapContent = { _, _, _, _, _ ->
                     Box(Modifier.fillMaxSize().testTag("map_placeholder"))
                 }
             )

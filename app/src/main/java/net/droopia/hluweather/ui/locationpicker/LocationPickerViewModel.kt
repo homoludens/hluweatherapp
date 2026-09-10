@@ -78,6 +78,8 @@ class LocationPickerViewModel(
     val completion: StateFlow<LocationPickerEvent?> = _completion.asStateFlow()
 
     private var reverseGeocodingJob: Job? = null
+    private var gpsJob: Job? = null
+    private var gpsRequestGeneration = 0L
     private val editingLocationId = initialLocation?.id ?: locationId
     val isEditMode: Boolean
         get() = editingLocationId != null && _state.value.initialization == LocationPickerInitialization.Ready
@@ -116,8 +118,10 @@ class LocationPickerViewModel(
     }
 
     fun onGpsClick() {
+        val generation = ++gpsRequestGeneration
+        gpsJob?.cancel()
         _state.update { it.copy(gpsStatus = GpsStatus.Locating) }
-        viewModelScope.launch {
+        gpsJob = viewModelScope.launch {
             val result = try {
                 deviceLocationSource.currentLocation()
             } catch (exception: CancellationException) {
@@ -125,7 +129,9 @@ class LocationPickerViewModel(
             } catch (_: Exception) {
                 GpsResult.Unavailable
             }
-            onGpsResult(result)
+            if (generation == gpsRequestGeneration) {
+                onGpsResult(result)
+            }
         }
     }
 
