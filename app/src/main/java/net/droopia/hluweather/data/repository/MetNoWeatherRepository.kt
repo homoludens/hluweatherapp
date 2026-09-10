@@ -24,13 +24,11 @@ class MetNoWeatherRepository(
     private val api: MetNoApi,
     private val clock: Clock = Clock.System,
     private val displayTimeZone: TimeZone = TimeZone.currentSystemDefault()
-) : WeatherRepository {
+) : WeatherSource {
 
-    override suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
-        if (provider != WeatherProvider.MET_NO) {
-            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
-        }
+    override val provider: WeatherProvider = WeatherProvider.MET_NO
 
+    override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
         val response = try {
             api.forecast(location)
         } catch (error: CancellationException) {
@@ -50,6 +48,13 @@ class MetNoWeatherRepository(
         } catch (error: Throwable) {
             throw WeatherRepositoryException("Unable to map weather data", error)
         }
+    }
+
+    suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
+        if (provider != WeatherProvider.MET_NO) {
+            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
+        }
+        return getForecast(location)
     }
 }
 

@@ -27,6 +27,7 @@ import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ui.settings.PersistedSettings
@@ -96,8 +97,10 @@ class WeatherViewModelTest {
         val repository = object : WeatherRepository {
             override suspend fun getForecast(
                 provider: WeatherProvider,
-                location: WeatherLocation
-            ) = forecast
+                location: ActiveLocation
+            ) = ForecastLoad(forecast)
+
+            override suspend fun clearCache() = Unit
         }
         val viewModel = WeatherViewModel(repository, Svilajnac)
 
@@ -111,13 +114,33 @@ class WeatherViewModelTest {
         val repository = object : WeatherRepository {
             override suspend fun getForecast(
                 provider: WeatherProvider,
-                location: WeatherLocation
+                location: ActiveLocation
             ): Nothing =
                 throw CancellationException("request cancelled")
+
+            override suspend fun clearCache() = Unit
         }
 
         val viewModel = WeatherViewModel(repository, Svilajnac)
 
+        assertNull(viewModel.state.value.error)
+    }
+
+    @Test
+    fun stale_forecast_load_sets_stale_state_without_an_error() {
+        val repository = object : WeatherRepository {
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: ActiveLocation
+            ) = ForecastLoad(buildMockForecast(Svilajnac), isStale = true)
+
+            override suspend fun clearCache() = Unit
+        }
+
+        val viewModel = WeatherViewModel(repository, Svilajnac)
+
+        assertTrue(viewModel.state.value.isStale)
+        assertNotNull(viewModel.state.value.forecast)
         assertNull(viewModel.state.value.error)
     }
 
@@ -378,10 +401,18 @@ class WeatherViewModelTest {
 
         override suspend fun getForecast(
             provider: WeatherProvider,
-            location: WeatherLocation
-        ) = buildMockForecast(location, Instant.fromEpochSeconds(requests.size.toLong())).also {
-            requests += Request(provider, location)
+            location: ActiveLocation
+        ): ForecastLoad {
+            val weatherLocation = location.toTestWeatherLocation()
+            return ForecastLoad(
+                buildMockForecast(weatherLocation, Instant.fromEpochSeconds(requests.size.toLong()))
+                    .copy(provider = provider)
+            ).also {
+                requests += Request(provider, weatherLocation)
+            }
         }
+
+        override suspend fun clearCache() = Unit
     }
 
     private class DeferredWeatherRepository(
@@ -390,10 +421,14 @@ class WeatherViewModelTest {
 
         override suspend fun getForecast(
             provider: WeatherProvider,
-            location: WeatherLocation
-        ): WeatherForecast {
-            return responses.first { it.first == location }.second.await()
+            location: ActiveLocation
+        ): ForecastLoad {
+            return ForecastLoad(
+                responses.first { it.first == location.toTestWeatherLocation() }.second.await()
+            )
         }
+
+        override suspend fun clearCache() = Unit
     }
 
     private class CancellationAwareWeatherRepository(
@@ -403,16 +438,19 @@ class WeatherViewModelTest {
 
         override suspend fun getForecast(
             provider: WeatherProvider,
-            location: WeatherLocation
-        ): WeatherForecast {
+            location: ActiveLocation
+        ): ForecastLoad {
             val request = requests[requestIndex++]
-            return try {
+            val forecast = try {
                 request.result.await()
             } catch (error: CancellationException) {
-                request.onCancellation?.let { outcome -> return outcome.getOrThrow() }
+                request.onCancellation?.let { outcome -> return ForecastLoad(outcome.getOrThrow()) }
                 throw error
             }
+            return ForecastLoad(forecast)
         }
+
+        override suspend fun clearCache() = Unit
     }
 
     private class PendingRequest(
@@ -478,4 +516,16 @@ class WeatherViewModelTest {
             updates.emit(result)
         }
     }
+
+}
+
+private fun ActiveLocation.toTestWeatherLocation(): WeatherLocation = when (this) {
+    is ActiveLocation.Saved -> location
+    is ActiveLocation.Current -> WeatherLocation(
+        id = "current",
+        name = "Current location",
+        latitude = point.latitude,
+        longitude = point.longitude,
+        altitude = altitude
+    )
 }

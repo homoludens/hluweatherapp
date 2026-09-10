@@ -37,6 +37,7 @@ data class WeatherUiState(
     val activeLocation: WeatherLocation? = null,
     val locations: List<WeatherLocation> = emptyList(),
     val forecast: WeatherForecast? = null,
+    val isStale: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val forecastMode: ForecastMode = ForecastMode.HOURLY,
@@ -171,6 +172,7 @@ class WeatherViewModel(
                     activeLocation = null,
                     locations = request.locations,
                     forecast = null,
+                    isStale = false,
                     isLoading = false,
                     error = null,
                     selectedDayIndex = 0,
@@ -209,19 +211,21 @@ class WeatherViewModel(
                 activeLocation = currentLocation,
                 locations = request.locations,
                 forecast = null,
+                isStale = false,
                 error = null,
                 selectedDayIndex = 0
             )
         }
         try {
-            val forecast = repository.getForecast(request.provider, currentLocation)
+            val forecast = repository.getForecast(request.provider, request.activeLocation!!)
             if (requestGeneration == request.generation &&
                 _state.value.activeLocation == currentLocation
             ) {
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        forecast = forecast,
+                        forecast = forecast.forecast,
+                        isStale = forecast.isStale,
                         error = null
                     )
                 }
@@ -241,6 +245,7 @@ class WeatherViewModel(
             _state.update {
                 it.copy(
                     isLoading = false,
+                    isStale = false,
                     error = error.message ?: "Weather request failed"
                 )
             }

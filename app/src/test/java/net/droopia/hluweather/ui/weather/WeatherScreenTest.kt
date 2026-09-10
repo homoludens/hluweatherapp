@@ -40,6 +40,7 @@ import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -143,8 +144,10 @@ class WeatherScreenTest {
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
                 provider: WeatherProvider,
-                location: WeatherLocation
-            ): WeatherForecast = forecast
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(forecast)
+
+            override suspend fun clearCache() = Unit
         }, Svilajnac)
         renderWeather(viewModel)
         viewModel.onDaySelected(1)
@@ -180,8 +183,10 @@ class WeatherScreenTest {
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
                 provider: WeatherProvider,
-                location: WeatherLocation
-            ): WeatherForecast = forecast
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(forecast)
+
+            override suspend fun clearCache() = Unit
         }, Svilajnac)
         renderWeather(viewModel)
 
@@ -217,8 +222,10 @@ class WeatherScreenTest {
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
                 provider: WeatherProvider,
-                location: WeatherLocation
-            ): WeatherForecast = forecast
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(forecast)
+
+            override suspend fun clearCache() = Unit
         }, Svilajnac)
         renderWeather(viewModel)
 
@@ -267,6 +274,24 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithText("Daily").performClick()
         composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
+    }
+
+    @Test
+    fun stale_forecast_shows_fetched_time_and_retry() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(123L))
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(forecast, isStale = true)
+
+            override suspend fun clearCache() = Unit
+        }, Svilajnac)
+        renderWeather(viewModel)
+
+        composeRule.onNodeWithTag("stale_forecast_banner").assertIsDisplayed()
+        composeRule.onNodeWithText("Showing cached data from ${forecast.fetchedAt}").assertIsDisplayed()
+        composeRule.onNodeWithText("Retry").assertIsDisplayed()
     }
 
     @Test

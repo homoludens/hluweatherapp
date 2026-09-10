@@ -18,10 +18,12 @@ import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.WeatherRepository
 
 class SettingsViewModel(
     private val repository: SettingsRepository,
-    private val locationRepository: LocationRepository
+    private val locationRepository: LocationRepository,
+    private val weatherRepository: WeatherRepository? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -136,7 +138,11 @@ class SettingsViewModel(
         updateSettings { it.copy(tripAlerts = enabled) }
     }
 
-    fun clearCache() = Unit
+    fun clearCache() {
+        viewModelScope.launch {
+            runCatching { weatherRepository?.clearCache() }
+        }
+    }
 
     private fun updateSettings(transform: (SettingsUiState) -> SettingsUiState) {
         hasUserMutation = true
@@ -155,7 +161,8 @@ class SettingsViewModel(
                 ] as HluWeatherApplication
                 SettingsViewModel(
                     settingsRepository(application),
-                    application.locationRepository
+                    application.locationRepository,
+                    application.weatherRepository
                 )
             }
         }

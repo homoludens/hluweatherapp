@@ -7,6 +7,8 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import net.droopia.hluweather.data.cache.ForecastCache
+import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.data.device.AndroidDeviceLocationSource
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.network.KtorMetNoApi
@@ -18,6 +20,8 @@ import net.droopia.hluweather.data.repository.MetNoWeatherRepository
 import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.WeatherSource
+import net.droopia.hluweather.data.repository.applicationDataStore
 import net.droopia.hluweather.data.repository.locationRepository
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import net.droopia.hluweather.ui.settings.settingsRepository
@@ -37,10 +41,14 @@ class HluWeatherApplication : Application() {
     }
 
     val weatherRepository: WeatherRepository by lazy {
-        OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient))
+        CachingWeatherRepository(
+            openMeteo = OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient)),
+            metNo = MetNoWeatherRepository(KtorMetNoApi(httpClient)),
+            cache = ForecastCache(applicationDataStore)
+        )
     }
 
-    val metNoWeatherRepository: WeatherRepository by lazy {
+    val metNoWeatherRepository: WeatherSource by lazy {
         MetNoWeatherRepository(KtorMetNoApi(httpClient))
     }
 

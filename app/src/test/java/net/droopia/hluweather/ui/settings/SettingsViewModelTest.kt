@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.ForecastLoad
+import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.After
@@ -207,6 +209,30 @@ class SettingsViewModelTest {
         viewModel.setTrackMe(true)
 
         assertEquals(listOf(true), locationRepository.trackMeValues)
+    }
+
+    @Test
+    fun clear_cache_delegates_to_weather_repository() {
+        var clearCalls = 0
+        val weatherRepository = object : WeatherRepository {
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: ActiveLocation
+            ) = error("not used")
+
+            override suspend fun clearCache() {
+                clearCalls++
+            }
+        }
+        val viewModel = SettingsViewModel(
+            InMemorySettingsRepository(),
+            InMemoryLocationRepository(),
+            weatherRepository
+        )
+
+        viewModel.clearCache()
+
+        assertEquals(1, clearCalls)
     }
 
     @Test

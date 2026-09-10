@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -163,6 +164,12 @@ fun WeatherScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
+                if (state.isStale) {
+                    StaleForecastBanner(
+                        fetchedAt = forecast.fetchedAt.toString(),
+                        onRetry = viewModel::refresh
+                    )
+                }
                 if (state.forecastMode == ForecastMode.HOURLY) {
                     HourlyWeatherContent(
                         forecast = forecast,
@@ -261,6 +268,28 @@ fun WeatherScreen(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun StaleForecastBanner(fetchedAt: String, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .testTag("stale_forecast_banner")
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Showing cached data from $fetchedAt",
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Button(onClick = onRetry) {
+            Text("Retry")
         }
     }
 }

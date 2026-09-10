@@ -23,13 +23,11 @@ class WeatherRepositoryException(message: String, cause: Throwable? = null) : IO
 class OpenMeteoWeatherRepository(
     private val api: OpenMeteoApi,
     private val clock: Clock = Clock.System
-) : WeatherRepository {
+) : WeatherSource {
 
-    override suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
-        if (provider != WeatherProvider.OPEN_METEO) {
-            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
-        }
+    override val provider: WeatherProvider = WeatherProvider.OPEN_METEO
 
+    override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
         val response = try {
             api.forecast(location)
         } catch (error: CancellationException) {
@@ -49,6 +47,13 @@ class OpenMeteoWeatherRepository(
         } catch (error: Throwable) {
             throw WeatherRepositoryException("Unable to map weather data", error)
         }
+    }
+
+    suspend fun getForecast(provider: WeatherProvider, location: WeatherLocation): WeatherForecast {
+        if (provider != WeatherProvider.OPEN_METEO) {
+            throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
+        }
+        return getForecast(location)
     }
 }
 

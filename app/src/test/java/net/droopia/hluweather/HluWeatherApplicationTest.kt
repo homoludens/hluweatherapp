@@ -1,7 +1,7 @@
 package net.droopia.hluweather
 
 import androidx.test.core.app.ApplicationProvider
-import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
+import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,6 +17,6 @@ class HluWeatherApplicationTest {
         val application = ApplicationProvider
             .getApplicationContext<HluWeatherApplication>()
 
-        assertTrue(application.weatherRepository is OpenMeteoWeatherRepository)
+        assertTrue(application.weatherRepository is CachingWeatherRepository)
     }
 }
