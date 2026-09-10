@@ -41,7 +41,9 @@ fun HluNavHost(
                     onSettingsClick = { navController.navigate("settings") },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
-                    darkTheme = darkTheme
+                    darkTheme = darkTheme,
+                    temperatureUnit = settingsState.temperatureUnit,
+                    precipitationUnit = settingsState.precipitationUnit
                 )
             } else {
                 WeatherScreen(
@@ -51,6 +53,8 @@ fun HluNavHost(
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
+                    temperatureUnit = settingsState.temperatureUnit,
+                    precipitationUnit = settingsState.precipitationUnit,
                     mapContent = weatherMapContent
                 )
             }

@@ -9,6 +9,8 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +44,7 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
-        composeRule.onAllNodesWithText("21°").onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("21°C").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("Clear sky").assertIsDisplayed()
         composeRule.onNodeWithText("51%").assertIsDisplayed()
         composeRule.onNodeWithText("0 mm").assertIsDisplayed()
@@ -65,5 +67,27 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("Tue, Sep 1, 2026 • 20:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun renders_current_values_in_selected_units() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    precipitationUnit = PrecipitationUnit.INCH
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithText("70°F").onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("0 in").onFirst().assertIsDisplayed()
     }
 }

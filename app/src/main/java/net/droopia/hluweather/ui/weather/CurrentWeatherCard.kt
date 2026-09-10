@@ -38,14 +38,18 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
-import net.droopia.hluweather.data.temperatureText
+import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.components.MoonPhase
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
 @Composable
 fun CurrentWeatherCard(
     location: WeatherLocation,
     forecast: WeatherForecast,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     onLocationClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -98,7 +102,9 @@ fun CurrentWeatherCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = forecast.current.temperature.temperatureText(),
+                            text = forecast.current.temperature.temperatureValueText(temperatureUnit),
+                            maxLines = 1,
+                            softWrap = false,
                             fontSize = 70.sp,
                             fontWeight = FontWeight.Medium,
                             lineHeight = 70.sp
@@ -125,7 +131,7 @@ fun CurrentWeatherCard(
 
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     WeatherMetric(
                         icon = Icons.Default.WaterDrop,
@@ -135,17 +141,17 @@ fun CurrentWeatherCard(
                     WeatherMetric(
                         icon = Icons.Default.DeviceThermostat,
                         title = "Feels like",
-                        value = forecast.current.apparentTemperature.temperatureText()
+                        value = forecast.current.apparentTemperature.temperatureValueText(temperatureUnit)
                     )
                     WeatherMetric(
                         icon = Icons.Default.Eco,
                         title = "Dew point",
-                        value = forecast.current.dewPoint.temperatureText()
+                        value = forecast.current.dewPoint.temperatureValueText(temperatureUnit)
                     )
                     WeatherMetric(
                         icon = Icons.Default.Umbrella,
                         title = "Precipitation",
-                        value = forecast.current.precipitation.precipitationText()
+                        value = forecast.current.precipitation.precipitationText(precipitationUnit)
                     )
                 }
             }
@@ -174,6 +180,8 @@ private fun WeatherMetric(
         )
         Text(
             text = value,
+            maxLines = 1,
+            softWrap = false,
             fontWeight = FontWeight.SemiBold
         )
     }

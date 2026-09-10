@@ -41,8 +41,10 @@ import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
-import net.droopia.hluweather.data.temperatureText
+import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.components.HluWeatherIcon
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
 @Composable
@@ -51,6 +53,8 @@ fun HourlyForecast(
     forecast: WeatherForecast,
     selectedDayIndex: Int,
     onDaySelected: (Int) -> Unit,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
@@ -96,6 +100,8 @@ fun HourlyForecast(
                     ForecastRow(
                         weather = item.hour,
                         displayZone = displayZone,
+                        temperatureUnit = temperatureUnit,
+                        precipitationUnit = precipitationUnit,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .then(
@@ -248,6 +254,8 @@ private fun RowScope.ForecastCell(
 internal fun ForecastRow(
     weather: HourForecast,
     displayZone: ZoneId,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     timeTestTag: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -292,13 +300,13 @@ internal fun ForecastRow(
         }
 
         Text(
-            text = weather.temperature.temperatureText(),
+            text = weather.temperature.temperatureValueText(temperatureUnit),
             modifier = Modifier.weight(0.8f),
             fontWeight = FontWeight.SemiBold
         )
 
         Text(
-            text = weather.dewPoint.temperatureText(),
+            text = weather.dewPoint.temperatureValueText(temperatureUnit),
             modifier = Modifier.weight(1f),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -309,7 +317,7 @@ internal fun ForecastRow(
         )
 
         Text(
-            text = weather.precipitation.precipitationText(),
+            text = weather.precipitation.precipitationText(precipitationUnit),
             modifier = Modifier.weight(0.9f)
         )
     }

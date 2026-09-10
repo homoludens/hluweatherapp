@@ -6,8 +6,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import java.util.TimeZone
@@ -86,5 +88,27 @@ class HluNavHostTest {
         composeRule.onNodeWithText("Add Location").performClick()
 
         composeRule.onNodeWithText("Location picker").assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_units_reach_weather_content() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(4)
+        composeRule.onNodeWithText("°F").performClick()
+        composeRule.onNodeWithText("in").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(0)
+        composeRule.onNodeWithContentDescription("Back").performClick()
+
+        composeRule.onAllNodesWithText("70°F").onFirst().assertIsDisplayed()
     }
 }

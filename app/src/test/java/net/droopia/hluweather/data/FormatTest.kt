@@ -2,6 +2,10 @@ package net.droopia.hluweather.data
 
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import net.droopia.hluweather.ui.settings.DistanceUnit
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.settings.WindUnit
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.ZoneId
@@ -29,6 +33,41 @@ class FormatTest {
     fun precipitation_formats_millimetres() {
         assertEquals("0 mm", 0.2.precipitationText())
         assertEquals("1 mm", 0.8.precipitationText())
+    }
+
+    @Test
+    fun temperature_formats_selected_unit() {
+        assertEquals("20 degrees C", 20.0.temperatureText(TemperatureUnit.CELSIUS))
+        assertEquals("68 degrees F", 20.0.temperatureText(TemperatureUnit.FAHRENHEIT))
+        assertEquals("68°F", 20.0.temperatureValueText(TemperatureUnit.FAHRENHEIT))
+    }
+
+    @Test
+    fun precipitation_formats_selected_unit() {
+        assertEquals("10 mm", 10.0.precipitationText(PrecipitationUnit.MM))
+        assertEquals("0.39 in", 10.0.precipitationText(PrecipitationUnit.INCH))
+    }
+
+    @Test
+    fun wind_speed_formats_selected_unit() {
+        assertEquals("100 km/h", 100.0.windSpeedText(WindUnit.KMH))
+        assertEquals("62.14 mph", 100.0.windSpeedText(WindUnit.MPH))
+    }
+
+    @Test
+    fun distance_formats_selected_unit() {
+        assertEquals("10 km", 10.0.distanceText(DistanceUnit.KM))
+        assertEquals("6.21 mi", 10.0.distanceText(DistanceUnit.MILES))
+    }
+
+    @Test
+    fun unit_aware_formatters_round_and_preserve_missing_values() {
+        assertEquals("22 degrees C", 21.6.temperatureText(TemperatureUnit.CELSIUS))
+        assertEquals("1 in", 25.4.precipitationText(PrecipitationUnit.INCH))
+        assertEquals("—", null.temperatureText(TemperatureUnit.CELSIUS))
+        assertEquals("—", null.precipitationText(PrecipitationUnit.INCH))
+        assertEquals("—", null.windSpeedText(WindUnit.MPH))
+        assertEquals("—", null.distanceText(DistanceUnit.MILES))
     }
 
     @Test

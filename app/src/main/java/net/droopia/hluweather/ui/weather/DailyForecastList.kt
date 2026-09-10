@@ -28,14 +28,18 @@ import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.precipitationText
-import net.droopia.hluweather.data.temperatureText
+import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.components.HluWeatherIcon
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
 
 @Composable
 fun DailyForecastList(
     forecast: WeatherForecast,
     onDaySelected: (Int) -> Unit,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
@@ -55,6 +59,8 @@ fun DailyForecastList(
             DailyRow(
                 day = forecast.daily[index],
                 displayZone = displayZone,
+                temperatureUnit = temperatureUnit,
+                precipitationUnit = precipitationUnit,
                 onClick = { onDaySelected(index) }
             )
         }
@@ -65,6 +71,8 @@ fun DailyForecastList(
 private fun DailyRow(
     day: DayForecast,
     displayZone: ZoneId,
+    temperatureUnit: TemperatureUnit,
+    precipitationUnit: PrecipitationUnit,
     onClick: () -> Unit
 ) {
     ElevatedCard(
@@ -104,14 +112,15 @@ private fun DailyRow(
             Spacer(Modifier.width(12.dp))
 
             Text(
-                text = "${day.temperatureMin.temperatureText()} – ${day.temperatureMax.temperatureText()}",
+                text = "${day.temperatureMin.temperatureValueText(temperatureUnit)} – " +
+                    day.temperatureMax.temperatureValueText(temperatureUnit),
                 fontWeight = FontWeight.SemiBold
             )
 
             Spacer(Modifier.width(12.dp))
 
             Text(
-                text = day.precipitation.precipitationText(),
+                text = day.precipitation.precipitationText(precipitationUnit),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

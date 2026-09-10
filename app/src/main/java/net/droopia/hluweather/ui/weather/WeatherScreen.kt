@@ -52,6 +52,8 @@ import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.map.WeatherMap
 
 private const val WEATHER_HEADER_KEY = "weather_header"
@@ -71,6 +73,8 @@ fun WeatherScreen(
     onTrackMeClick: () -> Unit = {},
     trackMeSelected: Boolean = false,
     darkTheme: Boolean = false,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     modifier: Modifier = Modifier,
     mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
         { mapLocation, locations, activeLocationId, mapDarkTheme, onRecenterClick ->
@@ -175,6 +179,8 @@ fun WeatherScreen(
                         forecast = forecast,
                         location = location,
                         selectedDayIndex = state.selectedDayIndex,
+                        temperatureUnit = temperatureUnit,
+                        precipitationUnit = precipitationUnit,
                         onDaySelected = viewModel::onDaySelected,
                         onForecastModeSelected = viewModel::onForecastModeSelected,
                         onSettingsClick = onSettingsClick,
@@ -192,6 +198,8 @@ fun WeatherScreen(
                     CurrentWeatherCard(
                         location = location,
                         forecast = forecast,
+                        temperatureUnit = temperatureUnit,
+                        precipitationUnit = precipitationUnit,
                         onLocationClick = { locationSwitcherVisible = true },
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
@@ -202,6 +210,8 @@ fun WeatherScreen(
                         ForecastMode.DAILY -> {
                             DailyForecastList(
                                 forecast = forecast,
+                                temperatureUnit = temperatureUnit,
+                                precipitationUnit = precipitationUnit,
                                 onDaySelected = viewModel::onDaySelected,
                                 modifier = Modifier.weight(1f)
                             )
@@ -312,6 +322,8 @@ private fun HourlyWeatherContent(
     forecast: WeatherForecast,
     location: WeatherLocation,
     selectedDayIndex: Int,
+    temperatureUnit: TemperatureUnit,
+    precipitationUnit: PrecipitationUnit,
     onDaySelected: (Int) -> Unit,
     onForecastModeSelected: (ForecastMode) -> Unit,
     onSettingsClick: () -> Unit,
@@ -412,6 +424,8 @@ private fun HourlyWeatherContent(
                 CurrentWeatherCard(
                     location = location,
                     forecast = forecast,
+                    temperatureUnit = temperatureUnit,
+                    precipitationUnit = precipitationUnit,
                     onLocationClick = onLocationClick,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
@@ -456,6 +470,8 @@ private fun HourlyWeatherContent(
                         ForecastRow(
                             weather = item.hour,
                             displayZone = displayZone,
+                            temperatureUnit = temperatureUnit,
+                            precipitationUnit = precipitationUnit,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
                                 .then(

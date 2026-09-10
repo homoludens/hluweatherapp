@@ -12,6 +12,8 @@ import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
+import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Before
 import org.junit.Assert.assertTrue
@@ -108,5 +110,28 @@ class HourlyForecastTest {
 
         composeRule.onAllNodesWithText("Tue, Sep 1").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("20h").assertIsDisplayed()
+    }
+
+    @Test
+    fun renders_hourly_values_in_selected_units() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast,
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    precipitationUnit = PrecipitationUnit.INCH
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithText("63°F").onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("0 in").onFirst().assertIsDisplayed()
     }
 }
