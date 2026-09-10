@@ -171,6 +171,26 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun edited_saved_location_with_the_same_id_refetches_weather() = runTest {
+        val repository = RecordingWeatherRepository()
+        val locations = TestLocationRepository(ActiveLocation.Saved(Svilajnac))
+        val viewModel = WeatherViewModel(repository, TestSettingsRepository(), locations)
+        advanceUntilIdle()
+
+        val editedLocation = Svilajnac.copy(
+            latitude = Svilajnac.latitude + 0.1,
+            longitude = Svilajnac.longitude + 0.1,
+            altitude = Svilajnac.altitude!! + 1
+        )
+        locations.emitActive(ActiveLocation.Saved(editedLocation))
+        advanceUntilIdle()
+
+        assertEquals(2, repository.requests.size)
+        assertEquals(editedLocation, repository.requests.last().location)
+        assertEquals(editedLocation, viewModel.state.value.activeLocation)
+    }
+
+    @Test
     fun no_active_location_does_not_request_weather() = runTest {
         val repository = RecordingWeatherRepository()
         val viewModel = WeatherViewModel(

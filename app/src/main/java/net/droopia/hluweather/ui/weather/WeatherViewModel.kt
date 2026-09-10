@@ -183,7 +183,7 @@ class WeatherViewModel(
         }
 
         val currentPoint = (request.activeLocation as? ActiveLocation.Current)?.point
-        val locationKey = currentPoint?.let { "current" } ?: currentLocation.id
+        val locationKey = currentPoint?.let { "current" } ?: currentLocation.savedLocationKey()
         val refreshRequested = request.refresh != handledRefresh
         val providerChanged = request.provider != lastLoadedProvider
         val locationChanged = currentPoint == null && locationKey != lastLoadedLocationKey
@@ -289,6 +289,9 @@ private fun ActiveLocation?.toWeatherLocation(): WeatherLocation? = when (this) 
     )
     null -> null
 }
+
+private fun WeatherLocation.savedLocationKey(): String =
+    "saved:$id:$latitude:$longitude:$altitude"
 
 private object FixedSettingsRepository : SettingsRepository {
     override val settings = flowOf(PersistedSettings())

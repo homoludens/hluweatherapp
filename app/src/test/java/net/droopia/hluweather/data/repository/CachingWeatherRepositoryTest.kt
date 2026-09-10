@@ -323,6 +323,69 @@ class CachingWeatherRepositoryTest {
     }
 
     @Test
+    fun saved_location_with_mismatched_altitude_does_not_use_old_cache_when_offline() = runTest {
+        val requestedLocation = Svilajnac
+        val cachedLocation = requestedLocation.copy(altitude = requestedLocation.altitude!! + 1)
+        val liveFailure = WeatherRepositoryException("offline")
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:${requestedLocation.id}"),
+            forecast(WeatherProvider.OPEN_METEO).copy(location = cachedLocation)
+        )
+        val repository = repository(
+            FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO), liveFailure),
+            cache
+        )
+
+        var error: Throwable? = null
+        try {
+            repository.getForecast(
+                WeatherProvider.OPEN_METEO,
+                ActiveLocation.Saved(requestedLocation)
+            )
+        } catch (thrown: Throwable) {
+            error = thrown
+        }
+
+        assertSame(liveFailure, error)
+    }
+
+    @Test
+    fun current_location_with_matching_rounded_cache_key_uses_stale_cache() = runTest {
+        val requestedPoint = GeoPoint(44.81761, 20.46331)
+        val cachedPoint = GeoPoint(44.81760, 20.46330)
+        val cachedForecast = forecast(WeatherProvider.OPEN_METEO).copy(
+            location = WeatherLocation(
+                id = "current",
+                name = "Current location",
+                latitude = cachedPoint.latitude,
+                longitude = cachedPoint.longitude
+            )
+        )
+        val cache = InMemoryCache()
+        cache.put(
+            ForecastCacheKey(WeatherProvider.OPEN_METEO, "current:44.818:20.463"),
+            cachedForecast
+        )
+        val repository = repository(
+            FakeSource(
+                WeatherProvider.OPEN_METEO,
+                forecast(WeatherProvider.OPEN_METEO),
+                WeatherRepositoryException("offline")
+            ),
+            cache
+        )
+
+        val load = repository.getForecast(
+            WeatherProvider.OPEN_METEO,
+            ActiveLocation.Current(requestedPoint)
+        )
+
+        assertTrue(load.isStale)
+        assertEquals(cachedForecast, load.forecast)
+    }
+
+    @Test
     fun selected_source_provider_is_validated_again_at_use_time() = runTest {
         val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
         val repository = repository(source, InMemoryCache())

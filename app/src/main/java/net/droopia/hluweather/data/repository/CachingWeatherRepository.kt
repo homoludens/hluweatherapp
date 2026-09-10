@@ -53,7 +53,7 @@ class CachingWeatherRepository(
                 throw error
             }
             if (cached != null && cached.provider == key.provider &&
-                cached.location.coordinatesMatch(requestedLocation)
+                location.matchesCachedLocation(key, cached.location)
             ) {
                 return ForecastLoad(cached, isStale = true)
             }
@@ -105,5 +105,15 @@ private fun ActiveLocation.toWeatherLocation(): WeatherLocation = when (this) {
     )
 }
 
-private fun WeatherLocation.coordinatesMatch(other: WeatherLocation): Boolean =
-    latitude == other.latitude && longitude == other.longitude
+private fun ActiveLocation.matchesCachedLocation(
+    key: ForecastCacheKey,
+    cachedLocation: WeatherLocation
+): Boolean = when (this) {
+    is ActiveLocation.Saved -> cachedLocation.id == location.id &&
+        cachedLocation.latitude == location.latitude &&
+        cachedLocation.longitude == location.longitude &&
+        cachedLocation.altitude == location.altitude
+    is ActiveLocation.Current -> cachedLocation.id == "current" &&
+        currentCacheLocationKey(GeoPoint(cachedLocation.latitude, cachedLocation.longitude)) ==
+        key.locationKey
+}
