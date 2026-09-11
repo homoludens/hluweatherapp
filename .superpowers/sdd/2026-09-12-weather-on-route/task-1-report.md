@@ -100,3 +100,65 @@ Exact output: no output, exit code 0.
 - Gradle emits existing compile-SDK compatibility and Kotlin deprecation
   warnings. The required route model API uses `kotlinx.datetime.Instant`,
   which is also reported as deprecated by the current dependency/toolchain.
+
+## Task 1 Fix Report
+
+### Covering Tests
+
+- `buildRouteSamples_accepts_supported_speed_boundaries` verifies speeds 50 and 240 are accepted.
+- `buildRouteSamples_rejects_speed_outside_supported_range` verifies speeds 49 and 241 are rejected.
+- `buildRouteSamples_rejects_invalid_geometry_and_distance` now covers a one-point route, zero-length geometry, zero distance, and `NaN` distance.
+- `buildRouteSamples_rejects_positive_infinite_distance` verifies positive infinity is rejected; its one-second test timeout prevents the pre-fix infinite sampling loop from hanging the suite.
+
+### Red Run
+
+Command:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.data.weatherroute.RouteSamplingTest
+```
+
+Output before the fix:
+
+```text
+RouteSamplingTest > buildRouteSamples_rejects_positive_infinite_distance FAILED
+    org.junit.runners.model.TestTimedOutException at RouteSamplingTest.kt:118
+RouteSamplingTest > buildRouteSamples_rejects_invalid_geometry_and_distance FAILED
+    java.lang.AssertionError at RouteSamplingTest.kt:92
+RouteSamplingTest > buildRouteSamples_rejects_speed_outside_supported_range FAILED
+    java.lang.AssertionError at RouteSamplingTest.kt:75
+9 tests completed, 3 failed
+```
+
+### Fix And Verification
+
+`buildRouteSamples()` now requires a finite positive route distance, an average
+speed in the inclusive range `50..240`, and finite positive Haversine geometry
+length before calculating offsets.
+
+The exact targeted command was rerun:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.data.weatherroute.RouteSamplingTest
+```
+
+Final output:
+
+```text
+BUILD SUCCESSFUL in 5s
+28 actionable tasks: 4 executed, 24 up-to-date
+```
+
+### Fix Self-Review
+
+- Changes are limited to `RouteSampling.kt`, `RouteSamplingTest.kt`, and this report.
+- The speed constraint is inclusive and rejects both out-of-range boundaries.
+- Non-finite route distances are rejected before the sampling loop, preventing nontermination.
+- Degenerate and non-finite geometry is rejected before interpolation.
+- Existing six tests plus the four new regression tests pass, for 10 targeted tests total.
+- `git diff --check` produced no output.
+
+### Fix Concerns
+
+- Gradle still emits the existing compile-SDK compatibility warning and
+  `kotlinx.datetime.Instant` deprecation warning; neither affects this fix.

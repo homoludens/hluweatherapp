@@ -61,6 +61,26 @@ class RouteSamplingTest {
     }
 
     @Test
+    fun buildRouteSamples_accepts_supported_speed_boundaries() {
+        val route = DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 1_000.0, 100.0)
+
+        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 50).size)
+        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 240).size)
+    }
+
+    @Test
+    fun buildRouteSamples_rejects_speed_outside_supported_range() {
+        val route = DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 1_000.0, 100.0)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 49)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 241)
+        }
+    }
+
+    @Test
     fun buildRouteSamples_rejects_invalid_geometry_and_distance() {
         assertThrows(IllegalArgumentException::class.java) {
             buildRouteSamples(
@@ -71,7 +91,32 @@ class RouteSamplingTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             buildRouteSamples(
+                DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.8, 20.4)), 1_000.0, 100.0),
+                Instant.parse("2026-09-12T10:00:00Z"),
+                80
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(
                 DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 0.0, 100.0),
+                Instant.parse("2026-09-12T10:00:00Z"),
+                80
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(
+                DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), Double.NaN, 100.0),
+                Instant.parse("2026-09-12T10:00:00Z"),
+                80
+            )
+        }
+    }
+
+    @Test(timeout = 1_000)
+    fun buildRouteSamples_rejects_positive_infinite_distance() {
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(
+                DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), Double.POSITIVE_INFINITY, 100.0),
                 Instant.parse("2026-09-12T10:00:00Z"),
                 80
             )

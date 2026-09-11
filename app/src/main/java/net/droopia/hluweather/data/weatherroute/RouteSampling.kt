@@ -20,13 +20,18 @@ fun buildRouteSamples(
     averageSpeedKmh: Int
 ): List<RouteWeatherSample> {
     require(route.polyline.size >= 2) { "Route geometry must contain at least two points" }
-    require(route.distanceMeters > 0.0) { "Route distance must be positive" }
-    require(averageSpeedKmh > 0) { "Average speed must be positive" }
+    require(route.distanceMeters.isFinite() && route.distanceMeters > 0.0) {
+        "Route distance must be finite and positive"
+    }
+    require(averageSpeedKmh in 50..240) { "Average speed must be between 50 and 240 km/h" }
 
     val speedMetersPerSecond = averageSpeedKmh * 1_000.0 / SECONDS_PER_HOUR
     val durationSeconds = route.distanceMeters / speedMetersPerSecond
     val geometryDistances = route.polyline.zipWithNext(::haversineDistance)
     val totalGeometryDistance = geometryDistances.sum()
+    require(totalGeometryDistance.isFinite() && totalGeometryDistance > 0.0) {
+        "Route geometry must have finite positive length"
+    }
     val cumulativeGeometryDistances = geometryDistances.runningFold(0.0, Double::plus)
     val offsets = buildList {
         add(0.0)
