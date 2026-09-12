@@ -46,6 +46,7 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 import kotlin.math.asin
 import kotlin.math.cos
+import kotlin.math.ln
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.minutes
@@ -60,6 +61,11 @@ data class WeatherMapMarker(
     val isActive: Boolean
 )
 
+data class WeatherMapViewport(
+    val center: GeoPoint,
+    val zoom: Double
+)
+
 fun mapStyleUrl(darkTheme: Boolean): String =
     if (darkTheme) OPEN_FREE_MAP_DARK_STYLE else OPEN_FREE_MAP_LIBERTY_STYLE
 
@@ -68,6 +74,33 @@ fun weatherMapMarkers(
     activeLocationId: String?
 ): List<WeatherMapMarker> = locations.map { location ->
     WeatherMapMarker(location, location.id == activeLocationId)
+}
+
+fun weatherMapViewport(
+    locations: List<WeatherLocation>,
+    fallbackCenter: GeoPoint = GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE),
+    includeFallbackInBounds: Boolean = false
+): WeatherMapViewport {
+    if (locations.isEmpty()) return WeatherMapViewport(fallbackCenter, zoom = 11.0)
+
+    val points = locations.map { it.toGeoPoint() } +
+        if (includeFallbackInBounds) listOf(fallbackCenter) else emptyList()
+    val minLatitude = points.minOf(GeoPoint::latitude)
+    val maxLatitude = points.maxOf(GeoPoint::latitude)
+    val minLongitude = points.minOf(GeoPoint::longitude)
+    val maxLongitude = points.maxOf(GeoPoint::longitude)
+    val latitudeSpan = (maxLatitude - minLatitude).coerceAtLeast(0.02)
+    val longitudeSpan = (maxLongitude - minLongitude).coerceAtLeast(0.02)
+    val span = maxOf(latitudeSpan, longitudeSpan)
+    val zoom = (ln(360.0 / (span * 1.35)) / ln(2.0)).coerceIn(0.0, 12.0)
+
+    return WeatherMapViewport(
+        center = GeoPoint(
+            latitude = (minLatitude + maxLatitude) / 2.0,
+            longitude = (minLongitude + maxLongitude) / 2.0
+        ),
+        zoom = zoom
+    )
 }
 
 fun selectWeatherMapLocation(
@@ -100,6 +133,7 @@ fun WeatherMap(
     locations: List<WeatherLocation> = emptyList(),
     activeLocationId: String? = null,
     center: GeoPoint? = null,
+    fitLocations: Boolean = false,
     darkTheme: Boolean,
     modifier: Modifier = Modifier,
     onLocationClick: (WeatherLocation) -> Unit = {},
@@ -107,15 +141,26 @@ fun WeatherMap(
     onCameraIdle: (GeoPoint) -> Unit = {},
     onRecenterClick: () -> Unit = {}
 ) {
-    val initialCenter = center
-        ?: locations.firstOrNull { it.id == activeLocationId }?.toGeoPoint()
-        ?: locations.firstOrNull()?.toGeoPoint()
-        ?: GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE)
+    val viewport = if (fitLocations) {
+        weatherMapViewport(
+            locations,
+            center ?: GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE),
+            includeFallbackInBounds = activeLocationId == null && center != null
+        )
+    } else {
+        WeatherMapViewport(
+            center = center
+                ?: locations.firstOrNull { it.id == activeLocationId }?.toGeoPoint()
+                ?: locations.firstOrNull()?.toGeoPoint()
+                ?: GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE),
+            zoom = 11.0
+        )
+    }
     val mapState = rememberMapState(
         baseStyle = BaseStyle.Uri(mapStyleUrl(darkTheme)),
         initialCameraPosition = CameraPosition(
-            target = initialCenter.toPosition(),
-            zoom = 11.0
+            target = viewport.center.toPosition(),
+            zoom = viewport.zoom
         )
     )
     val scope = rememberCoroutineScope()
@@ -133,6 +178,7 @@ fun WeatherMap(
     }
 
     LaunchedEffect(center) {
+        if (fitLocations) return@LaunchedEffect
         center?.let { point ->
             val current = mapState.cameraPosition.target
             val currentPoint = GeoPoint(current.latitude, current.longitude)
@@ -141,6 +187,31 @@ fun WeatherMap(
                     CameraPosition(
                         target = point.toPosition(),
                         zoom = mapState.cameraPosition.zoom
+                    )
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(locations, fitLocations, center, activeLocationId) {
+        if (fitLocations) {
+            val target = weatherMapViewport(
+                locations,
+                center ?: GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE),
+                includeFallbackInBounds = activeLocationId == null && center != null
+            )
+            if (shouldAnimateWeatherMapCenter(
+                    GeoPoint(
+                        mapState.cameraPosition.target.latitude,
+                        mapState.cameraPosition.target.longitude
+                    ),
+                    target.center
+                ) || mapState.cameraPosition.zoom != target.zoom
+            ) {
+                mapState.animateCameraPosition(
+                    CameraPosition(
+                        target = target.center.toPosition(),
+                        zoom = target.zoom
                     )
                 )
             }
@@ -187,17 +258,7 @@ fun WeatherMap(
                     } else {
                         MaterialTheme.colorScheme.secondaryContainer
                     }
-                ) {
-                    Text(
-                        text = marker.location.name.take(1).uppercase(),
-                        modifier = Modifier.align(Alignment.Center),
-                        color = if (marker.isActive) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        }
-                    )
-                }
+                ) { }
             }
             WeatherMapRecenterButton(
                 onClick = {
@@ -205,8 +266,8 @@ fun WeatherMap(
                         scope.launch {
                             mapState.animateCameraPosition(
                                 CameraPosition(
-                                    target = initialCenter.toPosition(),
-                                    zoom = mapState.cameraPosition.zoom
+                                    target = viewport.center.toPosition(),
+                                    zoom = viewport.zoom
                                 )
                             )
                         }

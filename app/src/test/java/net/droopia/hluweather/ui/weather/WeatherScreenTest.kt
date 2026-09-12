@@ -235,7 +235,7 @@ class WeatherScreenTest {
                 )
             }
         )
-        val tableData = forecast.toHourlyTableData()
+        val tableData = forecast.toHourlyTableData(now = forecast.hourly.first().time)
         val syntheticDayIndex = tableData.days.last().dayIndex
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
@@ -274,7 +274,7 @@ class WeatherScreenTest {
         val forecast = baseForecast.copy(
             hourly = baseForecast.hourly.filter { it.time.toAppLocalDate() != missingDate }
         )
-        val tableData = forecast.toHourlyTableData()
+        val tableData = forecast.toHourlyTableData(now = forecast.hourly.first().time)
         val nearestDay = tableData.nearestDayForIndex(2)!!
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
@@ -313,7 +313,7 @@ class WeatherScreenTest {
                     }
                 )
         )
-        val tableData = forecast.toHourlyTableData()
+        val tableData = forecast.toHourlyTableData(now = forecast.hourly.first().time)
         val syntheticDayIndex = tableData.days.last().dayIndex
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
@@ -363,12 +363,19 @@ class WeatherScreenTest {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    now = Instant.fromEpochSeconds(0L)
                 )
             }
         }
 
         composeRule.onNodeWithText("Daily").performClick()
+        composeRule.onNodeWithTag("weather_hero").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("current_weather_card")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
         composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
     }
 
@@ -380,7 +387,8 @@ class WeatherScreenTest {
             HluWeatherTheme(darkTheme = true) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    now = Instant.fromEpochSeconds(0L)
                 )
             }
         }
@@ -397,7 +405,7 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun stale_forecast_shows_fetched_time_and_retry() {
+    fun stale_forecast_does_not_show_a_banner_or_retry_action() {
         val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(123L))
         val viewModel = WeatherViewModel(object : WeatherRepository {
             override suspend fun getForecast(
@@ -409,9 +417,21 @@ class WeatherScreenTest {
         }, Svilajnac)
         renderWeather(viewModel)
 
-        composeRule.onNodeWithTag("stale_forecast_banner").assertIsDisplayed()
-        composeRule.onNodeWithText("Showing cached data from ${forecast.fetchedAt}").assertIsDisplayed()
-        composeRule.onNodeWithText("Retry").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("stale_forecast_banner")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+        assertTrue(
+            composeRule.onAllNodesWithText("Showing cached data from ${forecast.fetchedAt}")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+        assertTrue(
+            composeRule.onAllNodesWithText("Retry")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
     }
 
     @Test
@@ -557,7 +577,8 @@ class WeatherScreenTest {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    now = Instant.fromEpochSeconds(0L)
                 )
             }
         }
@@ -633,17 +654,26 @@ class WeatherScreenTest {
 
     private fun renderWeather(baseTime: Instant): WeatherViewModel {
         return renderWeather(
-            WeatherViewModel(MockWeatherRepository(baseTime = baseTime), Svilajnac)
+            WeatherViewModel(MockWeatherRepository(baseTime = baseTime), Svilajnac),
+            now = baseTime
         )
     }
 
     private fun renderWeather(viewModel: WeatherViewModel): WeatherViewModel {
+        return renderWeather(
+            viewModel,
+            now = viewModel.state.value.forecast?.hourly?.firstOrNull()?.time
+        )
+    }
+
+    private fun renderWeather(viewModel: WeatherViewModel, now: Instant?): WeatherViewModel {
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    onSettingsClick = {}
+                    onSettingsClick = {},
+                    now = now
                 )
             }
         }

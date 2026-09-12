@@ -111,14 +111,35 @@ internal fun WeatherForecast.summaryBody(
         append(day.temperatureMax.asNotificationTemperature(temperatureUnit))
         append(", low ")
         append(day.temperatureMin.asNotificationTemperature(temperatureUnit))
-        append(", precipitation ")
-        if (day.precipitation == null) {
-            append("unavailable.")
-        } else {
+        val rainWindow = rainWindow(day)
+        if (day.precipitation != null && day.precipitation > 0.0 && rainWindow != null) {
+            append(", Rain ")
+            append(rainWindow)
+            append(", ")
             append(day.precipitation.asNotificationPrecipitation(precipitationUnit))
             append(".")
+        } else {
+            append(", precipitation ")
+            if (day.precipitation == null) {
+                append("unavailable.")
+            } else {
+                append(day.precipitation.asNotificationPrecipitation(precipitationUnit))
+                append(".")
+            }
         }
     }
+}
+
+private fun WeatherForecast.rainWindow(day: DayForecast): String? {
+    val timeZone = runCatching { TimeZone.of(timezone) }.getOrNull() ?: return null
+    val rainHours = hourly.filter { hour ->
+        hour.precipitation > 0.0 && hour.time.toLocalDateTime(timeZone).date == day.date
+    }
+    if (rainHours.isEmpty()) return null
+
+    val first = rainHours.first().time.toLocalDateTime(timeZone).time.toString()
+    val last = rainHours.last().time.toLocalDateTime(timeZone).time.toString()
+    return if (first == last) first else "$first-$last"
 }
 
 private fun WeatherForecast.dayForSummary(deliveryTime: kotlinx.datetime.Instant): DayForecast? {

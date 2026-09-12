@@ -3,6 +3,13 @@ package net.droopia.hluweather.ui.locationpicker
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,13 +45,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.ui.map.WeatherMap
 import java.util.Locale
+
+private const val NAME_SPINNER_DURATION_MILLIS = 900
+
+internal fun nameSpinnerRotation(elapsedMillis: Long): Float =
+    (elapsedMillis % NAME_SPINNER_DURATION_MILLIS) * 360f / NAME_SPINNER_DURATION_MILLIS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,6 +170,20 @@ fun LocationPickerScreen(
                             .testTag("location_picker_name"),
                         singleLine = true
                     )
+                    if (state.isNameLoading) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LocationNameSpinner(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .testTag("location_name_loading")
+                            )
+                            Text("Finding location name...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     Text(
                         text = coordinateText(state.point),
                         style = MaterialTheme.typography.bodyLarge,
@@ -195,7 +226,8 @@ fun LocationPickerScreen(
                             }
                         }
                         Button(
-                            enabled = state.initialization == LocationPickerInitialization.Ready,
+                            enabled = state.initialization == LocationPickerInitialization.Ready &&
+                                !state.isNameLoading,
                             onClick = { viewModel.save() }
                         ) {
                             Text("Save")
@@ -205,6 +237,35 @@ fun LocationPickerScreen(
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+@Composable
+private fun LocationNameSpinner(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "location_name_spinner")
+    val rotation = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(NAME_SPINNER_DURATION_MILLIS, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "location_name_spinner_rotation"
+    )
+    val color = MaterialTheme.colorScheme.primary
+
+    Canvas(
+        modifier = modifier.semantics {
+            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+        }
+    ) {
+        drawArc(
+            color = color,
+            startAngle = rotation.value,
+            sweepAngle = 270f,
+            useCenter = false,
+            style = Stroke(size.minDimension * 0.12f, cap = StrokeCap.Round)
+        )
     }
 }
 

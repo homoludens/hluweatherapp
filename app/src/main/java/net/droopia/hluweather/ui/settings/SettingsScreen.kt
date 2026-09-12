@@ -320,7 +320,12 @@ private fun SettingsHeader(onBackClick: () -> Unit) {
         }
         Spacer(modifier = Modifier.width(4.dp))
         Column {
-            Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Settings",
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            )
             Text(
                 "Customize your weather experience",
                 style = MaterialTheme.typography.bodyMedium,

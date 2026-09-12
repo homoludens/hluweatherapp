@@ -26,7 +26,7 @@ class HourlyTableDataTest {
 
     @Test
     fun includes_all_days_in_source_order() {
-        val table = forecast.toHourlyTableData()
+        val table = forecast.toHourlyTableData(now = forecast.hourly.first().time)
 
         assertEquals(7 * 24, table.hourItems.size)
         assertEquals(7, table.days.size)
@@ -37,7 +37,7 @@ class HourlyTableDataTest {
 
     @Test
     fun exposes_first_item_index_for_each_day_jump() {
-        val table = forecast.toHourlyTableData()
+        val table = forecast.toHourlyTableData(now = forecast.hourly.first().time)
 
         assertEquals(0, table.firstItemIndexForDay(0))
         assertEquals(25, table.firstItemIndexForDay(1))
@@ -47,7 +47,7 @@ class HourlyTableDataTest {
 
     @Test
     fun includes_date_boundaries_with_stable_keys() {
-        val table = forecast.toHourlyTableData()
+        val table = forecast.toHourlyTableData(now = forecast.hourly.first().time)
 
         assertEquals(7 * 25, table.items.size)
         assertEquals("date-header-1970-01-01", table.items.first().key)
@@ -62,7 +62,7 @@ class HourlyTableDataTest {
             hourly = forecast.hourly.filter { it.time.toAppLocalDate() != missingDate }
         )
 
-        val table = incompleteForecast.toHourlyTableData()
+        val table = incompleteForecast.toHourlyTableData(now = forecast.hourly.first().time)
 
         assertEquals(listOf(0, 1, 3, 4, 5, 6), table.days.map { it.dayIndex })
         assertEquals(6 * 24, table.hourItems.size)
@@ -79,7 +79,7 @@ class HourlyTableDataTest {
             hourly = forecast.hourly.filter { it.time.toAppLocalDate() != missingDate }
         )
 
-        val table = incompleteForecast.toHourlyTableData()
+        val table = incompleteForecast.toHourlyTableData(now = forecast.hourly.first().time)
 
         assertEquals(1, table.nearestDayForIndex(2)?.dayIndex)
     }

@@ -114,7 +114,19 @@ fun WeatherRouteMap(
             target = initialPoint.toPosition(),
             zoom = 10.0
         )
-    )
+    ) {
+        val routeSource = rememberGeoJsonSource(
+            GeoJsonData.JsonString(routeLineGeoJson(result.route.polyline))
+        )
+        LineLayer(
+            id = "weather_route_line",
+            source = routeSource,
+            color = const(MaterialTheme.colorScheme.primary),
+            width = const(5.dp),
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round)
+        )
+    }
     LaunchedEffect(mapState, result.route.polyline) {
         if (result.route.polyline.size >= 2) {
             mapState.fitCameraToBounds(
@@ -141,17 +153,6 @@ fun WeatherRouteMap(
             state = mapState
         ) {
             include(MapOverlay.Default)
-            val routeSource = rememberGeoJsonSource(
-                GeoJsonData.JsonString(routeLineGeoJson(result.route.polyline))
-            )
-            LineLayer(
-                id = "weather_route_line",
-                source = routeSource,
-                color = const(MaterialTheme.colorScheme.primary),
-                width = const(5.dp),
-                cap = const(LineCap.Round),
-                join = const(LineJoin.Round)
-            )
 
             RouteEndpointMarker(
                 label = "Start",

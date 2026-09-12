@@ -71,7 +71,8 @@ class HourlyForecastTest {
                 HourlyForecast(
                     forecast = forecast,
                     selectedDayIndex = 0,
-                    onDaySelected = {}
+                    onDaySelected = {},
+                    now = forecast.hourly.first().time
                 )
             }
         }
@@ -103,7 +104,8 @@ class HourlyForecastTest {
                 HourlyForecast(
                     forecast = forecast,
                     selectedDayIndex = 0,
-                    onDaySelected = {}
+                    onDaySelected = {},
+                    now = forecast.hourly.first().time
                 )
             }
         }
@@ -125,7 +127,8 @@ class HourlyForecastTest {
                 HourlyForecast(
                     forecast = forecast,
                     selectedDayIndex = 0,
-                    onDaySelected = {}
+                    onDaySelected = {},
+                    now = forecast.hourly.first().time
                 )
             }
         }
@@ -148,7 +151,8 @@ class HourlyForecastTest {
                     selectedDayIndex = 0,
                     onDaySelected = {},
                     temperatureUnit = TemperatureUnit.FAHRENHEIT,
-                    precipitationUnit = PrecipitationUnit.INCH
+                    precipitationUnit = PrecipitationUnit.INCH,
+                    now = forecast.hourly.first().time
                 )
             }
         }
@@ -198,7 +202,8 @@ class HourlyForecastTest {
                     HourlyForecast(
                         forecast = forecast,
                         selectedDayIndex = 0,
-                        onDaySelected = {}
+                        onDaySelected = {},
+                        now = forecast.hourly.first().time
                     )
                 }
             }

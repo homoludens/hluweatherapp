@@ -1,7 +1,13 @@
 package net.droopia.hluweather.ui.weather
 
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import java.time.ZoneId
+import kotlin.time.Clock
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.toAppLocalDate
@@ -39,10 +45,23 @@ data class HourlyTableHour(
     override val key: String
 ) : HourlyTableItem
 
-fun WeatherForecast.toHourlyTableData(): HourlyTableData {
+fun WeatherForecast.toHourlyTableData(now: Instant = Clock.System.now()): HourlyTableData {
     val displayZone = ZoneId.of(timezone)
+    val currentDateTime = now.toLocalDateTime(TimeZone.of(timezone))
+    val currentHour = LocalDateTime(
+        year = currentDateTime.year,
+        month = currentDateTime.month,
+        day = currentDateTime.day,
+        hour = currentDateTime.hour,
+        minute = 0,
+        second = 0,
+        nanosecond = 0
+    ).toInstant(TimeZone.of(timezone))
     val items = buildList {
-        hourly.groupBy { it.time.toAppLocalDate(displayZone) }.forEach { (date, hours) ->
+        hourly
+            .filter { it.time >= currentHour }
+            .groupBy { it.time.toAppLocalDate(displayZone) }
+            .forEach { (date, hours) ->
             val dayIndex = daily.indexOfFirst { it.date == date }
                 .takeIf { it >= 0 }
                 ?: (Int.MIN_VALUE + date.toEpochDays().toInt())

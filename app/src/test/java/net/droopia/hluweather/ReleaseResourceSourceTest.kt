@@ -2,6 +2,7 @@ package net.droopia.hluweather
 
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,9 +13,22 @@ class ReleaseResourceSourceTest {
             ?: File("src/main/AndroidManifest.xml")
         val source = manifest.readText()
 
-        assertTrue(source.contains("android:icon=\"@mipmap/ic_launcher\""))
-        assertTrue(source.contains("android:roundIcon=\"@mipmap/ic_launcher_round\""))
+        assertTrue(source.contains("android:icon=\"@drawable/hluweatherapp_icon\""))
+        assertTrue(source.contains("android:roundIcon=\"@drawable/hluweatherapp_icon\""))
         assertTrue(!source.contains("@android:drawable/sym_def_app_icon"))
+    }
+
+    @Test
+    fun launcher_icon_matches_the_supplied_design_asset() {
+        val resourceDirectory = File("app/src/main/res").takeIf { it.isDirectory }
+            ?: File("src/main/res")
+        val icon = resourceDirectory.resolve("drawable-nodpi/hluweatherapp_icon.png")
+        val source = File("docs/settings_design/hluweatherapp_icon.png").takeIf { it.isFile }
+            ?: File("../docs/settings_design/hluweatherapp_icon.png")
+
+        assertTrue(icon.isFile)
+        assertTrue(source.isFile)
+        assertArrayEquals(source.readBytes(), icon.readBytes())
     }
 
     @Test
