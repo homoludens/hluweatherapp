@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
-import net.droopia.hluweather.data.distanceText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.RouteWeatherSample
 import net.droopia.hluweather.data.model.WeatherCondition
@@ -74,16 +73,13 @@ fun WeatherRouteTable(
                 WeatherRouteTableHeader()
                 displayedSampleIndices.forEach { sampleIndex ->
                     WeatherRouteTableRow(
-                        result = result,
                         sample = result.samples[sampleIndex],
                         index = sampleIndex,
                         selected = selectedSampleIndex == sampleIndex,
                         temperatureUnit = temperatureUnit,
                         windUnit = windUnit,
-                        distanceUnit = distanceUnit,
                         precipitationUnit = precipitationUnit,
                         timeZone = timeZone,
-                        isDestination = sampleIndex == result.samples.lastIndex,
                         onSelected = onSampleSelected
                     )
                 }
@@ -116,33 +112,26 @@ private fun WeatherRouteTableHeader() {
             .testTag("route_weather_table_header")
             .padding(horizontal = 16.dp, vertical = 13.dp)
     ) {
-        TableCell("Time", 0.18f, header = true)
-        TableCell("Weather", 0.48f, header = true)
-        TableCell("Location", 0.34f, header = true)
+        TableCell("Time", 0.14f, header = true)
+        TableCell("Weather", 0.32f, header = true)
+        TableCell("Temp.", 0.15f, header = true)
+        TableCell("Precip.", 0.22f, header = true)
+        TableCell("Wind", 0.17f, header = true)
     }
 }
 
 @Composable
 private fun WeatherRouteTableRow(
-    result: WeatherRouteResult,
     sample: RouteWeatherSample,
     index: Int,
     selected: Boolean,
     temperatureUnit: TemperatureUnit,
     windUnit: WindUnit,
-    distanceUnit: DistanceUnit,
     precipitationUnit: PrecipitationUnit,
     timeZone: ZoneId,
-    isDestination: Boolean,
     onSelected: (Int) -> Unit
 ) {
     val condition = routeWeatherConditionText(sample)
-    val location = sample.placeLabel
-        ?: if (index == result.samples.lastIndex) result.end.label else "Route checkpoint ${index + 1}"
-    val precipitation = sample.precipitationMm.precipitationText(precipitationUnit)
-    val details = "${sample.temperatureCelsius.temperatureValueText(temperatureUnit)} · $precipitation"
-    val routeDetails = "${sample.windSpeedKmh.windSpeedText(windUnit)} · " +
-        (sample.distanceMeters / 1_000.0).distanceText(distanceUnit)
 
     Row(
         modifier = Modifier
@@ -159,40 +148,23 @@ private fun WeatherRouteTableRow(
             .testTag("route_weather_table_row_$index")
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        TableCell(sample.arrivalTime.hourText(timeZone), 0.18f)
-        Row(modifier = Modifier.weight(0.48f)) {
+        TableCell(sample.arrivalTime.hourText(timeZone), 0.14f)
+        Row(modifier = Modifier.weight(0.32f)) {
             HluWeatherIcon(
                 condition = sample.condition ?: WeatherCondition.UNKNOWN,
                 isDay = sample.isDay,
                 modifier = Modifier.width(24.dp)
             )
-            Column(modifier = Modifier.padding(start = 8.dp)) {
-                Text(condition, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    details,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    routeDetails,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        if (isDestination) {
-            TableCell(
-                text = "Destination: $location",
-                weight = 0.34f,
-                modifier = Modifier.testTag("route_weather_table_destination")
+            Text(
+                condition,
+                modifier = Modifier.padding(start = 8.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
-        } else {
-            TableCell(location, 0.34f)
         }
+        TableCell(sample.temperatureCelsius.temperatureValueText(temperatureUnit), 0.15f)
+        TableCell(sample.precipitationMm.precipitationText(precipitationUnit), 0.22f)
+        TableCell(sample.windSpeedKmh.windSpeedText(windUnit), 0.17f)
     }
 }
 

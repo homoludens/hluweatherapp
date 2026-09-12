@@ -45,7 +45,7 @@ class WeatherRouteTableTest {
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
-    fun table_uses_compact_time_weather_location_columns_and_preserves_row_details() {
+    fun table_uses_compact_weather_measurement_columns_without_location_or_distance() {
         var selectedIndex: Int? = null
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -67,23 +67,19 @@ class WeatherRouteTableTest {
             .assertIsDisplayed()
             .assertTextContains("Time")
             .assertTextContains("Weather")
-            .assertTextContains("Location")
-        composeRule.onNodeWithText("Temperature").assertDoesNotExist()
-        composeRule.onNodeWithText("Precipitation").assertDoesNotExist()
-        composeRule.onNodeWithText("Wind").assertDoesNotExist()
+            .assertTextContains("Temp.")
+            .assertTextContains("Precip.")
+            .assertTextContains("Wind")
+        composeRule.onNodeWithText("Location").assertDoesNotExist()
         composeRule.onNodeWithText("Distance").assertDoesNotExist()
         composeRule.onNodeWithTag("route_weather_table_row_2")
             .assertIsDisplayed()
-            .assertTextContains("Destination", substring = true)
             .assertTextContains("Weather unavailable")
             .performClick()
         composeRule.onNodeWithTag("route_weather_table_row_0")
-            .assertTextContains("68°F · 0 in")
-            .assertTextContains("6.21 mph · 0 mi")
-        assertTrue(
-            composeRule.onNodeWithTag("route_weather_table_row_0")
-                .fetchSemanticsNode().boundsInRoot.height >= with(composeRule.density) { 72.dp.toPx() }
-        )
+            .assertTextContains("68°F")
+            .assertTextContains("0 in")
+            .assertTextContains("6.21 mph")
         assertEquals(2, selectedIndex)
         assertTrue(
             composeRule.onAllNodesWithTag("route_weather_table_vertical_scroll")
