@@ -7,25 +7,35 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -155,7 +166,16 @@ private fun WeatherRouteScreenContent(
             .testTag("weather_route_screen"),
         topBar = {
             TopAppBar(
-                title = { Text("Trip weather") },
+                title = {
+                    Column {
+                        Text("Trip weather", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Plan your journey. Know the weather ahead.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(
                         onClick = onBackClick,
@@ -167,76 +187,55 @@ private fun WeatherRouteScreenContent(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .testTag("weather_route_content"),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .testTag("weather_route_content"),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             item {
-                RouteEndpointPicker(
-                    state = state,
-                    savedLocations = savedLocations,
-                    slot = RouteEndpointSlot.START,
-                    onSearchQueryChanged = onSearchQueryChanged,
-                    onSearchResultSelected = onSearchResultSelected,
-                    onSavedLocationSelected = onSavedLocationSelected,
-                    onCurrentLocationSelected = onCurrentLocationSelected,
-                    onMapEndpointSelected = onMapEndpointSelected,
-                    darkTheme = darkTheme,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            item {
-                RouteEndpointPicker(
-                    state = state,
-                    savedLocations = savedLocations,
-                    slot = RouteEndpointSlot.END,
-                    onSearchQueryChanged = onSearchQueryChanged,
-                    onSearchResultSelected = onSearchResultSelected,
-                    onSavedLocationSelected = onSavedLocationSelected,
-                    onCurrentLocationSelected = onCurrentLocationSelected,
-                    onMapEndpointSelected = onMapEndpointSelected,
-                    darkTheme = darkTheme,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .testTag("route_calculate")
-                            .semantics { if (!canCalculate) disabled() }
-                    ) {
-                        Button(
-                            onClick = onCalculate,
-                            enabled = canCalculate,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("trip_show_weather")
-                        ) {
-                            if (state.isCalculating) {
-                                CircularProgressIndicator()
-                            } else {
-                                Text("Show trip weather")
-                            }
-                        }
-                    }
-                    state.routeError?.let { error ->
-                        RouteError(
-                            error = error,
-                            canRetry = state.start != null && state.end != null && !state.isCalculating,
-                            onRetry = onRetry
-                        )
-                    }
+                TripLocationsCard {
+                    RouteEndpointPicker(
+                        state = state,
+                        savedLocations = savedLocations,
+                        slot = RouteEndpointSlot.START,
+                        onSearchQueryChanged = onSearchQueryChanged,
+                        onSearchResultSelected = onSearchResultSelected,
+                        onSavedLocationSelected = onSavedLocationSelected,
+                        onCurrentLocationSelected = onCurrentLocationSelected,
+                        onMapEndpointSelected = onMapEndpointSelected,
+                        darkTheme = darkTheme,
+                        showCard = false,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    RouteEndpointPicker(
+                        state = state,
+                        savedLocations = savedLocations,
+                        slot = RouteEndpointSlot.END,
+                        onSearchQueryChanged = onSearchQueryChanged,
+                        onSearchResultSelected = onSearchResultSelected,
+                        onSavedLocationSelected = onSavedLocationSelected,
+                        onCurrentLocationSelected = onCurrentLocationSelected,
+                        onMapEndpointSelected = onMapEndpointSelected,
+                        darkTheme = darkTheme,
+                        showCard = false,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
+            }
+            item {
+                SpeedControl(
+                    speed = speed,
+                    onSpeedChanged = { onSpeedChanged(it.roundToInt().toString()) }
+                )
             }
             item {
                 StartTimeControl(
@@ -244,12 +243,6 @@ private fun WeatherRouteScreenContent(
                     selectedDeparture = selectedDeparture,
                     timeZone = timeZone,
                     onOffsetChanged = onDepartureOffsetChanged
-                )
-            }
-            item {
-                SpeedControl(
-                    speed = speed,
-                    onSpeedChanged = { onSpeedChanged(it.roundToInt().toString()) }
                 )
             }
 
@@ -260,13 +253,18 @@ private fun WeatherRouteScreenContent(
                         text = "Result outdated. Calculate again to use the updated inputs.",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier
-                            .padding(horizontal = 16.dp)
                             .testTag("route_result_outdated")
                     )
                 }
             } else if (result != null) {
                 item {
-                    mapContent(result, state.selectedSampleIndex, darkTheme) { onSampleSelected(it) }
+                    Card(
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        mapContent(result, state.selectedSampleIndex, darkTheme) { onSampleSelected(it) }
+                    }
                 }
                 item {
                     WeatherRouteTable(
@@ -288,6 +286,47 @@ private fun WeatherRouteScreenContent(
                         error = state.weatherError,
                         isRetrying = state.isRetryingWeather,
                         onRetry = onRetryWeather
+                    )
+                }
+            }
+            }
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("route_calculate")
+                        .semantics { if (!canCalculate) disabled() }
+                ) {
+                    Button(
+                        onClick = onCalculate,
+                        enabled = canCalculate,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .testTag("trip_show_weather"),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        if (state.isCalculating) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text("Show trip weather", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        }
+                    }
+                }
+                state.routeError?.let { error ->
+                    RouteError(
+                        error = error,
+                        canRetry = state.start != null && state.end != null && !state.isCalculating,
+                        onRetry = onRetry
                     )
                 }
             }
@@ -379,7 +418,12 @@ private fun PreviewRouteMap(
                             .size(if (marker.isSelected) 44.dp else 36.dp)
                             .testTag("preview_route_icon_${marker.sampleIndex}"),
                         shape = CircleShape,
-                        color = marker.color,
+                        color = if (marker.isSelected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        shadowElevation = 2.dp,
                         onClick = { onSampleSelected(marker.sampleIndex) }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -481,6 +525,20 @@ private val previewWeatherRouteState = WeatherRouteUiState(
 )
 
 @Composable
+private fun TripLocationsCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            content()
+        }
+    }
+}
+
+@Composable
 private fun StartTimeControl(
     offsetHours: Int,
     selectedDeparture: kotlin.time.Instant,
@@ -491,32 +549,75 @@ private fun StartTimeControl(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .testTag("trip_start_time_control")
+        ,
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Start time", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "${localDeparture.date} at ${localDeparture.time}",
-                modifier = Modifier.testTag("trip_start_time_value")
-            )
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Start time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = localDeparture.tripDateTimeText(),
+                        modifier = Modifier.testTag("trip_start_time_value"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(
+                        text = localDeparture.time.toString().take(5),
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${localDeparture.dayOfWeek.shortName()}, ${localDeparture.day} ${localDeparture.month.shortName()} ${localDeparture.year}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Slider(
                 value = offsetHours.toFloat(),
                 onValueChange = { onOffsetChanged(it.roundToInt()) },
                 valueRange = 0f..72f,
                 steps = 71,
+                colors = tripSliderColors(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("trip_start_time_slider")
             )
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf("Now" to 0, "+24h" to 24, "+48h" to 48, "+72h" to 72).forEach { (label, value) ->
                     Text(
                         text = label,
                         modifier = Modifier
-                            .weight(1f)
                             .testTag("trip_start_time_$value"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (offsetHours == value) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (offsetHours == value) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
@@ -529,31 +630,76 @@ private fun SpeedControl(speed: Float, onSpeedChanged: (Float) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .testTag("trip_speed_control")
+            .testTag("trip_speed_control"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Speed", style = MaterialTheme.typography.titleMedium)
-            Text("${speed.roundToInt()} km/h", modifier = Modifier.testTag("trip_speed_value"))
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.DirectionsCar,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("Speed", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${speed.roundToInt()} km/h",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                "${speed.roundToInt()} km/h",
+                modifier = Modifier.testTag("trip_speed_value"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Slider(
                 value = speed,
                 onValueChange = onSpeedChanged,
                 valueRange = 40f..130f,
                 steps = 89,
+                colors = tripSliderColors(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("trip_speed_slider")
             )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("40", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text("130", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
 
 @Composable
+private fun tripSliderColors() = SliderDefaults.colors(
+    thumbColor = MaterialTheme.colorScheme.primary,
+    activeTrackColor = MaterialTheme.colorScheme.primary,
+    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+)
+
+private fun kotlinx.datetime.LocalDateTime.tripDateTimeText(): String =
+    "${dayOfWeek.shortName()}, $day ${month.shortName()} $year · ${time.toString().take(5)}"
+
+private fun kotlinx.datetime.DayOfWeek.shortName(): String =
+    name.lowercase().replaceFirstChar(Char::uppercase).take(3)
+
+private fun kotlinx.datetime.Month.shortName(): String =
+    name.lowercase().replaceFirstChar(Char::uppercase).take(3)
+
+@Composable
 private fun RouteError(error: String, canRetry: Boolean, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("route_error"))
@@ -575,8 +721,7 @@ private fun InlineWeatherError(error: String?, isRetrying: Boolean, onRetry: () 
     if (error == null && !isRetrying) return
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         error?.let {
@@ -609,7 +754,6 @@ private fun RouteSummary(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .semantics(mergeDescendants = true) {}
             .testTag("route_summary")
     ) {

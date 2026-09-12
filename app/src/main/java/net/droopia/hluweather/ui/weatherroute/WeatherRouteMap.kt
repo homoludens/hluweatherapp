@@ -216,10 +216,10 @@ private fun WeatherRouteSampleMarker(
 ) {
     Surface(
         modifier = modifier
-            .size(if (marker.isSelected) 56.dp else 48.dp)
+            .size(if (marker.isSelected) 44.dp else 40.dp)
             .border(
-                width = if (marker.isSelected) 3.dp else 0.dp,
-                color = MaterialTheme.colorScheme.onSurface,
+                width = if (marker.isSelected) 2.dp else 0.dp,
+                color = MaterialTheme.colorScheme.primary,
                 shape = CircleShape
             )
             .clickable(
@@ -238,13 +238,18 @@ private fun WeatherRouteSampleMarker(
             }
             .testTag("route_weather_marker_${marker.sampleIndex}"),
         shape = CircleShape,
-        color = marker.color
+        color = if (marker.isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        shadowElevation = 2.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             HluWeatherIcon(
                 condition = marker.condition ?: WeatherCondition.UNKNOWN,
                 isDay = marker.isDay,
-                modifier = Modifier.size(28.dp).testTag("route_weather_icon_${marker.sampleIndex}")
+                modifier = Modifier.size(24.dp).testTag("route_weather_icon_${marker.sampleIndex}")
             )
         }
     }

@@ -2,11 +2,13 @@ package net.droopia.hluweather.ui.weatherroute
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertCountEquals
@@ -144,6 +146,18 @@ class RouteEndpointPickerTest {
     }
 
     @Test
+    fun endpoint_action_chips_stay_within_a_narrow_location_card() {
+        render(modifier = Modifier.width(252.dp))
+
+        val endpointBounds = composeRule.onNodeWithTag("route_start_endpoint")
+            .fetchSemanticsNode().boundsInRoot
+        val mapChipBounds = composeRule.onNodeWithTag("route_start_map_picker")
+            .fetchSemanticsNode().boundsInRoot
+
+        assertTrue(mapChipBounds.right <= endpointBounds.right)
+    }
+
+    @Test
     fun map_confirmation_returns_the_camera_idle_point_as_an_endpoint() {
         var selectedEndpoint: RouteEndpoint? = null
 
@@ -203,7 +217,8 @@ class RouteEndpointPickerTest {
         onSearchResultSelected: (PlaceSearchResult) -> Unit = {},
         onSavedLocationSelected: (RouteEndpointSlot, WeatherLocation) -> Unit = { _, _ -> },
         onCurrentLocationSelected: (RouteEndpointSlot) -> Unit = {},
-        onMapEndpointSelected: (RouteEndpointSlot, RouteEndpoint) -> Unit = { _, _ -> }
+        onMapEndpointSelected: (RouteEndpointSlot, RouteEndpoint) -> Unit = { _, _ -> },
+        modifier: Modifier = Modifier
     ) {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -220,6 +235,7 @@ class RouteEndpointPickerTest {
                     onSavedLocationSelected = onSavedLocationSelected,
                     onCurrentLocationSelected = onCurrentLocationSelected,
                     onMapEndpointSelected = onMapEndpointSelected,
+                    modifier = modifier,
                     mapContent = { _, _, onCameraIdle ->
                         LaunchedEffect(Unit) {
                             onCameraIdle(GeoPoint(46.05, 14.51))

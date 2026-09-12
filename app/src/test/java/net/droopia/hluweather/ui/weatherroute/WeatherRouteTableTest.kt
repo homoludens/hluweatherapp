@@ -1,16 +1,14 @@
 package net.droopia.hluweather.ui.weatherroute
 
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.hours
@@ -47,7 +45,7 @@ class WeatherRouteTableTest {
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
-    fun table_keeps_seven_columns_destination_and_unavailable_values_with_horizontal_only_scrolling() {
+    fun table_uses_compact_time_weather_location_columns_and_preserves_row_details() {
         var selectedIndex: Int? = null
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -70,22 +68,23 @@ class WeatherRouteTableTest {
             .assertTextContains("Time")
             .assertTextContains("Weather")
             .assertTextContains("Location")
-            .assertTextContains("Temperature")
-            .assertTextContains("Precipitation")
-            .assertTextContains("Wind")
-            .assertTextContains("Distance")
+        composeRule.onNodeWithText("Temperature").assertDoesNotExist()
+        composeRule.onNodeWithText("Precipitation").assertDoesNotExist()
+        composeRule.onNodeWithText("Wind").assertDoesNotExist()
+        composeRule.onNodeWithText("Distance").assertDoesNotExist()
         composeRule.onNodeWithTag("route_weather_table_row_2")
             .assertIsDisplayed()
             .assertTextContains("Destination", substring = true)
             .assertTextContains("Weather unavailable")
-            .assertTextContains("—")
             .performClick()
-        assertEquals(2, selectedIndex)
-        composeRule.onNodeWithTag("route_weather_table_scroll").performTouchInput { swipeLeft() }
+        composeRule.onNodeWithTag("route_weather_table_row_0")
+            .assertTextContains("68°F · 0 in")
+            .assertTextContains("6.21 mph · 0 mi")
         assertTrue(
-            composeRule.onNodeWithTag("route_weather_table_scroll")
-                .fetchSemanticsNode().config.contains(SemanticsActions.ScrollBy)
+            composeRule.onNodeWithTag("route_weather_table_row_0")
+                .fetchSemanticsNode().boundsInRoot.height >= with(composeRule.density) { 72.dp.toPx() }
         )
+        assertEquals(2, selectedIndex)
         assertTrue(
             composeRule.onAllNodesWithTag("route_weather_table_vertical_scroll")
                 .fetchSemanticsNodes().isEmpty()

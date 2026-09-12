@@ -3,22 +3,22 @@ package net.droopia.hluweather.ui.weatherroute
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import net.droopia.hluweather.data.distanceText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.RouteWeatherSample
@@ -41,10 +41,6 @@ import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
 import java.time.ZoneId
 
-private val tableColumnsWidth = 800.dp
-private val tableHorizontalPadding = 32.dp
-private val tableWidth = tableColumnsWidth + tableHorizontalPadding
-
 @Composable
 fun WeatherRouteTable(
     result: WeatherRouteResult,
@@ -65,14 +61,15 @@ fun WeatherRouteTable(
             .fillMaxWidth()
             .testTag("route_weather_table")
     ) {
-        Column(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .testTag("route_weather_table_scroll")
+                .testTag("route_weather_table_scroll"),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
-                modifier = Modifier.width(tableWidth)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 WeatherRouteTableHeader()
                 displayedSampleIndices.forEach { sampleIndex ->
@@ -113,19 +110,15 @@ fun WeatherRouteTable(
 private fun WeatherRouteTableHeader() {
     Row(
         modifier = Modifier
-            .width(tableWidth)
+            .fillMaxWidth()
             .background(LocalHluColors.current.tableHeader)
             .semantics(mergeDescendants = true) {}
             .testTag("route_weather_table_header")
             .padding(horizontal = 16.dp, vertical = 13.dp)
     ) {
-        TableCell("Time", 76.dp, header = true)
-        TableCell("Weather", 156.dp, header = true)
-        TableCell("Location", 172.dp, header = true)
-        TableCell("Temperature", 104.dp, header = true)
-        TableCell("Precipitation", 112.dp, header = true)
-        TableCell("Wind", 84.dp, header = true)
-        TableCell("Distance", 96.dp, header = true)
+        TableCell("Time", 0.18f, header = true)
+        TableCell("Weather", 0.48f, header = true)
+        TableCell("Location", 0.34f, header = true)
     }
 }
 
@@ -146,10 +139,14 @@ private fun WeatherRouteTableRow(
     val condition = routeWeatherConditionText(sample)
     val location = sample.placeLabel
         ?: if (index == result.samples.lastIndex) result.end.label else "Route checkpoint ${index + 1}"
+    val precipitation = sample.precipitationMm.precipitationText(precipitationUnit)
+    val details = "${sample.temperatureCelsius.temperatureValueText(temperatureUnit)} · $precipitation"
+    val routeDetails = "${sample.windSpeedKmh.windSpeedText(windUnit)} · " +
+        (sample.distanceMeters / 1_000.0).distanceText(distanceUnit)
 
     Row(
         modifier = Modifier
-            .width(tableWidth)
+            .fillMaxWidth()
             .background(
                 if (selected) MaterialTheme.colorScheme.primaryContainer else LocalHluColors.current.tableRow
             )
@@ -158,34 +155,44 @@ private fun WeatherRouteTableRow(
                 onClickLabel = "Show weather sample ${index + 1}",
                 onClick = { onSelected(index) }
             )
+            .semantics(mergeDescendants = true) {}
             .testTag("route_weather_table_row_$index")
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        TableCell(sample.arrivalTime.hourText(timeZone), 76.dp)
-        Row(modifier = Modifier.width(156.dp)) {
+        TableCell(sample.arrivalTime.hourText(timeZone), 0.18f)
+        Row(modifier = Modifier.weight(0.48f)) {
             HluWeatherIcon(
                 condition = sample.condition ?: WeatherCondition.UNKNOWN,
                 isDay = sample.isDay,
                 modifier = Modifier.width(24.dp)
             )
-            Text(condition, modifier = Modifier.padding(start = 8.dp))
+            Column(modifier = Modifier.padding(start = 8.dp)) {
+                Text(condition, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    routeDetails,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (isDestination) {
             TableCell(
                 text = "Destination: $location",
-                width = 172.dp,
+                weight = 0.34f,
                 modifier = Modifier.testTag("route_weather_table_destination")
             )
         } else {
-            TableCell(location, 172.dp)
+            TableCell(location, 0.34f)
         }
-        TableCell(sample.temperatureCelsius.temperatureValueText(temperatureUnit), 104.dp)
-        TableCell(sample.precipitationMm.precipitationText(precipitationUnit), 112.dp)
-        TableCell(sample.windSpeedKmh.windSpeedText(windUnit), 84.dp)
-        TableCell(
-            (sample.distanceMeters / 1_000.0).distanceText(distanceUnit),
-            96.dp
-        )
     }
 }
 
@@ -217,19 +224,21 @@ private fun WeatherRouteTableWarning(
 @Composable
 private fun RowScope.TableCell(
     text: String,
-    width: Dp,
+    weight: Float,
     header: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Text(
         text = text,
-        modifier = modifier.width(width),
+        modifier = modifier.weight(weight),
         color = if (header) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             MaterialTheme.colorScheme.onSurface
         },
-        style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+        style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
     )
 }
 

@@ -105,7 +105,7 @@ class WeatherRouteMapTest {
     }
 
     @Test
-    fun sample_markers_have_the_required_touch_target() {
+    fun sample_markers_use_the_compact_weather_marker_size() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherRouteMapMarkers(
@@ -116,7 +116,7 @@ class WeatherRouteMapTest {
             }
         }
 
-        composeRule.onNodeWithTag("route_weather_marker_0").assertWidthIsAtLeast(48.dp)
+        composeRule.onNodeWithTag("route_weather_marker_0").assertWidthIsAtLeast(40.dp)
     }
 
     @Test

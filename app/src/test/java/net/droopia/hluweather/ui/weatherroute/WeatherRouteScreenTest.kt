@@ -136,7 +136,7 @@ class WeatherRouteScreenTest {
     }
 
     @Test
-    fun single_page_has_ordered_controls_without_provider_or_legacy_time_controls() {
+    fun single_page_uses_trip_weather_hierarchy_without_provider_or_legacy_time_controls() {
         val viewModel = viewModel().also {
             it.selectSavedLocation(RouteEndpointSlot.START, start)
             it.selectSavedLocation(RouteEndpointSlot.END, end)
@@ -164,10 +164,13 @@ class WeatherRouteScreenTest {
         assertLayoutOrder(
             "route_start_search",
             "route_end_search",
-            "trip_show_weather",
-            "trip_start_time_slider",
-            "trip_speed_slider"
+            "trip_speed_slider",
+            "trip_start_time_slider"
         )
+        composeRule.onNodeWithText("Plan your journey. Know the weather ahead.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("trip_start_time_value")
+            .assertTextContains("Sat, 12 Sep 2026 · 09:15")
         composeRule.onNodeWithText("Search provider").assertDoesNotExist()
         composeRule.onNodeWithTag("route_departure_date").assertDoesNotExist()
         composeRule.onNodeWithTag("route_departure_time").assertDoesNotExist()
@@ -176,7 +179,7 @@ class WeatherRouteScreenTest {
 
         composeRule.onNodeWithTag("trip_show_weather").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(7)
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(6)
         assertLayoutOrder(
             "weather_route_map",
             "weather_route_table",
@@ -246,7 +249,7 @@ class WeatherRouteScreenTest {
         viewModel.onSpeedChanged("90")
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(3)
         composeRule.onNodeWithTag("route_result_outdated").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithTag("route_summary").fetchSemanticsNodes().isEmpty())
     }

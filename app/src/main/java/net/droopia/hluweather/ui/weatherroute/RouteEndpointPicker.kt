@@ -2,6 +2,8 @@ package net.droopia.hluweather.ui.weatherroute
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,10 +16,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +64,7 @@ fun RouteEndpointPicker(
     onCurrentLocationSelected: (RouteEndpointSlot) -> Unit,
     onMapEndpointSelected: (RouteEndpointSlot, RouteEndpoint) -> Unit,
     darkTheme: Boolean = false,
+    showCard: Boolean = true,
     modifier: Modifier = Modifier,
     mapContent: @Composable (GeoPoint, Boolean, (GeoPoint) -> Unit) -> Unit = { point,
         mapDarkTheme,
@@ -75,9 +87,8 @@ fun RouteEndpointPicker(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             EndpointCard(
                 slot = slot,
@@ -96,9 +107,9 @@ fun RouteEndpointPicker(
                         onCurrentLocationSelected(slot)
                     }
                 },
-                modifier = Modifier.padding(horizontal = 16.dp)
+                showCard = showCard,
+                modifier = if (showCard) Modifier.padding(horizontal = 16.dp) else Modifier
             )
-            Spacer(Modifier.height(8.dp))
         }
 
         savedSlot?.let { slot ->
@@ -129,6 +140,7 @@ fun RouteEndpointPicker(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun EndpointCard(
     slot: RouteEndpointSlot,
     endpoint: RouteEndpoint?,
@@ -138,49 +150,60 @@ private fun EndpointCard(
     onSavedLocationsClick: () -> Unit,
     onMapPickerClick: () -> Unit,
     onCurrentLocationClick: () -> Unit,
+    showCard: Boolean,
     modifier: Modifier = Modifier
 ) {
     val prefix = if (slot == RouteEndpointSlot.START) "route_start" else "route_end"
     val isActiveSearch = state.activeSearchSlot == slot
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    val content: @Composable () -> Unit = {
         Column(
-            modifier = Modifier
-                .padding(12.dp)
-                .testTag("${prefix}_endpoint"),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.testTag("${prefix}_endpoint"),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = if (slot == RouteEndpointSlot.START) "Start" else "Destination",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = endpoint?.label ?: "Not selected",
-                modifier = Modifier.testTag("${prefix}_label"),
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Saved locations",
-                    modifier = Modifier
-                        .testTag("${prefix}_saved_locations")
-                        .clickable(onClick = onSavedLocationsClick)
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
                 )
-                Text(
-                    text = "Pick on map",
-                    modifier = Modifier
-                        .testTag("${prefix}_map_picker")
-                        .clickable(onClick = onMapPickerClick)
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (slot == RouteEndpointSlot.START) "Start" else "Destination",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = endpoint?.label ?: "Not selected",
+                        modifier = Modifier.testTag("${prefix}_label"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = onSavedLocationsClick,
+                    label = { Text("Saved locations") },
+                    leadingIcon = { Icon(Icons.Outlined.BookmarkBorder, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.primary,
+                        leadingIconContentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.testTag("${prefix}_saved_locations")
+                )
+                AssistChip(
+                    onClick = onMapPickerClick,
+                    label = { Text("Pick on map") },
+                    leadingIcon = { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.primary,
+                        leadingIconContentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.testTag("${prefix}_map_picker")
                 )
             }
             OutlinedTextField(
@@ -205,16 +228,29 @@ private fun EndpointCard(
                 }
             }
             if (slot == RouteEndpointSlot.START) {
-                Text(
-                    text = "Use my location",
-                    modifier = Modifier
-                        .testTag("route_start_current_location")
-                        .clickable(onClick = onCurrentLocationClick)
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
+                AssistChip(
+                    onClick = onCurrentLocationClick,
+                    label = { Text("Use my location") },
+                    leadingIcon = { Icon(Icons.Outlined.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = MaterialTheme.colorScheme.primary,
+                        leadingIconContentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.testTag("route_start_current_location")
                 )
             }
         }
+    }
+    if (showCard) {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) { content() }
+        }
+    } else {
+        content()
     }
 }
 
