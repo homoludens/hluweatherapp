@@ -104,3 +104,66 @@ Output: no output.
 - Gradle emits the existing unsupported compile SDK warning because AGP 9.1.0 is tested through SDK 36.1 while this project compiles with SDK 37.
 - Kotlin emits one MapLibre composable-target warning at the `MaplibreMap` call; the existing `WeatherMap` uses the same MapLibre API pattern.
 - Tests cover the marker layer and timeline directly; full native MapLibre rendering and camera animation are not exercised by the Robolectric targeted suite.
+
+## Review Follow-up
+
+Addressed reviewer finding P2 by adding an actual `WeatherRouteMap` composition test
+using a minimal route result. The test uses Compose inspection mode because Robolectric
+cannot load MapLibre's native library; it verifies the public composable preserves its
+full-size map container contract without native rendering.
+
+Additional focused coverage now verifies the route `LineString` source payload,
+full-route bounds supplied to initial fitting, selected sample point supplied to
+centering, and the tile-error overlay composable. Existing `WeatherRouteMapMarkers`
+tests were retained unchanged in behavior.
+
+Exact follow-up command:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.ui.weatherroute.WeatherRouteMapTest --tests net.droopia.hluweather.ui.weatherroute.WeatherRouteTimelineTest
+```
+
+Exact follow-up output:
+
+```text
+> Task :app:testDebugUnitTest
+BUILD SUCCESSFUL in 18s
+28 actionable tasks: 4 executed, 24 up-to-date
+```
+
+The follow-up targeted suite completed 9 tests with 0 failures.
+
+Follow-up self-review:
+
+- `WeatherRouteMapTest` now renders `WeatherRouteMap` directly with a minimal result.
+- `routeLineGeoJson` is asserted as a longitude-first GeoJSON `LineString`, matching the source passed to `rememberGeoJsonSource(GeoJsonData.JsonString(...))`.
+- `routeMapBounds` and `routeMapSelectedPoint` are the exact helper inputs used by the map camera effects and are asserted against deterministic fixture values.
+- `WeatherRouteMapError(showError = true)` is rendered directly and asserts the existing tile-failure message and tag.
+- The original severity, unavailable marker, callback, and touch-target tests remain present.
+- `git diff --check` remains clean after the follow-up changes.
+
+Follow-up concerns:
+
+- Robolectric cannot exercise the normal MapLibre source/layer installation or native camera calls because MapLibre Compose fails with `UnsatisfiedLinkError`; inspection mode intentionally bypasses that unavailable native boundary.
+- Gradle still emits the existing SDK 37/AGP compatibility warning and the MapLibre composable-target warning.
+
+## Final Verification
+
+Exact command:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.ui.weatherroute.WeatherRouteMapTest --tests net.droopia.hluweather.ui.weatherroute.WeatherRouteTimelineTest
+```
+
+Exact output:
+
+```text
+> Task :app:testDebugUnitTest
+BUILD SUCCESSFUL in 18s
+28 actionable tasks: 4 executed, 24 up-to-date
+```
+
+Final self-review: 9 focused tests pass; the direct `WeatherRouteMap` test is
+deterministic in inspection mode, and source payload, camera inputs, and error
+overlay are covered by the exact helpers and branch used by the production
+composable. Native MapLibre rendering remains unavailable under Robolectric.

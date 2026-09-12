@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -79,6 +80,18 @@ fun weatherRouteMarkerColor(severity: WeatherSeverity): Color = when (severity) 
 fun routeLineGeoJson(polyline: List<GeoPoint>): String =
     LineString(polyline.map { Position(longitude = it.longitude, latitude = it.latitude) }).toJson()
 
+internal fun routeMapBounds(polyline: List<GeoPoint>): BoundingBox = BoundingBox(
+    west = polyline.minOf { it.longitude },
+    south = polyline.minOf { it.latitude },
+    east = polyline.maxOf { it.longitude },
+    north = polyline.maxOf { it.latitude }
+)
+
+internal fun routeMapSelectedPoint(
+    result: WeatherRouteResult,
+    selectedSampleIndex: Int?
+): GeoPoint? = result.samples.getOrNull(selectedSampleIndex ?: -1)?.point
+
 @Composable
 fun WeatherRouteMap(
     result: WeatherRouteResult,
@@ -87,6 +100,11 @@ fun WeatherRouteMap(
     modifier: Modifier = Modifier,
     onSampleSelected: (Int) -> Unit = {}
 ) {
+    if (LocalInspectionMode.current) {
+        Box(modifier = modifier.fillMaxSize().testTag("weather_route_map"))
+        return
+    }
+
     val initialPoint = result.route.polyline.firstOrNull() ?: result.start.point
     val mapState = rememberMapState(
         baseStyle = BaseStyle.Uri(
@@ -100,17 +118,17 @@ fun WeatherRouteMap(
     LaunchedEffect(mapState, result.route.polyline) {
         if (result.route.polyline.size >= 2) {
             mapState.fitCameraToBounds(
-                routeBounds(result.route.polyline),
+                routeMapBounds(result.route.polyline),
                 padding = androidx.compose.foundation.layout.PaddingValues(48.dp)
             )
         }
     }
 
     LaunchedEffect(selectedSampleIndex) {
-        result.samples.getOrNull(selectedSampleIndex ?: -1)?.let { sample ->
+        routeMapSelectedPoint(result, selectedSampleIndex)?.let { point ->
             mapState.animateCameraPosition(
                 CameraPosition(
-                    target = sample.point.toPosition(),
+                    target = point.toPosition(),
                     zoom = mapState.cameraPosition.zoom.coerceAtLeast(12.0)
                 )
             )
@@ -161,17 +179,10 @@ fun WeatherRouteMap(
             }
         }
 
-        if (mapState.style.loadState is StyleLoadState.Failed) {
-            Text(
-                text = "Map tiles unavailable",
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                    .padding(12.dp)
-                    .testTag("weather_route_map_error"),
-                color = MaterialTheme.colorScheme.error
-            )
-        }
+        WeatherRouteMapError(
+            showError = mapState.style.loadState is StyleLoadState.Failed,
+            modifier = Modifier.align(Alignment.Center)
+        )
     }
 }
 
@@ -240,11 +251,18 @@ private fun RouteEndpointMarker(
     }
 }
 
-private fun routeBounds(polyline: List<GeoPoint>): BoundingBox = BoundingBox(
-    west = polyline.minOf { it.longitude },
-    south = polyline.minOf { it.latitude },
-    east = polyline.maxOf { it.longitude },
-    north = polyline.maxOf { it.latitude }
-)
+@Composable
+internal fun WeatherRouteMapError(showError: Boolean, modifier: Modifier = Modifier) {
+    if (showError) {
+        Text(
+            text = "Map tiles unavailable",
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                .padding(12.dp)
+                .testTag("weather_route_map_error"),
+            color = MaterialTheme.colorScheme.error
+        )
+    }
+}
 
 private fun GeoPoint.toPosition() = Position(longitude = longitude, latitude = latitude)

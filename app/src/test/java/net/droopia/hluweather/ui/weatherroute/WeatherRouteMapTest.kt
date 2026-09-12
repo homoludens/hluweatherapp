@@ -1,10 +1,14 @@
 package net.droopia.hluweather.ui.weatherroute
 
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.DrivingRoute
@@ -23,6 +27,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.maplibre.spatialk.geojson.BoundingBox
 import kotlin.time.Instant
 import kotlin.time.Duration.Companion.hours
 
@@ -110,6 +115,46 @@ class WeatherRouteMapTest {
         }
 
         composeRule.onNodeWithTag("route_weather_marker_0").assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun actual_route_map_composes_with_a_minimal_route_result() {
+        composeRule.setContent {
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                HluWeatherTheme(darkTheme = false) {
+                    WeatherRouteMap(
+                        result = routeResult(conditions = listOf(WeatherCondition.CLEAR, WeatherCondition.RAIN)),
+                        selectedSampleIndex = 1,
+                        darkTheme = false
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("weather_route_map").assertIsDisplayed()
+    }
+
+    @Test
+    fun initial_fit_uses_the_full_route_bounds_and_selection_uses_the_sample_point() {
+        val result = routeResult(conditions = listOf(WeatherCondition.CLEAR, WeatherCondition.RAIN))
+
+        assertEquals(
+            BoundingBox(west = 21.0, south = 44.0, east = 22.0, north = 45.0),
+            routeMapBounds(result.route.polyline)
+        )
+        assertEquals(result.samples[1].point, routeMapSelectedPoint(result, 1))
+    }
+
+    @Test
+    fun tile_error_overlay_renders_without_native_map_rendering() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherRouteMapError(showError = true)
+            }
+        }
+
+        composeRule.onNodeWithTag("weather_route_map_error").assertIsDisplayed()
+        composeRule.onNodeWithText("Map tiles unavailable").assertIsDisplayed()
     }
 
     private fun routeResult(conditions: List<WeatherCondition?>): WeatherRouteResult {
