@@ -110,6 +110,7 @@ class WeatherRouteViewModel(
     }
 
     fun onSearchQueryChanged(slot: RouteEndpointSlot, query: String) {
+        invalidateCalculation()
         _state.update {
             it.copy(
                 activeSearchSlot = slot,
@@ -123,6 +124,7 @@ class WeatherRouteViewModel(
     }
 
     fun onSearchProviderChanged(provider: PlaceSearchProvider) {
+        invalidateCalculation()
         _state.update {
             it.copy(
                 searchProvider = provider,
@@ -169,6 +171,7 @@ class WeatherRouteViewModel(
     }
 
     fun onSpeedChanged(speedText: String) {
+        invalidateCalculation()
         _state.update {
             it.copy(
                 speedText = speedText,
@@ -180,6 +183,7 @@ class WeatherRouteViewModel(
     }
 
     fun onDepartureChanged(departure: Instant) {
+        invalidateCalculation()
         _state.update {
             it.copy(
                 departure = departure,
@@ -216,6 +220,7 @@ class WeatherRouteViewModel(
         _state.update {
             it.copy(
                 isCalculating = true,
+                isRetryingWeather = false,
                 isResultOutdated = it.result != null,
                 routeError = null,
                 weatherError = null,
@@ -269,6 +274,7 @@ class WeatherRouteViewModel(
         val generation = ++calculationGeneration
         _state.update {
             it.copy(
+                isCalculating = false,
                 isRetryingWeather = true,
                 weatherError = null,
                 routeError = null
@@ -330,6 +336,7 @@ class WeatherRouteViewModel(
     }
 
     private fun setEndpoint(slot: RouteEndpointSlot, endpoint: RouteEndpoint) {
+        invalidateCalculation()
         _state.update {
             when (slot) {
                 RouteEndpointSlot.START -> it.copy(
@@ -371,6 +378,17 @@ class WeatherRouteViewModel(
 
     private fun showRouteErrorIfCurrent(generation: Long, message: String) {
         if (generation == calculationGeneration) showRouteError(message)
+    }
+
+    private fun invalidateCalculation() {
+        calculationGeneration++
+        _state.update {
+            it.copy(
+                isCalculating = false,
+                isRetryingWeather = false,
+                isResultOutdated = it.result != null
+            )
+        }
     }
 
     private fun forecastEnd(): Instant = now() + FORECAST_DURATION

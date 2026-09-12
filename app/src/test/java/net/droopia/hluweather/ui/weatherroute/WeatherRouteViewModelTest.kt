@@ -1,19 +1,24 @@
 package net.droopia.hluweather.ui.weatherroute
 
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlin.time.Duration.Companion.hours
+import kotlinx.coroutines.cancel
 import net.droopia.hluweather.data.weatherroute.buildRouteSamples
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.DrivingRoute
@@ -170,6 +175,27 @@ class WeatherRouteViewModelTest {
     }
 
     @Test
+    fun initial_weather_failure_preserves_the_route_and_unenriched_samples() = runTest {
+        val routeData = route(distanceMeters = 80_000.0)
+        val weather = FakeRouteWeatherSource().also {
+            it.failure = IllegalStateException("weather down")
+        }
+        val viewModel = viewModel(route = FakeRoutingSource(routeData), weather = weather)
+        chooseEndpoints(viewModel)
+
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        assertEquals(routeData, viewModel.state.value.result?.route)
+        assertEquals("weather down", viewModel.state.value.weatherError)
+        assertEquals(
+            buildRouteSamples(routeData, now + 1.hours, 80),
+            viewModel.state.value.result?.samples
+        )
+        assertFalse(viewModel.state.value.isCalculating)
+    }
+
+    @Test
     fun retry_weather_reuses_existing_route_and_input_changes_mark_result_outdated() = runTest {
         val route = FakeRoutingSource(route(distanceMeters = 80_000.0))
         val weather = FakeRouteWeatherSource()
@@ -209,6 +235,110 @@ class WeatherRouteViewModelTest {
     }
 
     @Test
+    fun endpoint_speed_departure_and_search_changes_invalidate_route_work() = runTest {
+        val pendingRequests = List(5) { CompletableDeferred<DrivingRoute>() }
+        val route = SequencedRoutingSource(
+            listOf(CompletableDeferred<DrivingRoute>().also { it.complete(route()) }) + pendingRequests
+        )
+        val viewModel = viewModel(route = route)
+        chooseEndpoints(viewModel)
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        val changes = listOf<(WeatherRouteViewModel) -> Unit>(
+            { it.selectSavedLocation(RouteEndpointSlot.START, start.copy(name = "Changed start")) },
+            { it.onSpeedChanged("90") },
+            { it.onDepartureChanged(now + 2.hours) },
+            { it.onSearchProviderChanged(PlaceSearchProvider.OPEN_METEO) },
+            { it.onSearchQueryChanged(RouteEndpointSlot.END, "new query") }
+        )
+        changes.forEachIndexed { index, change ->
+            viewModel.calculate()
+            assertTrue(viewModel.state.value.isCalculating)
+
+            change(viewModel)
+
+            assertFalse(viewModel.state.value.isCalculating)
+            assertTrue(viewModel.state.value.isResultOutdated)
+            pendingRequests[index].complete(route(distanceMeters = 90_000.0 + index))
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.isResultOutdated)
+        }
+    }
+
+    @Test
+    fun stale_weather_completion_cannot_replace_result_or_clear_outdated_state() = runTest {
+        val weatherRequest = CompletableDeferred<List<RouteWeatherSample>>()
+        val weather = DeferredRouteWeatherSource(weatherRequest)
+        val viewModel = viewModel(route = FakeRoutingSource(route()), weather = weather)
+        chooseEndpoints(viewModel)
+
+        viewModel.calculate()
+        advanceUntilIdle()
+        assertEquals(1, weather.requests)
+
+        viewModel.calculate()
+        viewModel.onDepartureChanged(now + 2.hours)
+        assertTrue(viewModel.state.value.isResultOutdated)
+        assertFalse(viewModel.state.value.isCalculating)
+        weatherRequest.complete(listOf(RouteWeatherSample(startPoint, 0.0, now)))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.isResultOutdated)
+        assertEquals(now + 1.hours, viewModel.state.value.result?.departure)
+        assertFalse(viewModel.state.value.isCalculating)
+    }
+
+    @Test
+    fun superseded_weather_retry_clears_retrying_flag_and_cannot_publish() = runTest {
+        val retryRequest = CompletableDeferred<List<RouteWeatherSample>>()
+        val weather = DeferredRouteWeatherSource(retryRequest)
+        val viewModel = viewModel(route = FakeRoutingSource(route()), weather = weather)
+        chooseEndpoints(viewModel)
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        viewModel.retryWeather()
+        assertTrue(viewModel.state.value.isRetryingWeather)
+        viewModel.onSpeedChanged("90")
+        assertFalse(viewModel.state.value.isRetryingWeather)
+        assertTrue(viewModel.state.value.isResultOutdated)
+
+        retryRequest.complete(listOf(RouteWeatherSample(endPoint, 80_000.0, now)))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isRetryingWeather)
+        assertTrue(viewModel.state.value.isResultOutdated)
+        assertEquals(80, viewModel.state.value.result?.averageSpeedKmh)
+    }
+
+    @Test
+    fun retrying_weather_replaces_calculation_and_clears_calculating_flag() = runTest {
+        val routeRequest = CompletableDeferred<DrivingRoute>()
+        val routing = SequencedRoutingSource(
+            listOf(CompletableDeferred<DrivingRoute>().also { it.complete(route()) }, routeRequest)
+        )
+        val retryRequest = CompletableDeferred<List<RouteWeatherSample>>()
+        val weather = DeferredRouteWeatherSource(retryRequest)
+        val viewModel = viewModel(route = routing, weather = weather)
+        chooseEndpoints(viewModel)
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        viewModel.calculate()
+        assertTrue(viewModel.state.value.isCalculating)
+        viewModel.retryWeather()
+        assertFalse(viewModel.state.value.isCalculating)
+        assertTrue(viewModel.state.value.isRetryingWeather)
+        routeRequest.complete(route(distanceMeters = 90_000.0))
+        retryRequest.complete(listOf(RouteWeatherSample(endPoint, 80_000.0, now)))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isCalculating)
+        assertFalse(viewModel.state.value.isRetryingWeather)
+    }
+
+    @Test
     fun current_location_is_requested_only_when_chosen_and_status_is_concise() = runTest {
         val gps = FakeDeviceLocationSource(GpsResult.PermissionRequired)
         val viewModel = viewModel(deviceLocation = gps)
@@ -223,14 +353,37 @@ class WeatherRouteViewModelTest {
     }
 
     @Test
-    fun cancellation_is_rethrown() = runTest {
-        val cancellation = kotlinx.coroutines.CancellationException("cancelled")
-        val viewModel = viewModel(route = FakeRoutingSource(failure = cancellation))
+    fun cancellation_is_propagated_to_the_route_source() = runTest {
+        val cancellationObserved = CompletableDeferred<CancellationException>()
+        val viewModel = viewModel(route = BlockingRoutingSource(cancellationObserved))
         chooseEndpoints(viewModel)
 
         viewModel.calculate()
+        runCurrent()
+        viewModel.viewModelScope.cancel()
         advanceUntilIdle()
+
+        assertTrue(cancellationObserved.isCompleted)
         assertFalse(viewModel.state.value.isCalculating)
+        assertNull(viewModel.state.value.routeError)
+    }
+
+    @Test
+    fun flat_map_latest_cancels_the_previous_search() = runTest {
+        val search = CancellingPlaceSearchSource(trieste)
+        val viewModel = viewModel(search = search)
+
+        viewModel.onSearchQueryChanged(RouteEndpointSlot.START, "first")
+        advanceTimeBy(300)
+        runCurrent()
+        assertTrue(search.firstStarted)
+
+        viewModel.onSearchQueryChanged(RouteEndpointSlot.START, "second")
+        advanceTimeBy(300)
+        advanceUntilIdle()
+
+        assertTrue(search.firstCancelled)
+        assertEquals(listOf(trieste), viewModel.state.value.searchResults)
     }
 
     @Test
@@ -298,6 +451,22 @@ private class FakeRoutingSource(
     }
 }
 
+private class BlockingRoutingSource(
+    private val cancellationObserved: CompletableDeferred<CancellationException>
+) : RoutingSource {
+    override val providerName = "OSRM"
+
+    override suspend fun route(start: GeoPoint, end: GeoPoint): DrivingRoute {
+        try {
+            awaitCancellation()
+            error("Route should have been cancelled")
+        } catch (error: CancellationException) {
+            cancellationObserved.complete(error)
+            throw error
+        }
+    }
+}
+
 private class SequencedRoutingSource(
     private val requests: List<CompletableDeferred<DrivingRoute>>
 ) : RoutingSource {
@@ -318,6 +487,38 @@ private class FakeRouteWeatherSource : RouteWeatherSource {
         requests++
         failure?.let { throw it }
         return result ?: samples.map { it.copy(condition = WeatherCondition.CLEAR) }
+    }
+}
+
+private class DeferredRouteWeatherSource(
+    private val retryResult: CompletableDeferred<List<RouteWeatherSample>>
+) : RouteWeatherSource {
+    var requests = 0
+        private set
+
+    override suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample> {
+        requests++
+        return if (requests == 1) samples else retryResult.await()
+    }
+}
+
+private class CancellingPlaceSearchSource(
+    private val secondResult: PlaceSearchResult
+) : PlaceSearchSource {
+    var firstStarted = false
+    var firstCancelled = false
+    override val provider = PlaceSearchProvider.PHOTON
+
+    override suspend fun search(query: String): List<PlaceSearchResult> = when (query) {
+        "first" -> try {
+            firstStarted = true
+            awaitCancellation()
+            emptyList()
+        } catch (error: CancellationException) {
+            firstCancelled = true
+            throw error
+        }
+        else -> listOf(secondResult)
     }
 }
 

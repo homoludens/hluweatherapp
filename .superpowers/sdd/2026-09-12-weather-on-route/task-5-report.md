@@ -118,3 +118,65 @@ Exact result: no output.
 - Gradle emits the project-wide warning that Android Gradle Plugin 9.1.0 is
   tested through compile SDK 36.1 while this project uses compile SDK 37.
 - Navigation wiring and the route-planner UI remain outside Task 5.
+
+## Review Fix Follow-Up
+
+The reviewer findings were reproduced with failing tests, then fixed without
+changing the Task 2-4 source interfaces. Planner input mutations now advance
+the calculation generation and immediately clear stale calculation/retry
+loading flags. New calculation and retry jobs clear the opposite operation's
+flag, while stale completions remain unable to mutate newer state.
+
+Additional coverage verifies:
+
+- Endpoint, speed, departure, provider, and search-query changes invalidate
+  in-flight route work.
+- Stale weather completion cannot replace a newer result or clear
+  `isResultOutdated`.
+- Superseded weather retries clear `isRetryingWeather` and cannot publish.
+- Retry during calculation clears `isCalculating` for the replaced work.
+- Initial weather failure preserves the route and un-enriched samples.
+- A real scope cancellation reaches the route source and is not converted to
+  a route error.
+- `flatMapLatest` cancels an in-flight previous search when the query changes.
+
+Exact targeted verification command:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.ui.weatherroute.WeatherRouteViewModelTest
+```
+
+Exact output:
+
+```text
+BUILD SUCCESSFUL in 5s
+```
+
+Generated report result:
+
+```text
+16 tests
+0 failures
+0 skipped
+100% successful
+```
+
+## Follow-Up Self-Review
+
+- All endpoint, speed, departure, provider, and search-query mutations call
+  the same generation invalidation path.
+- Invalidated work clears `isCalculating` and `isRetryingWeather` immediately;
+  stale `finally` blocks cannot clear flags belonging to newer work.
+- New calculate/retry operations explicitly reset the opposite loading flag.
+- Success and failure publication remains generation-gated, including weather
+  enrichment and retry results.
+- Cancellation exceptions are still rethrown at route, weather, search, and
+  current-location boundaries.
+- Existing route, search, weather, location, and model interfaces are
+  unchanged.
+- `git diff --check` produced no output before staging the fix.
+
+## Follow-Up Concerns
+
+- The project still emits the existing `kotlinx.datetime.Instant` deprecation
+  warnings and the compile-SDK 37 Android Gradle Plugin compatibility warning.
