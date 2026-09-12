@@ -94,6 +94,28 @@ class PhotonApiTest {
         missingArrayClient.close()
     }
 
+    @Test
+    fun search_decodes_nullable_coordinates_without_rejecting_the_response() = runTest {
+        val client = mockClient {
+            respond(
+                content = """
+                    {"features":[
+                      {"geometry":{"coordinates":[null,45.0]},"properties":{"name":"Malformed"}},
+                      {"geometry":{"coordinates":[13.7768,45.6495]},"properties":{"name":"Trieste"}}
+                    ]}
+                """.trimIndent(),
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+
+        val features = KtorPhotonApi(client, "https://photon.test").search("trieste").features
+
+        assertEquals(2, features.size)
+        assertEquals(null, features.first().geometry.coordinates.first())
+        assertEquals("Trieste", features.last().properties.name)
+        client.close()
+    }
+
     private fun mockClient(
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
     ): HttpClient = HttpClient(MockEngine) {

@@ -55,6 +55,10 @@ class PlaceSearchSourceTest {
                     feature(
                         coordinates = listOf(181.0, 45.0),
                         name = "Out of range"
+                    ),
+                    feature(
+                        coordinates = listOf(null, 45.0),
+                        name = "Malformed coordinate"
                     )
                 )
             )
@@ -112,6 +116,12 @@ class PlaceSearchSourceTest {
                         latitude = 91.0,
                         longitude = 13.0,
                         country = "Italy"
+                    ),
+                    OpenMeteoGeocodingResult(
+                        name = "Malformed coordinate",
+                        latitude = null,
+                        longitude = 13.0,
+                        country = "Italy"
                     )
                 )
             )
@@ -139,7 +149,7 @@ class PlaceSearchSourceTest {
     }
 
     private fun feature(
-        coordinates: List<Double>,
+        coordinates: List<Double?>,
         name: String? = null,
         city: String? = null,
         state: String? = null,

@@ -217,38 +217,50 @@ fun WeatherRouteScreen(
                 }
             }
 
-            state.result?.let { result ->
-                RouteSummary(result, distanceUnit)
-                if (state.weatherError != null) {
-                    Text(
-                        text = state.weatherError.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Button(
-                        onClick = viewModel::retryWeather,
-                        enabled = !state.isRetryingWeather,
+            if (state.isResultOutdated && state.result != null) {
+                Text(
+                    text = "Result outdated. Calculate again to use the updated inputs.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .testTag("route_result_outdated")
+                )
+            } else {
+                state.result?.let { result ->
+                    RouteSummary(result, distanceUnit)
+                    if (state.weatherError != null) {
+                        Text(
+                            text = state.weatherError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .testTag("route_weather_error")
+                        )
+                        Button(
+                            onClick = viewModel::retryWeather,
+                            enabled = !state.isRetryingWeather,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .testTag("route_weather_retry")
+                        ) {
+                            Text("Retry weather")
+                        }
+                    }
+                    mapContent(result, state.selectedSampleIndex, darkTheme, viewModel::selectSample)
+                    WeatherRouteTimeline(
+                        result = result,
+                        selectedSampleIndex = state.selectedSampleIndex,
+                        temperatureUnit = temperatureUnit,
+                        windUnit = windUnit,
+                        distanceUnit = distanceUnit,
+                        onSampleSelected = viewModel::selectSample,
+                        timeZone = ZoneId.systemDefault(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .testTag("route_weather_retry")
-                    ) {
-                        Text("Retry weather")
-                    }
+                            .height(420.dp)
+                    )
                 }
-                mapContent(result, state.selectedSampleIndex, darkTheme, viewModel::selectSample)
-                WeatherRouteTimeline(
-                    result = result,
-                    selectedSampleIndex = state.selectedSampleIndex,
-                    temperatureUnit = temperatureUnit,
-                    windUnit = windUnit,
-                    distanceUnit = distanceUnit,
-                    onSampleSelected = viewModel::selectSample,
-                    timeZone = ZoneId.systemDefault(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(420.dp)
-                )
             }
 
             if (state.isRetryingWeather) {

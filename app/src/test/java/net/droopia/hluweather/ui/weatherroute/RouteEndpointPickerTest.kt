@@ -130,6 +130,10 @@ class RouteEndpointPickerTest {
         composeRule.onNodeWithTag("route_end_map_picker").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("route_map_picker_map").assertIsDisplayed()
+        assertTrue(
+            composeRule.onNodeWithTag("route_map_picker_overlay")
+                .fetchSemanticsNode().boundsInRoot.height > 440f
+        )
         composeRule.onNodeWithTag("route_map_picker_confirm").performClick()
         composeRule.waitForIdle()
 
@@ -150,6 +154,7 @@ class RouteEndpointPickerTest {
 
         val scrim = composeRule.onNodeWithTag("route_saved_locations_scrim")
         val scrimBounds = scrim.fetchSemanticsNode().boundsInRoot
+        assertTrue(scrimBounds.height > 440f)
         val currentLocationBounds = composeRule
             .onNodeWithTag("route_start_current_location")
             .fetchSemanticsNode().boundsInRoot

@@ -42,10 +42,11 @@ class OpenMeteoGeocodingApiTest {
         assertEquals("8", request.url.parameters["count"])
         assertEquals("en", request.url.parameters["language"])
         assertEquals("json", request.url.parameters["format"])
+        assertEquals("HluWeather/3.2 route planner", request.headers[HttpHeaders.UserAgent])
         assertEquals(1, response.results.size)
         assertEquals("Trieste", response.results.single().name)
-        assertEquals(45.6495, response.results.single().latitude, 0.0)
-        assertEquals(13.7768, response.results.single().longitude, 0.0)
+        assertEquals(45.6495, response.results.single().latitude)
+        assertEquals(13.7768, response.results.single().longitude)
 
         client.close()
     }
@@ -96,6 +97,29 @@ class OpenMeteoGeocodingApiTest {
         )
 
         missingArrayClient.close()
+    }
+
+    @Test
+    fun search_decodes_nullable_coordinates_without_rejecting_the_response() = runTest {
+        val client = mockClient {
+            respond(
+                content = """
+                    {"results":[
+                      {"name":"Malformed","latitude":null,"longitude":13.0},
+                      {"name":"Trieste","latitude":45.6495,"longitude":13.7768}
+                    ]}
+                """.trimIndent(),
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+
+        val results = KtorOpenMeteoGeocodingApi(client, "https://geocoding.test")
+            .search("trieste").results
+
+        assertEquals(2, results.size)
+        assertEquals(null, results.first().latitude)
+        assertEquals("Trieste", results.last().name)
+        client.close()
     }
 
     private fun mockClient(

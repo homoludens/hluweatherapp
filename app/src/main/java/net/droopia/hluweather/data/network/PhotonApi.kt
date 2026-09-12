@@ -28,7 +28,7 @@ data class PhotonFeature(
 
 @Serializable
 data class PhotonGeometry(
-    val coordinates: List<Double> = emptyList()
+    val coordinates: List<Double?> = emptyList()
 )
 
 @Serializable

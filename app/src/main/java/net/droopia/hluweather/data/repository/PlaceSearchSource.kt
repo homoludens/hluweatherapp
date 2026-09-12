@@ -31,8 +31,8 @@ class PhotonPlaceSearchSource(
                 return@mapNotNull null
             }
 
-            val longitude = coordinates[0]
-            val latitude = coordinates[1]
+            val longitude = coordinates[0] ?: return@mapNotNull null
+            val latitude = coordinates[1] ?: return@mapNotNull null
             if (!latitude.isFinite() || !longitude.isFinite() ||
                 latitude !in -90.0..90.0 || longitude !in -180.0..180.0
             ) {
@@ -63,8 +63,8 @@ class OpenMeteoPlaceSearchSource(
         }
 
         return api.search(normalizedQuery).results.mapNotNull { result ->
-            val latitude = result.latitude
-            val longitude = result.longitude
+            val latitude = result.latitude ?: return@mapNotNull null
+            val longitude = result.longitude ?: return@mapNotNull null
             if (!latitude.isFinite() || !longitude.isFinite() ||
                 latitude !in -90.0..90.0 || longitude !in -180.0..180.0
             ) {

@@ -29,12 +29,14 @@ import net.droopia.hluweather.data.model.RouteWeatherSample
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherRouteResult
+import net.droopia.hluweather.data.network.OpenMeteoApiException
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchResult
 import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.RouteWeatherSource
 import net.droopia.hluweather.data.repository.RoutingSource
+import net.droopia.hluweather.data.repository.RoutingException
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -149,8 +151,19 @@ class WeatherRouteViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.result)
-        assertEquals("routing down", viewModel.state.value.routeError)
+        assertEquals("Routing failed", viewModel.state.value.routeError)
         assertFalse(viewModel.state.value.isCalculating)
+    }
+
+    @Test
+    fun known_routing_failure_is_mapped_to_a_stable_message() = runTest {
+        val viewModel = viewModel(route = FakeRoutingSource(failure = RoutingException("provider details")))
+        chooseEndpoints(viewModel)
+
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        assertEquals("No driving route found", viewModel.state.value.routeError)
     }
 
     @Test
@@ -170,7 +183,7 @@ class WeatherRouteViewModelTest {
         viewModel.retryWeather()
         advanceUntilIdle()
         assertEquals(routeData, viewModel.state.value.result?.route)
-        assertEquals("weather down", viewModel.state.value.weatherError)
+        assertEquals("Weather unavailable", viewModel.state.value.weatherError)
         assertFalse(viewModel.state.value.isRetryingWeather)
     }
 
@@ -187,7 +200,7 @@ class WeatherRouteViewModelTest {
         advanceUntilIdle()
 
         assertEquals(routeData, viewModel.state.value.result?.route)
-        assertEquals("weather down", viewModel.state.value.weatherError)
+        assertEquals("Weather unavailable", viewModel.state.value.weatherError)
         assertEquals(
             buildRouteSamples(routeData, now + 1.hours, 80),
             viewModel.state.value.result?.samples
@@ -264,6 +277,63 @@ class WeatherRouteViewModelTest {
             advanceUntilIdle()
             assertTrue(viewModel.state.value.isResultOutdated)
         }
+    }
+
+    @Test
+    fun input_change_cancels_in_flight_route_request() = runTest {
+        val cancellationObserved = CompletableDeferred<CancellationException>()
+        val viewModel = viewModel(route = CancellingRoutingSource(cancellationObserved))
+        chooseEndpoints(viewModel)
+
+        viewModel.calculate()
+        runCurrent()
+        viewModel.onSpeedChanged("90")
+        advanceUntilIdle()
+
+        assertTrue(cancellationObserved.isCompleted)
+    }
+
+    @Test
+    fun input_change_cancels_in_flight_weather_retry() = runTest {
+        val weather = CancellingWeatherSource()
+        val viewModel = viewModel(route = FakeRoutingSource(route()), weather = weather)
+        chooseEndpoints(viewModel)
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        viewModel.retryWeather()
+        runCurrent()
+        viewModel.onSpeedChanged("90")
+        advanceUntilIdle()
+
+        assertTrue(weather.retryCancellationObserved)
+    }
+
+    @Test
+    fun search_failure_uses_a_stable_message() = runTest {
+        val viewModel = viewModel(
+            search = FakePlaceSearchSource(failure = IllegalStateException("provider details"))
+        )
+
+        viewModel.onSearchQueryChanged(RouteEndpointSlot.START, "trieste")
+        advanceTimeBy(300)
+        advanceUntilIdle()
+
+        assertEquals("Place search failed", viewModel.state.value.routeError)
+    }
+
+    @Test
+    fun known_weather_failure_is_mapped_to_a_stable_message() = runTest {
+        val weather = FakeRouteWeatherSource().also {
+            it.failure = OpenMeteoApiException("HTTP 503 response body")
+        }
+        val viewModel = viewModel(route = FakeRoutingSource(route()), weather = weather)
+        chooseEndpoints(viewModel)
+
+        viewModel.calculate()
+        advanceUntilIdle()
+
+        assertEquals("Weather service unavailable", viewModel.state.value.weatherError)
     }
 
     @Test
@@ -429,11 +499,15 @@ class WeatherRouteViewModelTest {
 }
 
 private class FakePlaceSearchSource(
-    private val results: List<PlaceSearchResult> = emptyList()
+    private val results: List<PlaceSearchResult> = emptyList(),
+    private val failure: Throwable? = null
 ) : PlaceSearchSource {
     override val provider = PlaceSearchProvider.PHOTON
 
-    override suspend fun search(query: String): List<PlaceSearchResult> = results
+    override suspend fun search(query: String): List<PlaceSearchResult> {
+        failure?.let { throw it }
+        return results
+    }
 }
 
 private class FakeRoutingSource(
@@ -452,6 +526,22 @@ private class FakeRoutingSource(
 }
 
 private class BlockingRoutingSource(
+    private val cancellationObserved: CompletableDeferred<CancellationException>
+) : RoutingSource {
+    override val providerName = "OSRM"
+
+    override suspend fun route(start: GeoPoint, end: GeoPoint): DrivingRoute {
+        try {
+            awaitCancellation()
+            error("Route should have been cancelled")
+        } catch (error: CancellationException) {
+            cancellationObserved.complete(error)
+            throw error
+        }
+    }
+}
+
+private class CancellingRoutingSource(
     private val cancellationObserved: CompletableDeferred<CancellationException>
 ) : RoutingSource {
     override val providerName = "OSRM"
@@ -499,6 +589,24 @@ private class DeferredRouteWeatherSource(
     override suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample> {
         requests++
         return if (requests == 1) samples else retryResult.await()
+    }
+}
+
+private class CancellingWeatherSource : RouteWeatherSource {
+    var retryCancellationObserved = false
+        private set
+    private var requests = 0
+
+    override suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample> {
+        requests++
+        if (requests == 1) return samples
+        try {
+            awaitCancellation()
+            error("Weather retry should have been cancelled")
+        } catch (error: CancellationException) {
+            retryCancellationObserved = true
+            throw error
+        }
     }
 }
 

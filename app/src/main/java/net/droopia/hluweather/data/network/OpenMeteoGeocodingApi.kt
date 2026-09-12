@@ -3,7 +3,9 @@ package net.droopia.hluweather.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.http.HttpHeaders
 import java.io.IOException
 import kotlinx.serialization.Serializable
 
@@ -21,15 +23,16 @@ data class OpenMeteoGeocodingResponse(
 @Serializable
 data class OpenMeteoGeocodingResult(
     val name: String? = null,
-    val latitude: Double = Double.NaN,
-    val longitude: Double = Double.NaN,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val country: String? = null,
     val admin1: String? = null
 )
 
 class KtorOpenMeteoGeocodingApi(
     private val client: HttpClient,
-    baseUrl: String = "https://geocoding-api.open-meteo.com"
+    baseUrl: String = "https://geocoding-api.open-meteo.com",
+    private val userAgent: String = USER_AGENT
 ) : OpenMeteoGeocodingApi {
 
     private val baseUrl = baseUrl.trimEnd('/')
@@ -40,6 +43,7 @@ class KtorOpenMeteoGeocodingApi(
             parameter("count", 8)
             parameter("language", "en")
             parameter("format", "json")
+            header(HttpHeaders.UserAgent, userAgent)
         }
 
         if (response.status.value !in 200..299) {
@@ -49,5 +53,9 @@ class KtorOpenMeteoGeocodingApi(
         }
 
         return response.body()
+    }
+
+    private companion object {
+        const val USER_AGENT = "HluWeather/3.2 route planner"
     }
 }

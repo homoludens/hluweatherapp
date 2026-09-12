@@ -3,9 +3,11 @@ package net.droopia.hluweather.ui.weatherroute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -30,11 +32,16 @@ import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.RouteEndpoint
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherRouteResult
+import net.droopia.hluweather.data.network.OpenMeteoApiException
+import net.droopia.hluweather.data.network.OpenMeteoGeocodingApiException
+import net.droopia.hluweather.data.network.OsrmApiException
+import net.droopia.hluweather.data.network.PhotonApiException
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchResult
 import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.RouteWeatherSource
+import net.droopia.hluweather.data.repository.RoutingException
 import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.weatherroute.buildRouteSamples
 
@@ -76,6 +83,7 @@ class WeatherRouteViewModel(
 
     private val searchInput = MutableStateFlow(SearchInput())
     private var calculationGeneration = 0L
+    private var activeWorkJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -92,7 +100,7 @@ class WeatherRouteViewModel(
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (error: Throwable) {
-                                emit(SearchOutcome(emptyList(), error.message ?: "Search failed"))
+                                emit(SearchOutcome(emptyList(), searchErrorMessage(error)))
                             }
                         }
                     }
@@ -169,7 +177,7 @@ class WeatherRouteViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                showRouteError(error.message ?: "Current location unavailable")
+                showRouteError("Current location unavailable")
             }
         }
     }
@@ -216,6 +224,7 @@ class WeatherRouteViewModel(
             return
         }
 
+        cancelActiveWork()
         val generation = ++calculationGeneration
         val start = snapshot.start!!
         val end = snapshot.end!!
@@ -232,7 +241,7 @@ class WeatherRouteViewModel(
             )
         }
 
-        viewModelScope.launch {
+        activeWorkJob = viewModelScope.launch {
             try {
                 val route = routingSource.route(start.point, end.point)
                 if (generation != calculationGeneration) return@launch
@@ -261,13 +270,14 @@ class WeatherRouteViewModel(
                     _state.update {
                         it.copy(
                             result = null,
-                            routeError = error.message ?: "Routing failed"
+                            routeError = routeErrorMessage(error)
                         )
                     }
                 }
             } finally {
                 if (generation == calculationGeneration) {
                     _state.update { it.copy(isCalculating = false) }
+                    activeWorkJob = null
                 }
             }
         }
@@ -275,6 +285,7 @@ class WeatherRouteViewModel(
 
     fun retryWeather() {
         val current = _state.value.result ?: return
+        cancelActiveWork()
         val generation = ++calculationGeneration
         _state.update {
             it.copy(
@@ -284,7 +295,7 @@ class WeatherRouteViewModel(
                 routeError = null
             )
         }
-        viewModelScope.launch {
+        activeWorkJob = viewModelScope.launch {
             try {
                 val enriched = routeWeatherSource.enrich(current.samples)
                 if (generation == calculationGeneration) {
@@ -304,10 +315,12 @@ class WeatherRouteViewModel(
                     _state.update {
                         it.copy(
                             isRetryingWeather = false,
-                            weatherError = error.message ?: "Weather unavailable"
+                            weatherError = weatherErrorMessage(error)
                         )
                     }
                 }
+            } finally {
+                if (generation == calculationGeneration) activeWorkJob = null
             }
         }
     }
@@ -331,7 +344,7 @@ class WeatherRouteViewModel(
                 _state.update {
                     it.copy(
                         result = result,
-                        weatherError = error.message ?: "Weather unavailable",
+                        weatherError = weatherErrorMessage(error),
                         isResultOutdated = false
                     )
                 }
@@ -386,6 +399,7 @@ class WeatherRouteViewModel(
 
     private fun invalidateCalculation() {
         calculationGeneration++
+        cancelActiveWork()
         _state.update {
             it.copy(
                 isCalculating = false,
@@ -393,6 +407,28 @@ class WeatherRouteViewModel(
                 isResultOutdated = it.result != null
             )
         }
+    }
+
+    private fun cancelActiveWork() {
+        activeWorkJob?.cancel()
+        activeWorkJob = null
+    }
+
+    private fun searchErrorMessage(error: Throwable): String = when (error) {
+        is PhotonApiException, is OpenMeteoGeocodingApiException, is IOException ->
+            "Place search unavailable"
+        else -> "Place search failed"
+    }
+
+    private fun routeErrorMessage(error: Throwable): String = when (error) {
+        is RoutingException -> "No driving route found"
+        is OsrmApiException, is IOException -> "Routing service unavailable"
+        else -> "Routing failed"
+    }
+
+    private fun weatherErrorMessage(error: Throwable): String = when (error) {
+        is OpenMeteoApiException, is IOException -> "Weather service unavailable"
+        else -> "Weather unavailable"
     }
 
     private fun forecastEnd(): Instant = now() + FORECAST_DURATION

@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RouteEndpoint
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -271,44 +273,50 @@ private fun SavedLocationOverlay(
     onDismiss: () -> Unit,
     onLocationSelected: (WeatherLocation) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-            .testTag("route_saved_locations_scrim")
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {})
-            },
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            tonalElevation = 6.dp,
-            shape = MaterialTheme.shapes.extraLarge
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                .testTag("route_saved_locations_scrim")
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {})
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                tonalElevation = 6.dp,
+                shape = MaterialTheme.shapes.extraLarge
             ) {
-                Text("Saved locations", style = MaterialTheme.typography.titleLarge)
-                if (locations.isEmpty()) {
-                    Text("No saved locations", modifier = Modifier.padding(top = 16.dp))
-                } else {
-                    locations.forEach { location ->
-                        TextButton(
-                            onClick = { onLocationSelected(location) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("route_saved_location_${location.id}")
-                        ) {
-                            Text(location.name, modifier = Modifier.fillMaxWidth())
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Saved locations", style = MaterialTheme.typography.titleLarge)
+                    if (locations.isEmpty()) {
+                        Text("No saved locations", modifier = Modifier.padding(top = 16.dp))
+                    } else {
+                        locations.forEach { location ->
+                            TextButton(
+                                onClick = { onLocationSelected(location) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("route_saved_location_${location.id}")
+                            ) {
+                                Text(location.name, modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
-                }
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-                    Text("Cancel")
+                    TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                        Text("Cancel")
+                    }
                 }
             }
         }
@@ -324,36 +332,41 @@ private fun MapPickerOverlay(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                mapContent(point, darkTheme, onPointChanged)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(40.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                        .testTag("route_map_picker_center_marker"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("+", color = MaterialTheme.colorScheme.onPrimary)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize().testTag("route_map_picker_overlay")) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    mapContent(point, darkTheme, onPointChanged)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .testTag("route_map_picker_center_marker"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = MaterialTheme.colorScheme.onPrimary)
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Text(
-                    text = "Use this point",
+                Row(
                     modifier = Modifier
-                        .testTag("route_map_picker_confirm")
-                        .clickable(onClick = onConfirm)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Text(
+                        text = "Use this point",
+                        modifier = Modifier
+                            .testTag("route_map_picker_confirm")
+                            .clickable(onClick = onConfirm)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

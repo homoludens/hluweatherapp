@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -42,6 +43,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -100,7 +102,7 @@ class WeatherRouteScreenTest {
         composeRule.onNodeWithTag("route_calculate").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("routing down").assertIsDisplayed()
+        composeRule.onNodeWithText("Routing failed").assertIsDisplayed()
         composeRule.onNodeWithTag("route_retry").assertIsDisplayed()
     }
 
@@ -115,8 +117,26 @@ class WeatherRouteScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("route_summary").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("weather down").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("route_weather_error")
+            .performScrollTo()
+            .assertTextContains("Weather unavailable")
         composeRule.onNodeWithTag("route_weather_retry").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun outdated_result_is_not_rendered_as_current() {
+        val viewModel = viewModel().also {
+            chooseEndpoints(it)
+            it.calculate()
+        }
+        render(viewModel)
+        composeRule.waitForIdle()
+
+        viewModel.onSpeedChanged("90")
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("route_result_outdated").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithTag("route_summary").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
