@@ -65,14 +65,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.R
 import kotlinx.datetime.LocalTime
+import android.content.res.Configuration
+import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 @Composable
 fun SettingsScreen(
@@ -80,6 +84,7 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     onProviderChange: (WeatherProvider) -> Unit,
     onProviderInfoClick: (WeatherProvider) -> Unit,
+    onPlaceSearchProviderChange: (PlaceSearchProvider) -> Unit,
     onTrackMeChange: (Boolean) -> Unit,
     onLocationSelect: (WeatherLocation) -> Unit,
     onLocationMenuClick: (WeatherLocation) -> Unit,
@@ -304,7 +309,89 @@ fun SettingsScreen(
                 )
             }
         }
+
+        item {
+            SettingsCard {
+                SectionHeader(
+                    icon = Icons.Outlined.LocationOn,
+                    title = "Location search",
+                    subtitle = "Choose your place search provider"
+                )
+                HorizontalDivider()
+                ProviderRow(
+                    title = "Photon",
+                    subtitle = "OpenStreetMap-based place search",
+                    selected = state.placeSearchProvider == PlaceSearchProvider.PHOTON,
+                    tag = "settings_place_search_photon",
+                    onClick = { onPlaceSearchProviderChange(PlaceSearchProvider.PHOTON) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ProviderRow(
+                    title = "Open-Meteo",
+                    subtitle = "Global geocoding search",
+                    selected = state.placeSearchProvider == PlaceSearchProvider.OPEN_METEO,
+                    tag = "settings_place_search_open_meteo",
+                    onClick = { onPlaceSearchProviderChange(PlaceSearchProvider.OPEN_METEO) }
+                )
+            }
+        }
     }
+}
+
+@Preview(
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 915
+)
+@Composable
+private fun SettingsLightPreview() {
+    HluWeatherTheme(darkTheme = false) {
+        SettingsPreviewContent()
+    }
+}
+
+@Preview(
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 915,
+    uiMode = Configuration.UI_MODE_NIGHT_YES
+)
+@Composable
+private fun SettingsDarkPreview() {
+    HluWeatherTheme(darkTheme = true) {
+        SettingsPreviewContent()
+    }
+}
+
+@Composable
+private fun SettingsPreviewContent() {
+    SettingsScreen(
+        state = SettingsUiState(
+            placeSearchProvider = PlaceSearchProvider.OPEN_METEO,
+            locations = listOf(
+                WeatherLocation("preview-svilajnac", "Svilajnac", 44.2380, 21.1970),
+                WeatherLocation("preview-belgrade", "Belgrade", 44.8176, 20.4633)
+            ),
+            selectedLocationId = "preview-svilajnac"
+        ),
+        onBackClick = {},
+        onProviderChange = {},
+        onProviderInfoClick = {},
+        onPlaceSearchProviderChange = {},
+        onTrackMeChange = {},
+        onLocationSelect = {},
+        onLocationMenuClick = {},
+        onAddLocationClick = {},
+        onThemeChange = {},
+        onTemperatureUnitChange = {},
+        onWindUnitChange = {},
+        onDistanceUnitChange = {},
+        onPrecipitationUnitChange = {},
+        onWeatherAlertsChange = {},
+        onDailySummaryChange = {},
+        onDailySummaryTimeChange = {},
+        onClearCacheClick = {}
+    )
 }
 
 @Composable
@@ -379,7 +466,7 @@ private fun ProviderRow(
     selected: Boolean,
     tag: String,
     recommended: Boolean = false,
-    onInfoClick: () -> Unit,
+    onInfoClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -416,12 +503,14 @@ private fun ProviderRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        IconButton(onClick = onInfoClick) {
-            Icon(
-                Icons.Outlined.Info,
-                contentDescription = "Information about $title",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        onInfoClick?.let { infoClick ->
+            IconButton(onClick = infoClick) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = "Information about $title",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

@@ -40,7 +40,8 @@ class OpenMeteoRouteWeatherApiTest {
         assertEquals("44.8,45.6", request.url.parameters["latitude"])
         assertEquals("20.4,13.7", request.url.parameters["longitude"])
         assertEquals(
-            "temperature_2m,weather_code,wind_speed_10m,precipitation_probability",
+            "temperature_2m,weather_code,wind_speed_10m,precipitation_probability," +
+                "precipitation,relative_humidity_2m,is_day",
             request.url.parameters["hourly"]
         )
         assertEquals("unixtime", request.url.parameters["timeformat"])
@@ -65,6 +66,22 @@ class OpenMeteoRouteWeatherApiTest {
 
         assertEquals(1, response.size)
         assertEquals(listOf(1_789_000_000L), response.single().hourly!!.time)
+        assertEquals(listOf(0.2), response.single().hourly!!.precipitation)
+        assertEquals(listOf(65), response.single().hourly!!.humidity)
+        assertEquals(listOf(1), response.single().hourly!!.isDay)
+
+        client.close()
+    }
+
+    @Test
+    fun forecast_makes_a_malformed_single_location_unavailable() = runTest {
+        val client = mockClient { respondJson(malformedSingleLocationResponse) }
+
+        val response = KtorOpenMeteoRouteWeatherApi(client, "https://open-meteo.test")
+            .forecast(listOf(GeoPoint(44.8, 20.4)))
+
+        assertEquals(1, response.size)
+        assertNull(response.single().hourly)
 
         client.close()
     }
@@ -126,7 +143,10 @@ class OpenMeteoRouteWeatherApiTest {
                 "temperature_2m": [20.0],
                 "weather_code": [1],
                 "wind_speed_10m": [12.0],
-                "precipitation_probability": [10]
+                "precipitation_probability": [10],
+                "precipitation": [0.2],
+                "relative_humidity_2m": [65],
+                "is_day": [1]
               }
             }
         """.trimIndent()
@@ -148,10 +168,25 @@ class OpenMeteoRouteWeatherApiTest {
                   "temperature_2m": [21.0],
                   "weather_code": [61],
                   "wind_speed_10m": [14.0],
-                  "precipitation_probability": [20]
+                  "precipitation_probability": [20],
+                  "precipitation": [0.4],
+                  "relative_humidity_2m": [70],
+                  "is_day": [1]
                 }
               }
             ]
+        """.trimIndent()
+
+        val malformedSingleLocationResponse = """
+            {
+              "hourly": {
+                "time": [1789000000],
+                "temperature_2m": ["not-a-number"],
+                "weather_code": [1],
+                "wind_speed_10m": [12.0],
+                "precipitation_probability": [10]
+              }
+            }
         """.trimIndent()
 
         val malformedLocationResponse = """

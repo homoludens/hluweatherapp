@@ -3,6 +3,7 @@ package net.droopia.hluweather.ui.settings
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import kotlinx.datetime.LocalTime
 
 enum class TemperatureUnit {
@@ -27,6 +28,8 @@ enum class PrecipitationUnit {
 
 data class SettingsUiState(
     val provider: WeatherProvider = WeatherProvider.OPEN_METEO,
+    val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
+    val isInitialized: Boolean = false,
     val locations: List<WeatherLocation> = emptyList(),
     val selectedLocationId: String? = null,
     val trackMeEnabled: Boolean = false,

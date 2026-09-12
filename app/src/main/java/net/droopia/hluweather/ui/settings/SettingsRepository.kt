@@ -15,11 +15,13 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.applicationDataStore
 import java.io.IOException
 
 data class PersistedSettings(
     val provider: WeatherProvider = WeatherProvider.OPEN_METEO,
+    val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
     val selectedLocationId: String? = null,
     val trackMeEnabled: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -54,6 +56,7 @@ class DataStoreSettingsRepository(
             val defaults = PersistedSettings()
             PersistedSettings(
                 provider = preferences.enum(providerKey, defaults.provider),
+                placeSearchProvider = preferences.enum(placeSearchProviderKey, defaults.placeSearchProvider),
                 selectedLocationId = preferences.getStringOrNull(selectedLocationIdKey) ?: defaults.selectedLocationId,
                 trackMeEnabled = preferences.getBooleanOrNull(trackMeEnabledKey) ?: defaults.trackMeEnabled,
                 themeMode = preferences.enum(themeModeKey, defaults.themeMode),
@@ -77,6 +80,7 @@ class DataStoreSettingsRepository(
     override suspend fun save(settings: PersistedSettings) {
         dataStore.edit { preferences ->
             preferences[providerKey] = settings.provider.name
+            preferences[placeSearchProviderKey] = settings.placeSearchProvider.name
             preferences[themeModeKey] = settings.themeMode.name
             preferences[temperatureUnitKey] = settings.temperatureUnit.name
             preferences[windUnitKey] = settings.windUnit.name
@@ -126,6 +130,7 @@ fun settingsRepository(context: Context): SettingsRepository =
     DataStoreSettingsRepository(context.applicationDataStore)
 
 private val providerKey = stringPreferencesKey("settings.provider")
+private val placeSearchProviderKey = stringPreferencesKey("settings.place_search_provider")
 private val trackMeEnabledKey = booleanPreferencesKey("settings.track_me_enabled")
 private val selectedLocationIdKey = stringPreferencesKey("settings.selected_location_id")
 private val themeModeKey = stringPreferencesKey("settings.theme_mode")

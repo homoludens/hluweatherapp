@@ -9,10 +9,14 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
@@ -25,11 +29,12 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.RouteEndpoint
+import net.droopia.hluweather.data.model.RouteWeatherSample
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherRouteResult
 import net.droopia.hluweather.data.network.OpenMeteoApiException
@@ -44,6 +49,14 @@ import net.droopia.hluweather.data.repository.RouteWeatherSource
 import net.droopia.hluweather.data.repository.RoutingException
 import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.weatherroute.buildRouteSamples
+import net.droopia.hluweather.data.weatherroute.RouteTimingMode
+import net.droopia.hluweather.data.weatherroute.RouteWeatherSnapshot
+import net.droopia.hluweather.data.weatherroute.TripWeatherSummary
+import net.droopia.hluweather.data.weatherroute.TripWeatherWarning
+import net.droopia.hluweather.data.weatherroute.covers
+import net.droopia.hluweather.data.weatherroute.enrich
+import net.droopia.hluweather.data.weatherroute.findTripWeatherWarnings
+import net.droopia.hluweather.data.weatherroute.summarizeTripWeather
 
 enum class RouteEndpointSlot { START, END }
 
@@ -63,25 +76,36 @@ data class WeatherRouteUiState(
     val routeError: String? = null,
     val weatherError: String? = null,
     val isResultOutdated: Boolean = false,
-    val selectedSampleIndex: Int? = null
+    val selectedSampleIndex: Int? = null,
+    val departureOffsetHours: Int = 0,
+    val snapshot: RouteWeatherSnapshot? = null,
+    val summary: TripWeatherSummary? = null,
+    val warnings: List<TripWeatherWarning> = emptyList()
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class WeatherRouteViewModel(
     private val routingSource: RoutingSource,
     private val placeSearchSources: List<PlaceSearchSource>,
+    private val placeSearchProvider: PlaceSearchProvider,
     private val routeWeatherSource: RouteWeatherSource,
     private val locationRepository: LocationRepository,
     private val deviceLocationSource: DeviceLocationSource,
     private val now: () -> Instant = { Clock.System.now() }
 ) : ViewModel() {
 
+    private val referenceNow = now()
     private val _state = MutableStateFlow(
-        WeatherRouteUiState(departure = nextFullHour(now()))
+        WeatherRouteUiState(
+            departure = referenceNow,
+            searchProvider = placeSearchProvider
+        )
     )
     val state = _state.asStateFlow()
 
     private val searchInput = MutableStateFlow(SearchInput())
+    private val departureRefreshInput = MutableSharedFlow<DepartureRefresh>(extraBufferCapacity = 1)
+    private val departureRefreshCancellation = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private var calculationGeneration = 0L
     private var activeWorkJob: Job? = null
 
@@ -115,6 +139,22 @@ class WeatherRouteViewModel(
                     }
                 }
         }
+        viewModelScope.launch {
+            merge(
+                departureRefreshInput
+                    .debounce(300)
+                    .map { DepartureRefreshEvent.Refresh(it) },
+                departureRefreshCancellation.map { DepartureRefreshEvent.Cancel }
+            ).flatMapLatest { event ->
+                when (event) {
+                    DepartureRefreshEvent.Cancel -> emptyFlow<Unit>()
+                    is DepartureRefreshEvent.Refresh -> flow<Unit> {
+                        refreshDeparture(event.request)
+                        emit(Unit)
+                    }
+                }
+            }.collect { }
+        }
     }
 
     fun onSearchQueryChanged(slot: RouteEndpointSlot, query: String) {
@@ -129,20 +169,6 @@ class WeatherRouteViewModel(
             )
         }
         searchInput.value = SearchInput(slot, query, _state.value.searchProvider)
-    }
-
-    fun onSearchProviderChanged(provider: PlaceSearchProvider) {
-        invalidateCalculation()
-        _state.update {
-            it.copy(
-                searchProvider = provider,
-                searchResults = emptyList(),
-                isSearching = it.searchQuery.isNotBlank(),
-                routeError = null
-            )
-        }
-        val current = _state.value
-        searchInput.value = SearchInput(current.activeSearchSlot, current.searchQuery, provider)
     }
 
     fun selectSearchResult(result: PlaceSearchResult) {
@@ -194,15 +220,85 @@ class WeatherRouteViewModel(
         }
     }
 
-    fun onDepartureChanged(departure: Instant) {
-        invalidateCalculation()
+    fun onDepartureOffsetChanged(offsetHours: Int) {
+        val offset = offsetHours.coerceIn(DEPARTURE_OFFSET_RANGE)
+        val generation = ++calculationGeneration
+        cancelActiveWork()
+        cancelDepartureRefresh()
+        val current = _state.value
+        val result = current.result
+        val selectedDeparture = selectedDeparture(offset)
+        val samples = try {
+            result?.let {
+                buildRouteSamples(
+                    route = it.route,
+                    departure = selectedDeparture,
+                    averageSpeedKmh = it.averageSpeedKmh,
+                    timingMode = RouteTimingMode.AVERAGE_SPEED
+                )
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            _state.update {
+                it.copy(
+                    departureOffsetHours = offset,
+                    isCalculating = false,
+                    isRetryingWeather = false,
+                    routeError = routeErrorMessage(error),
+                    weatherError = null
+                )
+            }
+            return
+        }
+        if (result != null && samples != null && samples.last().arrivalTime > forecastEnd()) {
+            val updatedResult = result.copy(
+                departure = selectedDeparture,
+                samples = samples.map { it.withoutWeather() }
+            )
+            _state.update {
+                it.copy(
+                    departureOffsetHours = offset,
+                    isCalculating = false,
+                    isRetryingWeather = false,
+                    result = updatedResult,
+                    snapshot = null,
+                    summary = summarizeTripWeather(updatedResult.samples),
+                    warnings = findTripWeatherWarnings(updatedResult.samples),
+                    routeError = "Arrival is outside the forecast range",
+                    weatherError = null,
+                    isResultOutdated = true
+                )
+            }
+            return
+        }
+        val coveredSnapshot = current.snapshot?.takeIf { snapshot ->
+            samples != null && snapshot.covers(samples)
+        }
+        val updatedResult = result?.copy(
+            departure = selectedDeparture,
+            samples = coveredSnapshot?.enrich(samples!!) ?: samples ?: result.samples
+        )
         _state.update {
             it.copy(
-                departure = departure,
-                isResultOutdated = it.result != null,
+                departureOffsetHours = offset,
+                isCalculating = false,
+                isRetryingWeather = false,
+                result = updatedResult,
+                snapshot = coveredSnapshot,
+                summary = updatedResult?.let { value -> summarizeTripWeather(value.samples) },
+                warnings = updatedResult?.let { value -> findTripWeatherWarnings(value.samples) }.orEmpty(),
                 routeError = null,
+                isResultOutdated = if (result != null && coveredSnapshot == null) {
+                    true
+                } else {
+                    it.isResultOutdated
+                },
                 weatherError = null
             )
+        }
+        if (generation == calculationGeneration && result != null && samples != null && coveredSnapshot == null) {
+            departureRefreshInput.tryEmit(DepartureRefresh(generation, offset))
         }
     }
 
@@ -215,8 +311,8 @@ class WeatherRouteViewModel(
         val speed = snapshot.speedText.toIntOrNull()
         val validationError = when {
             snapshot.start == null || snapshot.end == null -> "Choose both route endpoints"
-            speed == null || speed !in SPEED_RANGE -> "Speed must be between 50 and 240 km/h"
-            snapshot.departure < now() -> "Departure cannot be in the past"
+            speed == null || speed !in SPEED_RANGE -> "Speed must be between 40 and 130 km/h"
+            selectedDeparture() < referenceNow -> "Departure cannot be in the past"
             else -> null
         }
         if (validationError != null) {
@@ -224,11 +320,12 @@ class WeatherRouteViewModel(
             return
         }
 
-        cancelActiveWork()
         val generation = ++calculationGeneration
+        cancelActiveWork()
+        cancelDepartureRefresh()
         val start = snapshot.start!!
         val end = snapshot.end!!
-        val departure = snapshot.departure
+        val departure = selectedDeparture()
         val averageSpeed = speed!!
         _state.update {
             it.copy(
@@ -237,7 +334,10 @@ class WeatherRouteViewModel(
                 isResultOutdated = it.result != null,
                 routeError = null,
                 weatherError = null,
-                selectedSampleIndex = null
+                selectedSampleIndex = null,
+                snapshot = null,
+                summary = null,
+                warnings = emptyList()
             )
         }
 
@@ -246,14 +346,16 @@ class WeatherRouteViewModel(
                 val route = routingSource.route(start.point, end.point)
                 if (generation != calculationGeneration) return@launch
 
-                val durationSeconds = route.distanceMeters /
-                    (averageSpeed * METERS_PER_KILOMETER / SECONDS_PER_HOUR)
-                if (departure + durationSeconds.seconds > forecastEnd()) {
+                val samples = buildRouteSamples(
+                    route = route,
+                    departure = departure,
+                    averageSpeedKmh = averageSpeed,
+                    timingMode = RouteTimingMode.AVERAGE_SPEED
+                )
+                if (samples.last().arrivalTime > forecastEnd()) {
                     showRouteErrorIfCurrent(generation, "Arrival is outside the forecast range")
                     return@launch
                 }
-
-                val samples = buildRouteSamples(route, departure, averageSpeed)
                 val result = WeatherRouteResult(
                     start = start,
                     end = end,
@@ -262,7 +364,7 @@ class WeatherRouteViewModel(
                     averageSpeedKmh = averageSpeed,
                     samples = samples
                 )
-                enrichAndPublish(generation, result)
+                fetchAndPublish(generation, result)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
@@ -270,6 +372,9 @@ class WeatherRouteViewModel(
                     _state.update {
                         it.copy(
                             result = null,
+                            snapshot = null,
+                            summary = null,
+                            warnings = emptyList(),
                             routeError = routeErrorMessage(error)
                         )
                     }
@@ -285,8 +390,11 @@ class WeatherRouteViewModel(
 
     fun retryWeather() {
         val current = _state.value.result ?: return
-        cancelActiveWork()
+        val wasResultOutdated = _state.value.isResultOutdated
         val generation = ++calculationGeneration
+        cancelActiveWork()
+        cancelDepartureRefresh()
+        val selectedDeparture = selectedDeparture()
         _state.update {
             it.copy(
                 isCalculating = false,
@@ -297,16 +405,42 @@ class WeatherRouteViewModel(
         }
         activeWorkJob = viewModelScope.launch {
             try {
-                val enriched = routeWeatherSource.enrich(current.samples)
-                if (generation == calculationGeneration) {
-                    _state.update {
-                        it.copy(
-                            result = current.copy(samples = enriched),
-                            isRetryingWeather = false,
-                            weatherError = null,
-                            isResultOutdated = false
-                        )
+                val samples = buildRouteSamples(
+                    route = current.route,
+                    departure = selectedDeparture,
+                    averageSpeedKmh = current.averageSpeedKmh,
+                    timingMode = RouteTimingMode.AVERAGE_SPEED
+                )
+                if (samples.last().arrivalTime > forecastEnd()) {
+                    val updatedResult = current.copy(
+                        departure = selectedDeparture,
+                        samples = samples.map { it.withoutWeather() }
+                    )
+                    if (generation == calculationGeneration) {
+                        _state.update {
+                            it.copy(
+                                result = updatedResult,
+                                snapshot = null,
+                                summary = summarizeTripWeather(updatedResult.samples),
+                                warnings = findTripWeatherWarnings(updatedResult.samples),
+                                routeError = "Arrival is outside the forecast range",
+                                weatherError = null,
+                                isRetryingWeather = false,
+                                isResultOutdated = wasResultOutdated
+                            )
+                        }
                     }
+                    return@launch
+                }
+                val snapshot = routeWeatherSource.fetchSnapshot(samples.map { it.point })
+                if (generation == calculationGeneration) {
+                    publishSnapshot(
+                        generation = generation,
+                        result = current.copy(departure = selectedDeparture, samples = samples),
+                        snapshot = snapshot,
+                        isResultOutdated = wasResultOutdated
+                    )
+                    _state.update { it.copy(isRetryingWeather = false) }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -315,7 +449,8 @@ class WeatherRouteViewModel(
                     _state.update {
                         it.copy(
                             isRetryingWeather = false,
-                            weatherError = weatherErrorMessage(error)
+                            weatherError = weatherErrorMessage(error),
+                            snapshot = null
                         )
                     }
                 }
@@ -325,17 +460,11 @@ class WeatherRouteViewModel(
         }
     }
 
-    private suspend fun enrichAndPublish(generation: Long, result: WeatherRouteResult) {
+    private suspend fun fetchAndPublish(generation: Long, result: WeatherRouteResult) {
         try {
-            val enriched = routeWeatherSource.enrich(result.samples)
+            val snapshot = routeWeatherSource.fetchSnapshot(result.samples.map { it.point })
             if (generation == calculationGeneration) {
-                _state.update {
-                    it.copy(
-                        result = result.copy(samples = enriched),
-                        weatherError = null,
-                        isResultOutdated = false
-                    )
-                }
+                publishSnapshot(generation, result, snapshot, isResultOutdated = false)
             }
         } catch (error: CancellationException) {
             throw error
@@ -344,11 +473,102 @@ class WeatherRouteViewModel(
                 _state.update {
                     it.copy(
                         result = result,
+                        snapshot = null,
+                        summary = summarizeTripWeather(result.samples),
+                        warnings = findTripWeatherWarnings(result.samples),
                         weatherError = weatherErrorMessage(error),
                         isResultOutdated = false
                     )
                 }
             }
+        }
+    }
+
+    private suspend fun refreshDeparture(request: DepartureRefresh) {
+        if (request.generation != calculationGeneration) return
+        try {
+            val current = _state.value
+            val result = current.result ?: return
+            val selectedDeparture = selectedDeparture(request.offsetHours)
+            val samples = buildRouteSamples(
+                route = result.route,
+                departure = selectedDeparture,
+                averageSpeedKmh = result.averageSpeedKmh,
+                timingMode = RouteTimingMode.AVERAGE_SPEED
+            )
+            if (samples.last().arrivalTime > forecastEnd()) {
+                val updatedResult = result.copy(
+                    departure = selectedDeparture,
+                    samples = samples.map { it.withoutWeather() }
+                )
+                if (request.generation == calculationGeneration) {
+                    _state.update {
+                        it.copy(
+                            result = updatedResult,
+                            snapshot = null,
+                            summary = summarizeTripWeather(updatedResult.samples),
+                            warnings = findTripWeatherWarnings(updatedResult.samples),
+                            routeError = "Arrival is outside the forecast range",
+                            weatherError = null
+                        )
+                    }
+                }
+                return
+            }
+            val snapshot = current.snapshot
+            if (snapshot?.covers(samples) == true) {
+                publishSnapshot(
+                    generation = request.generation,
+                    result = result.copy(departure = selectedDeparture, samples = samples),
+                    snapshot = snapshot,
+                    isResultOutdated = false
+                )
+                return
+            }
+            val refreshed = routeWeatherSource.fetchSnapshot(samples.map { it.point })
+            if (request.generation == calculationGeneration) {
+                publishSnapshot(
+                    generation = request.generation,
+                    result = result.copy(departure = selectedDeparture, samples = samples),
+                    snapshot = refreshed,
+                    isResultOutdated = false
+                )
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if (request.generation == calculationGeneration) {
+                _state.update {
+                        it.copy(
+                            routeError = null,
+                            isResultOutdated = false,
+                            weatherError = weatherErrorMessage(error),
+                            snapshot = null
+                    )
+                }
+            }
+        }
+    }
+
+    private fun publishSnapshot(
+        generation: Long,
+        result: WeatherRouteResult,
+        snapshot: RouteWeatherSnapshot,
+        isResultOutdated: Boolean
+    ) {
+        if (generation != calculationGeneration) return
+        val covered = snapshot.covers(result.samples)
+        val enriched = snapshot.enrich(result.samples)
+        _state.update {
+            it.copy(
+                result = result.copy(samples = enriched),
+                snapshot = snapshot.takeIf { covered },
+                summary = summarizeTripWeather(enriched),
+                warnings = findTripWeatherWarnings(enriched),
+                routeError = null,
+                weatherError = if (covered) null else "Weather unavailable",
+                isResultOutdated = isResultOutdated
+            )
         }
     }
 
@@ -370,6 +590,7 @@ class WeatherRouteViewModel(
                 )
             }
         }
+        clearSearch()
     }
 
     private fun clearSearch() {
@@ -400,6 +621,7 @@ class WeatherRouteViewModel(
     private fun invalidateCalculation() {
         calculationGeneration++
         cancelActiveWork()
+        cancelDepartureRefresh()
         _state.update {
             it.copy(
                 isCalculating = false,
@@ -412,6 +634,10 @@ class WeatherRouteViewModel(
     private fun cancelActiveWork() {
         activeWorkJob?.cancel()
         activeWorkJob = null
+    }
+
+    private fun cancelDepartureRefresh() {
+        departureRefreshCancellation.tryEmit(Unit)
     }
 
     private fun searchErrorMessage(error: Throwable): String = when (error) {
@@ -431,10 +657,15 @@ class WeatherRouteViewModel(
         else -> "Weather unavailable"
     }
 
-    private fun forecastEnd(): Instant = now() + FORECAST_DURATION
+    private fun forecastEnd(): Instant = referenceNow + FORECAST_DURATION
+
+    fun selectedDeparture(): Instant = selectedDeparture(_state.value.departureOffsetHours)
+
+    private fun selectedDeparture(offsetHours: Int): Instant = referenceNow + offsetHours.hours
 
     class Factory(
         private val routingSource: RoutingSource,
+        private val placeSearchProvider: PlaceSearchProvider,
         private val placeSearchSources: List<PlaceSearchSource>,
         private val routeWeatherSource: RouteWeatherSource,
         private val locationRepository: LocationRepository,
@@ -447,6 +678,7 @@ class WeatherRouteViewModel(
             return WeatherRouteViewModel(
                 routingSource = routingSource,
                 placeSearchSources = placeSearchSources,
+                placeSearchProvider = placeSearchProvider,
                 routeWeatherSource = routeWeatherSource,
                 locationRepository = locationRepository,
                 deviceLocationSource = deviceLocationSource,
@@ -481,7 +713,26 @@ private data class SearchOutcome(
     val error: String?
 )
 
-private const val METERS_PER_KILOMETER = 1_000.0
-private const val SECONDS_PER_HOUR = 3_600.0
-private val SPEED_RANGE = 50..240
+private data class DepartureRefresh(
+    val generation: Long,
+    val offsetHours: Int
+)
+
+private sealed interface DepartureRefreshEvent {
+    data object Cancel : DepartureRefreshEvent
+    data class Refresh(val request: DepartureRefresh) : DepartureRefreshEvent
+}
+
+private val SPEED_RANGE = 40..130
+private val DEPARTURE_OFFSET_RANGE = 0..72
 private val FORECAST_DURATION = 16.days
+
+private fun RouteWeatherSample.withoutWeather(): RouteWeatherSample = copy(
+    condition = null,
+    temperatureCelsius = null,
+    windSpeedKmh = null,
+    precipitationProbability = null,
+    precipitationMm = null,
+    humidityPercent = null,
+    isDay = null
+)

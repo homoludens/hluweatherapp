@@ -8,7 +8,21 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import java.util.TimeZone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,10 +46,14 @@ import net.droopia.hluweather.data.model.RouteWeatherSample
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.repository.RouteWeatherSource
+import net.droopia.hluweather.data.weatherroute.RouteWeatherForecastHour
+import net.droopia.hluweather.data.weatherroute.RouteWeatherSnapshot
 import net.droopia.hluweather.ui.settings.DistanceUnit
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -44,6 +62,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -80,16 +99,107 @@ class WeatherRouteScreenTest {
     }
 
     @Test
+    fun factory_initializes_settings_place_search_provider_and_keeps_route_weather_source() {
+        val routeWeather = ScreenFakeRouteWeatherSource()
+        val factory = WeatherRouteViewModel.Factory(
+            routingSource = ScreenFakeRoutingSource(),
+            placeSearchProvider = PlaceSearchProvider.OPEN_METEO,
+            placeSearchSources = listOf(ScreenFakePlaceSearchSource()),
+            routeWeatherSource = routeWeather,
+            locationRepository = ScreenFakeLocationRepository(),
+            deviceLocationSource = ScreenFakeDeviceLocationSource(),
+            now = { now }
+        )
+        val viewModel: WeatherRouteViewModel = factory.create(WeatherRouteViewModel::class.java)
+
+        assertEquals(PlaceSearchProvider.OPEN_METEO, viewModel.state.value.searchProvider)
+        chooseEndpoints(viewModel)
+        viewModel.calculate()
+        composeRule.waitForIdle()
+
+        assertEquals(1, routeWeather.calls)
+    }
+
+    @Test
+    fun screen_formats_nonzero_route_precipitation_in_inches() {
+        val viewModel = viewModel(
+            weather = ScreenFakeRouteWeatherSource(precipitationMm = 25.4)
+        ).also { chooseEndpoints(it) }
+        render(viewModel, precipitationUnit = PrecipitationUnit.INCH)
+
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
+
+        composeRule.onNodeWithTag("route_weather_table_row_0")
+            .assertTextContains("1 in", substring = true)
+    }
+
+    @Test
+    fun single_page_has_ordered_controls_without_provider_or_legacy_time_controls() {
+        val viewModel = viewModel().also {
+            it.selectSavedLocation(RouteEndpointSlot.START, start)
+            it.selectSavedLocation(RouteEndpointSlot.END, end)
+        }
+        render(viewModel)
+
+        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_end_search").assertIsDisplayed()
+        composeRule.onNodeWithTag("trip_show_weather").assertIsDisplayed()
+        composeRule.onNodeWithTag("trip_start_time_slider")
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ProgressBarRangeInfo,
+                    ProgressBarRangeInfo(0f, 0f..72f, 71)
+                )
+            )
+        composeRule.onNodeWithTag("trip_speed_slider")
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ProgressBarRangeInfo,
+                    ProgressBarRangeInfo(80f, 40f..130f, 89)
+                )
+            )
+        assertLayoutOrder(
+            "route_start_search",
+            "route_end_search",
+            "trip_show_weather",
+            "trip_start_time_slider",
+            "trip_speed_slider"
+        )
+        composeRule.onNodeWithText("Search provider").assertDoesNotExist()
+        composeRule.onNodeWithTag("route_departure_date").assertDoesNotExist()
+        composeRule.onNodeWithTag("route_departure_time").assertDoesNotExist()
+        composeRule.onNodeWithTag("trip_route_estimates").assertDoesNotExist()
+        composeRule.onNodeWithTag("trip_provider_context").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(7)
+        assertLayoutOrder(
+            "weather_route_map",
+            "weather_route_table",
+            "route_summary"
+        )
+        composeRule.onNodeWithTag("weather_route_map").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_route_content").performTouchInput {
+            repeat(4) { swipeUp() }
+        }
+        composeRule.onNodeWithTag("weather_route_table").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun invalid_speed_shows_the_speed_validation_message() {
         val viewModel = viewModel().also {
             it.selectSavedLocation(RouteEndpointSlot.START, start)
             it.selectSavedLocation(RouteEndpointSlot.END, end)
-            it.onSpeedChanged("49")
+            it.onSpeedChanged("39")
         }
         render(viewModel)
 
-        composeRule.onNodeWithTag("route_calculate").performClick()
-        composeRule.onNodeWithText("Enter a speed from 50 to 240 km/h").assertIsDisplayed()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.onNodeWithText("Speed must be between 40 and 130 km/h").assertIsDisplayed()
     }
 
     @Test
@@ -99,7 +209,7 @@ class WeatherRouteScreenTest {
         }
         render(viewModel)
 
-        composeRule.onNodeWithTag("route_calculate").performClick()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Routing failed").assertIsDisplayed()
@@ -113,10 +223,11 @@ class WeatherRouteScreenTest {
         }
         render(viewModel)
 
-        composeRule.onNodeWithTag("route_calculate").performClick()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("route_summary").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
+        composeRule.onNodeWithTag("route_summary").assertIsDisplayed()
         composeRule.onNodeWithTag("route_weather_error")
             .performScrollTo()
             .assertTextContains("Weather unavailable")
@@ -135,32 +246,34 @@ class WeatherRouteScreenTest {
         viewModel.onSpeedChanged("90")
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
         composeRule.onNodeWithTag("route_result_outdated").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithTag("route_summary").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
-    fun route_summary_shows_provider_duration_departure_and_expected_arrival() {
+    fun route_summary_shows_route_values_without_provider_text() {
         val viewModel = viewModel().also { chooseEndpoints(it) }
-        val departure = now + 1.hours
-        val arrival = departure + 1.hours
         render(viewModel)
 
-        composeRule.onNodeWithTag("route_calculate").performClick()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("route_summary").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
+        composeRule.onNodeWithTag("route_summary").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("route_summary_provider")
-            .assertTextContains("Routing provider: OSRM")
-        composeRule.onNodeWithTag("route_summary_osrm_duration")
-            .assertTextContains("OSRM duration: 1h 0min")
-        composeRule.onNodeWithTag("route_summary_departure")
-            .assertTextContains("Departure: ${departure.dateTimeText()}", substring = true)
-        composeRule.onNodeWithTag("route_summary_expected_arrival")
-            .assertTextContains("Expected arrival: ${arrival.dateTimeText()}", substring = true)
+        composeRule.onNodeWithTag("route_summary")
+            .assertTextContains("80 km", substring = true)
+            .assertTextContains("Average speed: 80 km/h", substring = true)
+        composeRule.onNodeWithTag("route_summary_provider").assertDoesNotExist()
+        composeRule.onNodeWithTag("route_summary_osrm_duration").assertDoesNotExist()
+        composeRule.onNodeWithTag("route_summary_departure").assertDoesNotExist()
+        composeRule.onNodeWithTag("route_summary_expected_arrival").assertDoesNotExist()
     }
 
-    private fun render(viewModel: WeatherRouteViewModel) {
+    private fun render(
+        viewModel: WeatherRouteViewModel,
+        precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM
+    ) {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherRouteScreen(
@@ -170,17 +283,44 @@ class WeatherRouteScreenTest {
                     temperatureUnit = TemperatureUnit.CELSIUS,
                     windUnit = WindUnit.KMH,
                     distanceUnit = DistanceUnit.KM,
+                    precipitationUnit = precipitationUnit,
                     onBackClick = {},
-                    mapContent = { _, _, _, _ -> }
+                    mapContent = { _, _, _, _ ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
+                                .testTag("weather_route_map")
+                        )
+                    }
                 )
             }
         }
     }
 
+    private fun assertLayoutOrder(vararg tags: String) {
+        val content = composeRule
+            .onNodeWithTag("weather_route_content", useUnmergedTree = true)
+            .fetchSemanticsNode()
+        val semanticTags = mutableListOf<String>()
+        fun collect(node: SemanticsNode) {
+            if (node.config.contains(SemanticsProperties.TestTag)) {
+                semanticTags += node.config[SemanticsProperties.TestTag]
+            }
+            for (child in node.children) {
+                collect(child)
+            }
+        }
+        collect(content)
+        val positions = tags.map { tag -> semanticTags.indexOf(tag) }
+        assertTrue(positions.all { it >= 0 })
+        assertTrue(positions.zipWithNext().all { (first, second) -> first < second })
+    }
+
     private fun chooseEndpoints(viewModel: WeatherRouteViewModel) {
         viewModel.selectSavedLocation(RouteEndpointSlot.START, start)
         viewModel.selectSavedLocation(RouteEndpointSlot.END, end)
-        viewModel.onDepartureChanged(now + 1.hours)
+        viewModel.onDepartureOffsetChanged(1)
     }
 
     private fun viewModel(
@@ -189,6 +329,7 @@ class WeatherRouteScreenTest {
     ) = WeatherRouteViewModel(
         routingSource = route,
         placeSearchSources = listOf(ScreenFakePlaceSearchSource()),
+        placeSearchProvider = PlaceSearchProvider.PHOTON,
         routeWeatherSource = weather,
         locationRepository = ScreenFakeLocationRepository(),
         deviceLocationSource = ScreenFakeDeviceLocationSource(),
@@ -218,11 +359,42 @@ private class ScreenFakeRoutingSource(
 }
 
 private class ScreenFakeRouteWeatherSource(
-    private val failure: Throwable? = null
+    private val failure: Throwable? = null,
+    private val precipitationMm: Double = 0.0
 ) : RouteWeatherSource {
-    override suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample> {
+    var calls = 0
+
+    override suspend fun fetchSnapshot(points: List<GeoPoint>): RouteWeatherSnapshot {
+        calls++
         failure?.let { throw it }
-        return samples.map { it.copy(condition = WeatherCondition.CLEAR) }
+        return RouteWeatherSnapshot(
+            points = points,
+            hourlyByPoint = points.map {
+                listOf(
+                    RouteWeatherForecastHour(
+                        time = Instant.parse("2026-09-12T10:00:00Z"),
+                        condition = WeatherCondition.CLEAR,
+                        temperatureCelsius = 20.0,
+                        windSpeedKmh = 10.0,
+                        precipitationProbability = 0,
+                        precipitationMm = precipitationMm,
+                        humidityPercent = 50,
+                        isDay = true
+                    ),
+                    RouteWeatherForecastHour(
+                        time = Instant.parse("2026-09-12T11:00:00Z"),
+                        condition = WeatherCondition.CLEAR,
+                        temperatureCelsius = 20.0,
+                        windSpeedKmh = 10.0,
+                        precipitationProbability = 0,
+                        precipitationMm = precipitationMm,
+                        humidityPercent = 50,
+                        isDay = true
+                    )
+                )
+            },
+            fetchedAt = Instant.parse("2026-09-12T09:15:00Z")
+        )
     }
 }
 

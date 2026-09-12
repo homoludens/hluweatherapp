@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +37,6 @@ import androidx.compose.ui.window.DialogProperties
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RouteEndpoint
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchResult
 import net.droopia.hluweather.ui.map.WeatherMap
 
@@ -49,8 +46,8 @@ private val DEFAULT_MAP_POINT = GeoPoint(44.2380, 21.1970)
 fun RouteEndpointPicker(
     state: WeatherRouteUiState,
     savedLocations: List<WeatherLocation>,
+    slot: RouteEndpointSlot,
     onSearchQueryChanged: (RouteEndpointSlot, String) -> Unit,
-    onSearchProviderChanged: (PlaceSearchProvider) -> Unit,
     onSearchResultSelected: (PlaceSearchResult) -> Unit,
     onSavedLocationSelected: (RouteEndpointSlot, WeatherLocation) -> Unit,
     onCurrentLocationSelected: (RouteEndpointSlot) -> Unit,
@@ -71,45 +68,34 @@ fun RouteEndpointPicker(
     var mapSlot by remember { mutableStateOf<RouteEndpointSlot?>(null) }
     var mapPoint by remember { mutableStateOf(DEFAULT_MAP_POINT) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("route_endpoint_picker")
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SearchProviderSelector(
-                provider = state.searchProvider,
-                onProviderChanged = onSearchProviderChanged,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
             EndpointCard(
-                slot = RouteEndpointSlot.START,
-                endpoint = state.start,
+                slot = slot,
+                endpoint = if (slot == RouteEndpointSlot.START) state.start else state.end,
                 state = state,
                 onSearchQueryChanged = onSearchQueryChanged,
                 onSearchResultSelected = onSearchResultSelected,
-                onSavedLocationsClick = { savedSlot = RouteEndpointSlot.START },
+                onSavedLocationsClick = { savedSlot = slot },
                 onMapPickerClick = {
-                    mapPoint = state.start?.point ?: DEFAULT_MAP_POINT
-                    mapSlot = RouteEndpointSlot.START
+                    mapPoint = (if (slot == RouteEndpointSlot.START) state.start else state.end)
+                        ?.point ?: DEFAULT_MAP_POINT
+                    mapSlot = slot
                 },
-                onCurrentLocationClick = { onCurrentLocationSelected(RouteEndpointSlot.START) },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            EndpointCard(
-                slot = RouteEndpointSlot.END,
-                endpoint = state.end,
-                state = state,
-                onSearchQueryChanged = onSearchQueryChanged,
-                onSearchResultSelected = onSearchResultSelected,
-                onSavedLocationsClick = { savedSlot = RouteEndpointSlot.END },
-                onMapPickerClick = {
-                    mapPoint = state.end?.point ?: DEFAULT_MAP_POINT
-                    mapSlot = RouteEndpointSlot.END
+                onCurrentLocationClick = {
+                    if (slot == RouteEndpointSlot.START) {
+                        onCurrentLocationSelected(slot)
+                    }
                 },
-                onCurrentLocationClick = {},
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(Modifier.height(8.dp))
@@ -143,43 +129,6 @@ fun RouteEndpointPicker(
 }
 
 @Composable
-private fun SearchProviderSelector(
-    provider: PlaceSearchProvider,
-    onProviderChanged: (PlaceSearchProvider) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Search provider", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Photon",
-                modifier = Modifier
-                    .testTag("route_search_provider_photon")
-                    .clickable { onProviderChanged(PlaceSearchProvider.PHOTON) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = if (provider == PlaceSearchProvider.PHOTON) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-            Text(
-                text = "Open-Meteo",
-                modifier = Modifier
-                    .testTag("route_search_provider_open_meteo")
-                    .clickable { onProviderChanged(PlaceSearchProvider.OPEN_METEO) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = if (provider == PlaceSearchProvider.OPEN_METEO) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
-    }
-}
-
-@Composable
 private fun EndpointCard(
     slot: RouteEndpointSlot,
     endpoint: RouteEndpoint?,
@@ -199,7 +148,9 @@ private fun EndpointCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .padding(12.dp)
+                .testTag("${prefix}_endpoint"),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
@@ -243,7 +194,7 @@ private fun EndpointCard(
             )
             if (isActiveSearch && state.searchResults.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    state.searchResults.forEach { result ->
+                    state.searchResults.take(5).forEach { result ->
                         TextButton(
                             onClick = { onSearchResultSelected(result) },
                             modifier = Modifier.fillMaxWidth()

@@ -28,7 +28,10 @@ data class OpenMeteoRouteHourlyDto(
     @SerialName("temperature_2m") val temperature: List<Double?> = emptyList(),
     @SerialName("weather_code") val weatherCode: List<Int?> = emptyList(),
     @SerialName("wind_speed_10m") val windSpeed: List<Double?> = emptyList(),
-    @SerialName("precipitation_probability") val precipitationProbability: List<Int?> = emptyList()
+    @SerialName("precipitation_probability") val precipitationProbability: List<Int?> = emptyList(),
+    val precipitation: List<Double?>? = null,
+    @SerialName("relative_humidity_2m") val humidity: List<Int?>? = null,
+    @SerialName("is_day") val isDay: List<Int?>? = null
 )
 
 class KtorOpenMeteoRouteWeatherApi(
@@ -46,7 +49,8 @@ class KtorOpenMeteoRouteWeatherApi(
             parameter("longitude", points.joinToString(",") { it.longitude.toString() })
             parameter(
                 "hourly",
-                "temperature_2m,weather_code,wind_speed_10m,precipitation_probability"
+                "temperature_2m,weather_code,wind_speed_10m,precipitation_probability," +
+                    "precipitation,relative_humidity_2m,is_day"
             )
             parameter("timeformat", "unixtime")
             parameter("timezone", "GMT")
@@ -73,7 +77,13 @@ class KtorOpenMeteoRouteWeatherApi(
                     OpenMeteoRouteResponse()
                 }
             }
-            else -> listOf(json.decodeFromJsonElement<OpenMeteoRouteResponse>(element))
+            else -> listOf(
+                try {
+                    json.decodeFromJsonElement<OpenMeteoRouteResponse>(element)
+                } catch (_: SerializationException) {
+                    OpenMeteoRouteResponse()
+                }
+            )
         }
     }
 }

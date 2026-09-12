@@ -9,19 +9,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.geometry.Offset
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RouteEndpoint
 import net.droopia.hluweather.data.model.WeatherLocation
-import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchResult
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
@@ -47,7 +50,7 @@ class RouteEndpointPickerTest {
     private val savedBelgrade = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
 
     @Test
-    fun search_provider_and_saved_location_actions_update_the_picker() {
+    fun search_and_saved_location_actions_update_the_picker_without_provider_controls() {
         var selectedResult: PlaceSearchResult? = null
         val state = mutableStateOf(
             WeatherRouteUiState(
@@ -60,9 +63,6 @@ class RouteEndpointPickerTest {
             state = state,
             onSearchQueryChanged = { slot, query ->
                 state.value = state.value.copy(activeSearchSlot = slot, searchQuery = query)
-            },
-            onSearchProviderChanged = { provider ->
-                state.value = state.value.copy(searchProvider = provider)
             },
             onSearchResultSelected = { result ->
                 selectedResult = result
@@ -82,14 +82,14 @@ class RouteEndpointPickerTest {
         assertEquals(triesteResult, selectedResult)
         composeRule.onNodeWithTag("route_start_label")
             .assertTextContains("Trieste", substring = true)
-        composeRule.onNodeWithTag("route_search_provider_open_meteo").performClick()
-        composeRule.waitForIdle()
-        assertEquals(PlaceSearchProvider.OPEN_METEO, state.value.searchProvider)
-        composeRule.onNodeWithTag("route_end_saved_locations").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("route_start_saved_locations").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("route_saved_location_belgrade").assertIsDisplayed()
 
-        assertEquals(PlaceSearchProvider.OPEN_METEO, state.value.searchProvider)
+        assertTrue(
+            composeRule.onAllNodesWithTag("route_search_provider_open_meteo")
+                .fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
@@ -120,10 +120,35 @@ class RouteEndpointPickerTest {
     }
 
     @Test
+    fun dropdown_is_capped_at_five_results_and_endpoint_block_has_no_vertical_scroll() {
+        val results = (1..6).map { index ->
+            PlaceSearchResult("Result $index", GeoPoint(44.0 + index, 21.0 + index))
+        }
+        val state = mutableStateOf(
+            WeatherRouteUiState(
+                activeSearchSlot = RouteEndpointSlot.START,
+                searchResults = results
+            )
+        )
+
+        render(state = state, slot = RouteEndpointSlot.START)
+
+        composeRule.onAllNodesWithText("Result", substring = true).assertCountEquals(5)
+        assertTrue(
+            composeRule.onNodeWithTag("route_start_endpoint")
+                .fetchSemanticsNode()
+                .config
+                .contains(SemanticsActions.ScrollBy)
+                .not()
+        )
+    }
+
+    @Test
     fun map_confirmation_returns_the_camera_idle_point_as_an_endpoint() {
         var selectedEndpoint: RouteEndpoint? = null
 
         render(
+            slot = RouteEndpointSlot.END,
             onMapEndpointSelected = { _, endpoint -> selectedEndpoint = endpoint }
         )
 
@@ -155,11 +180,8 @@ class RouteEndpointPickerTest {
         val scrim = composeRule.onNodeWithTag("route_saved_locations_scrim")
         val scrimBounds = scrim.fetchSemanticsNode().boundsInRoot
         assertTrue(scrimBounds.height > 440f)
-        val currentLocationBounds = composeRule
-            .onNodeWithTag("route_start_current_location")
-            .fetchSemanticsNode().boundsInRoot
         scrim.performTouchInput {
-            click(currentLocationBounds.center - scrimBounds.topLeft)
+            click(Offset(1f, 1f))
         }
         assertEquals(0, currentLocationClicks)
 
@@ -176,8 +198,8 @@ class RouteEndpointPickerTest {
     private fun render(
         state: MutableState<WeatherRouteUiState> = mutableStateOf(WeatherRouteUiState()),
         savedLocations: List<WeatherLocation> = listOf(savedBelgrade),
+        slot: RouteEndpointSlot = RouteEndpointSlot.START,
         onSearchQueryChanged: (RouteEndpointSlot, String) -> Unit = { _, _ -> },
-        onSearchProviderChanged: (PlaceSearchProvider) -> Unit = {},
         onSearchResultSelected: (PlaceSearchResult) -> Unit = {},
         onSavedLocationSelected: (RouteEndpointSlot, WeatherLocation) -> Unit = { _, _ -> },
         onCurrentLocationSelected: (RouteEndpointSlot) -> Unit = {},
@@ -188,11 +210,9 @@ class RouteEndpointPickerTest {
                 RouteEndpointPicker(
                     state = state.value,
                     savedLocations = savedLocations,
+                    slot = slot,
                     onSearchQueryChanged = { slot, query ->
                         onSearchQueryChanged(slot, query)
-                    },
-                    onSearchProviderChanged = { provider ->
-                        onSearchProviderChanged(provider)
                     },
                     onSearchResultSelected = { result ->
                         onSearchResultSelected(result)

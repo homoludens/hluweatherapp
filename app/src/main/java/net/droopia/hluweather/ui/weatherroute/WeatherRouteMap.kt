@@ -25,10 +25,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherRouteResult
 import net.droopia.hluweather.data.weatherroute.WeatherSeverity
+import net.droopia.hluweather.data.weatherroute.displayRouteSampleIndices
 import net.droopia.hluweather.data.weatherroute.weatherSeverity
 import net.droopia.hluweather.ui.map.mapStyleUrl
+import net.droopia.hluweather.ui.components.HluWeatherIcon
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.expressions.value.LineCap
@@ -52,17 +55,22 @@ data class WeatherRouteMarker(
     val point: GeoPoint,
     val severity: WeatherSeverity,
     val color: Color,
-    val isSelected: Boolean
+    val isSelected: Boolean,
+    val condition: WeatherCondition? = null,
+    val isDay: Boolean? = null
 )
 
 fun weatherRouteMarkers(
     result: WeatherRouteResult,
     selectedSampleIndex: Int?
-): List<WeatherRouteMarker> = result.samples.mapIndexed { index, sample ->
+): List<WeatherRouteMarker> = displayRouteSampleIndices(result.samples, result.departure).map { index ->
+    val sample = result.samples[index]
     val severity = weatherSeverity(sample.condition)
     WeatherRouteMarker(
         sampleIndex = index,
         point = sample.point,
+        condition = sample.condition,
+        isDay = sample.isDay,
         severity = severity,
         color = weatherRouteMarkerColor(severity),
         isSelected = index == selectedSampleIndex
@@ -221,14 +229,23 @@ private fun WeatherRouteSampleMarker(
                 onSelected(marker.sampleIndex)
             }
             .semantics {
-                contentDescription = "Weather sample ${marker.sampleIndex + 1}, ${marker.severity}"
+                contentDescription = buildString {
+                    append("Weather sample ${marker.sampleIndex + 1}, ${marker.severity}")
+                    if (weatherSeverity(marker.condition) == WeatherSeverity.UNAVAILABLE) {
+                        append(", Weather unavailable")
+                    }
+                }
             }
             .testTag("route_weather_marker_${marker.sampleIndex}"),
         shape = CircleShape,
         color = marker.color
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(text = "${marker.sampleIndex + 1}", color = Color.White)
+            HluWeatherIcon(
+                condition = marker.condition ?: WeatherCondition.UNKNOWN,
+                isDay = marker.isDay,
+                modifier = Modifier.size(28.dp).testTag("route_weather_icon_${marker.sampleIndex}")
+            )
         }
     }
 }

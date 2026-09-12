@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.weatherroute
 
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -30,6 +31,7 @@ import org.robolectric.annotation.GraphicsMode
 import org.maplibre.spatialk.geojson.BoundingBox
 import kotlin.time.Instant
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -115,6 +117,58 @@ class WeatherRouteMapTest {
         }
 
         composeRule.onNodeWithTag("route_weather_marker_0").assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun sample_markers_render_shared_weather_icons_for_day_and_night_and_unavailable_weather() {
+        val result = routeResult(
+            conditions = listOf(
+                WeatherCondition.CLEAR,
+                WeatherCondition.CLEAR,
+                null
+            )
+        ).copy(
+            samples = routeResult(
+                conditions = listOf(
+                    WeatherCondition.CLEAR,
+                    WeatherCondition.CLEAR,
+                    null
+                )
+            ).samples.mapIndexed { index, sample ->
+                sample.copy(isDay = index == 0)
+            }
+        )
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherRouteMapMarkers(
+                    result = result,
+                    selectedSampleIndex = null,
+                    onSampleSelected = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("route_weather_icon_0", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("route_weather_icon_1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("route_weather_icon_2", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("route_weather_marker_2")
+            .assertContentDescriptionEquals("Weather sample 3, UNAVAILABLE, Weather unavailable")
+    }
+
+    @Test
+    fun unknown_weather_marker_is_accessibly_unavailable() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = true) {
+                WeatherRouteMapMarkers(
+                    result = routeResult(conditions = listOf(WeatherCondition.UNKNOWN)),
+                    selectedSampleIndex = null,
+                    onSampleSelected = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("route_weather_marker_0")
+            .assertContentDescriptionEquals("Weather sample 1, UNAVAILABLE, Weather unavailable")
     }
 
     @Test

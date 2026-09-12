@@ -22,13 +22,50 @@ class RouteSamplingTest {
             averageSpeedKmh = 80
         )
 
-        assertEquals(4, samples.size)
+        assertEquals(7, samples.size)
         assertEquals(0.0, samples[0].distanceMeters, 0.1)
-        assertEquals(80_000.0, samples[1].distanceMeters, 0.1)
+        assertEquals(40_000.0, samples[1].distanceMeters, 0.1)
+        assertEquals(80_000.0, samples[2].distanceMeters, 0.1)
         assertEquals(222_390.0, samples.last().distanceMeters, 0.1)
         assertEquals(Instant.parse("2026-09-12T12:46:47.550Z"), samples.last().arrivalTime)
-        assertEquals(0.0, samples[1].point.latitude, 0.01)
-        assertEquals(0.719, samples[1].point.longitude, 0.01)
+        assertEquals(0.0, samples[2].point.latitude, 0.01)
+        assertEquals(0.719, samples[2].point.longitude, 0.01)
+    }
+
+    @Test
+    fun route_estimate_distributes_provider_duration_over_route_distance() {
+        val route = DrivingRoute(
+            "OSRM",
+            listOf(GeoPoint(0.0, 0.0), GeoPoint(0.0, 1.0), GeoPoint(1.0, 1.0)),
+            distanceMeters = 222_390.0,
+            providerDurationSeconds = 7_200.0
+        )
+        val departure = Instant.parse("2026-09-12T10:00:00Z")
+
+        val samples = buildRouteSamples(route, departure, 80, RouteTimingMode.ROUTE_ESTIMATE)
+
+        assertEquals(5, samples.size)
+        assertEquals(7_200L, samples.last().arrivalTime.epochSeconds - departure.epochSeconds)
+        assertEquals(route.distanceMeters / 2.0, samples[2].distanceMeters, 0.1)
+    }
+
+    @Test
+    fun route_estimate_requires_positive_finite_provider_duration() {
+        val route = DrivingRoute(
+            "OSRM",
+            listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)),
+            distanceMeters = 1_000.0,
+            providerDurationSeconds = 0.0
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            buildRouteSamples(
+                route,
+                Instant.parse("2026-09-12T10:00:00Z"),
+                80,
+                RouteTimingMode.ROUTE_ESTIMATE
+            )
+        }
     }
 
     @Test
@@ -46,7 +83,7 @@ class RouteSamplingTest {
         val route = DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 80_000.0, 100.0)
         val samples = buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 80)
 
-        assertEquals(2, samples.size)
+        assertEquals(3, samples.size)
         assertEquals(Instant.parse("2026-09-12T11:00:00Z"), samples.last().arrivalTime)
         assertEquals(route.polyline.last(), samples.last().point)
     }
@@ -64,8 +101,8 @@ class RouteSamplingTest {
     fun buildRouteSamples_accepts_supported_speed_boundaries() {
         val route = DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 1_000.0, 100.0)
 
-        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 50).size)
-        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 240).size)
+        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 40).size)
+        assertEquals(2, buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 130).size)
     }
 
     @Test
@@ -73,10 +110,10 @@ class RouteSamplingTest {
         val route = DrivingRoute("OSRM", listOf(GeoPoint(44.8, 20.4), GeoPoint(44.81, 20.41)), 1_000.0, 100.0)
 
         assertThrows(IllegalArgumentException::class.java) {
-            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 49)
+            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 39)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 241)
+            buildRouteSamples(route, Instant.parse("2026-09-12T10:00:00Z"), 131)
         }
     }
 

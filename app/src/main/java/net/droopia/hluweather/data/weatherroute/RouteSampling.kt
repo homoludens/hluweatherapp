@@ -13,20 +13,31 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val SECONDS_PER_HOUR = 3_600.0
+private const val SAMPLE_INTERVAL_SECONDS = 30 * 60.0
+
+enum class RouteTimingMode { AVERAGE_SPEED, ROUTE_ESTIMATE }
 
 fun buildRouteSamples(
     route: DrivingRoute,
     departure: Instant,
-    averageSpeedKmh: Int
+    averageSpeedKmh: Int,
+    timingMode: RouteTimingMode = RouteTimingMode.AVERAGE_SPEED
 ): List<RouteWeatherSample> {
     require(route.polyline.size >= 2) { "Route geometry must contain at least two points" }
     require(route.distanceMeters.isFinite() && route.distanceMeters > 0.0) {
         "Route distance must be finite and positive"
     }
-    require(averageSpeedKmh in 50..240) { "Average speed must be between 50 and 240 km/h" }
+    require(averageSpeedKmh in 40..130) { "Average speed must be between 40 and 130 km/h" }
 
     val speedMetersPerSecond = averageSpeedKmh * 1_000.0 / SECONDS_PER_HOUR
-    val durationSeconds = route.distanceMeters / speedMetersPerSecond
+    val durationSeconds = when (timingMode) {
+        RouteTimingMode.AVERAGE_SPEED -> route.distanceMeters / speedMetersPerSecond
+        RouteTimingMode.ROUTE_ESTIMATE -> route.providerDurationSeconds.also {
+            require(it.isFinite() && it > 0.0) {
+                "Provider duration must be finite and positive for route estimate timing"
+            }
+        }
+    }
     val geometryDistances = route.polyline.zipWithNext(::haversineDistance)
     val totalGeometryDistance = geometryDistances.sum()
     require(totalGeometryDistance.isFinite() && totalGeometryDistance > 0.0) {
@@ -35,12 +46,14 @@ fun buildRouteSamples(
     val cumulativeGeometryDistances = geometryDistances.runningFold(0.0, Double::plus)
     val offsets = buildList {
         add(0.0)
-        var offset = SECONDS_PER_HOUR
+        var offset = SAMPLE_INTERVAL_SECONDS
         while (offset < durationSeconds) {
             add(offset)
-            offset += SECONDS_PER_HOUR
+            offset += SAMPLE_INTERVAL_SECONDS
         }
-        add(durationSeconds)
+        if (last() != durationSeconds) {
+            add(durationSeconds)
+        }
     }
 
     return offsets.map { offsetSeconds ->

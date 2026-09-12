@@ -27,6 +27,7 @@ import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -168,6 +169,37 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun settings_can_select_open_meteo_for_location_search() {
+        val state = mutableStateOf(testSettingsState)
+
+        renderSettings(
+            state = { state.value },
+            onProviderChange = { state.value = state.value.copy(provider = it) },
+            onPlaceSearchProviderChange = {
+                state.value = state.value.copy(placeSearchProvider = it)
+            }
+        )
+
+        composeRule.onNodeWithTag("settings_provider_met_no").performClick()
+        scrollTo(7)
+        composeRule.onNodeWithTag("settings_place_search_open_meteo").performClick()
+        composeRule.onNodeWithTag("settings_place_search_open_meteo").assertIsSelected()
+
+        assertEquals(PlaceSearchProvider.OPEN_METEO, state.value.placeSearchProvider)
+        assertEquals(WeatherProvider.MET_NO, state.value.provider)
+    }
+
+    @Test
+    fun location_search_provider_rows_have_no_dead_info_action() {
+        renderSettings()
+
+        scrollTo(7)
+
+        composeRule.onNodeWithContentDescription("Information about Photon").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Information about Open-Meteo").assertDoesNotExist()
+    }
+
+    @Test
     fun provider_information_reports_provider() {
         var provider: WeatherProvider? = null
 
@@ -275,6 +307,7 @@ class SettingsScreenTest {
         onBackClick: () -> Unit = {},
         onProviderChange: (WeatherProvider) -> Unit = {},
         onProviderInfoClick: (WeatherProvider) -> Unit = {},
+        onPlaceSearchProviderChange: (PlaceSearchProvider) -> Unit = {},
         onTrackMeChange: (Boolean) -> Unit = {},
         onLocationSelect: (WeatherLocation) -> Unit = {},
         onLocationMenuClick: (WeatherLocation) -> Unit = {},
@@ -301,6 +334,7 @@ class SettingsScreenTest {
                         onBackClick = onBackClick,
                         onProviderChange = onProviderChange,
                         onProviderInfoClick = onProviderInfoClick,
+                        onPlaceSearchProviderChange = onPlaceSearchProviderChange,
                         onTrackMeChange = onTrackMeChange,
                         onLocationSelect = onLocationSelect,
                         onLocationMenuClick = onLocationMenuClick,

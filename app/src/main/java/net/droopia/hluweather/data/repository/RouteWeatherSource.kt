@@ -1,33 +1,44 @@
 package net.droopia.hluweather.data.repository
 
-import kotlin.math.abs
-import net.droopia.hluweather.data.model.RouteWeatherSample
+import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.network.OpenMeteoRouteResponse
 import net.droopia.hluweather.data.network.OpenMeteoRouteWeatherApi
+import net.droopia.hluweather.data.weatherroute.RouteWeatherForecastHour
+import net.droopia.hluweather.data.weatherroute.RouteWeatherSnapshot
 
 interface RouteWeatherSource {
-    suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample>
+    suspend fun fetchSnapshot(points: List<GeoPoint>): RouteWeatherSnapshot
 }
 
 class OpenMeteoRouteWeatherSource(
     private val api: OpenMeteoRouteWeatherApi
 ) : RouteWeatherSource {
-    override suspend fun enrich(samples: List<RouteWeatherSample>): List<RouteWeatherSample> {
-        if (samples.isEmpty()) return emptyList()
-
-        val responses = api.forecast(samples.map { it.point })
-        return samples.mapIndexed { index, sample ->
-            responses.getOrNull(index)?.enrich(sample) ?: sample.unavailable()
+    override suspend fun fetchSnapshot(points: List<GeoPoint>): RouteWeatherSnapshot {
+        if (points.isEmpty()) {
+            return RouteWeatherSnapshot(
+                points = emptyList(),
+                hourlyByPoint = emptyList(),
+                fetchedAt = Clock.System.now()
+            )
         }
+
+        val responses = api.forecast(points)
+        return RouteWeatherSnapshot(
+            points = points,
+            hourlyByPoint = points.indices.map { index ->
+                responses.getOrNull(index)?.toForecastHours().orEmpty()
+            },
+            fetchedAt = Clock.System.now()
+        )
     }
 }
 
-private fun OpenMeteoRouteResponse.enrich(sample: RouteWeatherSample): RouteWeatherSample {
-    val hourly = hourly ?: return sample.unavailable()
-    val targetNanos = sample.arrivalTime.epochSeconds * NANOS_PER_SECOND +
-        sample.arrivalTime.nanosecondsOfSecond
-    val entry = hourly.time.indices.mapNotNull { index ->
+private fun OpenMeteoRouteResponse.toForecastHours(): List<RouteWeatherForecastHour> {
+    val hourly = hourly ?: return emptyList()
+    return hourly.time.indices.mapNotNull { index ->
         val time = hourly.time.getOrNull(index) ?: return@mapNotNull null
         val temperature = hourly.temperature.getOrNull(index) ?: return@mapNotNull null
         val weatherCode = hourly.weatherCode.getOrNull(index) ?: return@mapNotNull null
@@ -35,41 +46,19 @@ private fun OpenMeteoRouteResponse.enrich(sample: RouteWeatherSample): RouteWeat
         val precipitationProbability = hourly.precipitationProbability.getOrNull(index)
             ?: return@mapNotNull null
         if (!temperature.isFinite() || !windSpeed.isFinite()) return@mapNotNull null
-        RouteWeatherEntry(
-            time = time,
-            temperature = temperature,
+
+        RouteWeatherForecastHour(
+            time = Instant.fromEpochSeconds(time),
             condition = weatherCode.toWeatherCondition(),
-            windSpeed = windSpeed,
-            precipitationProbability = precipitationProbability
+            temperatureCelsius = temperature,
+            windSpeedKmh = windSpeed,
+            precipitationProbability = precipitationProbability,
+            precipitationMm = hourly.precipitation?.getOrNull(index),
+            humidityPercent = hourly.humidity?.getOrNull(index),
+            isDay = hourly.isDay?.getOrNull(index)?.let { it == 1 }
         )
-    }.minWithOrNull(
-        compareBy<RouteWeatherEntry> {
-            abs(it.time * NANOS_PER_SECOND - targetNanos)
-        }.thenByDescending { it.time }
-    ) ?: return sample.unavailable()
-
-    return sample.copy(
-        condition = entry.condition,
-        temperatureCelsius = entry.temperature,
-        windSpeedKmh = entry.windSpeed,
-        precipitationProbability = entry.precipitationProbability
-    )
+    }
 }
-
-private fun RouteWeatherSample.unavailable(): RouteWeatherSample = copy(
-    condition = null,
-    temperatureCelsius = null,
-    windSpeedKmh = null,
-    precipitationProbability = null
-)
-
-private data class RouteWeatherEntry(
-    val time: Long,
-    val temperature: Double,
-    val condition: WeatherCondition,
-    val windSpeed: Double,
-    val precipitationProbability: Int
-)
 
 private fun Int.toWeatherCondition(): WeatherCondition = when (this) {
     0 -> WeatherCondition.CLEAR
@@ -83,5 +72,3 @@ private fun Int.toWeatherCondition(): WeatherCondition = when (this) {
     95, 96, 99 -> WeatherCondition.THUNDERSTORM
     else -> WeatherCondition.UNKNOWN
 }
-
-private const val NANOS_PER_SECOND = 1_000_000_000L

@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalTime
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.Assert.assertEquals
@@ -39,6 +40,40 @@ class SettingsRepositoryTest {
         assertFalse(settings.weatherAlerts)
         assertFalse(settings.dailySummary)
         assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
+    }
+
+    @Test
+    fun missing_or_invalid_place_search_provider_defaults_to_photon() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.place_search_provider")] = "not-a-provider"
+        }
+
+        val state = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertEquals(PlaceSearchProvider.PHOTON, state.placeSearchProvider)
+    }
+
+    @Test
+    fun open_meteo_place_search_provider_survives_repository_reload() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        repository.save(PersistedSettings(placeSearchProvider = PlaceSearchProvider.OPEN_METEO))
+
+        assertEquals(PlaceSearchProvider.OPEN_METEO, DataStoreSettingsRepository(dataStore).settings.first().placeSearchProvider)
+        assertEquals(
+            "OPEN_METEO",
+            dataStore.data.first()[stringPreferencesKey("settings.place_search_provider")]
+        )
     }
 
     @Test

@@ -18,6 +18,7 @@ import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.WeatherRepository
 
 class SettingsViewModel(
@@ -55,6 +56,7 @@ class SettingsViewModel(
                             pendingTrackMe = null
                         }
                         _state.value.copy(
+                            isInitialized = true,
                             locations = locations,
                             selectedLocationId = activeSavedId
                                 ?: _state.value.selectedLocationId?.takeIf { id ->
@@ -77,6 +79,10 @@ class SettingsViewModel(
 
     fun setProvider(provider: WeatherProvider) {
         updateSettings { it.copy(provider = provider) }
+    }
+
+    fun setPlaceSearchProvider(provider: PlaceSearchProvider) {
+        updateSettings { it.copy(placeSearchProvider = provider) }
     }
 
     fun setTrackMe(enabled: Boolean) {
@@ -176,6 +182,8 @@ private fun PersistedSettings.toUiState(
 ): SettingsUiState =
     SettingsUiState(
         provider = provider,
+        placeSearchProvider = placeSearchProvider,
+        isInitialized = true,
         locations = locations,
         selectedLocationId = (activeLocation as? ActiveLocation.Saved)?.location?.id
             ?: selectedLocationId?.takeIf { id -> locations.any { location -> location.id == id } }
@@ -197,6 +205,7 @@ private fun PersistedSettings.toUiState(
 
 private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     provider = provider,
+    placeSearchProvider = placeSearchProvider,
     selectedLocationId = selectedLocationId,
     trackMeEnabled = trackMeEnabled,
     themeMode = themeMode,

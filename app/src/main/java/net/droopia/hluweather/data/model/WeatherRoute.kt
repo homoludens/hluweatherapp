@@ -18,7 +18,12 @@ data class RouteWeatherSample(
     val condition: WeatherCondition? = null,
     val temperatureCelsius: Double? = null,
     val windSpeedKmh: Double? = null,
-    val precipitationProbability: Int? = null
+    val precipitationProbability: Int? = null,
+    val precipitationMm: Double? = null,
+    val humidityPercent: Int? = null,
+    val isDay: Boolean? = null,
+    val placeLabel: String? = null,
+    val elevationMeters: Double? = null
 )
 
 data class WeatherRouteResult(
