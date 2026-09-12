@@ -64,6 +64,7 @@ fun WeatherRouteTimeline(
                 WeatherRouteTimelineItem(
                     sample = sample,
                     index = index,
+                    isDestination = index == result.samples.lastIndex,
                     isSelected = selectedSampleIndex == index,
                     temperatureUnit = temperatureUnit,
                     windUnit = windUnit,
@@ -80,6 +81,7 @@ fun WeatherRouteTimeline(
 private fun WeatherRouteTimelineItem(
     sample: RouteWeatherSample,
     index: Int,
+    isDestination: Boolean,
     isSelected: Boolean,
     temperatureUnit: TemperatureUnit,
     windUnit: WindUnit,
@@ -104,6 +106,13 @@ private fun WeatherRouteTimelineItem(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (isDestination) {
+                Text(
+                    text = "Destination",
+                    modifier = Modifier.testTag("route_timeline_destination_item"),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(sample.arrivalTime.hourText(timeZone), style = MaterialTheme.typography.titleMedium)
                 Text(

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.DrivingRoute
 import net.droopia.hluweather.data.model.GeoPoint
@@ -51,7 +52,8 @@ class WeatherRouteTimelineTest {
         }
 
         composeRule.onNodeWithTag("route_timeline_destination").assertIsDisplayed()
-        composeRule.onNodeWithText("Destination").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_timeline_destination")
+            .assertTextContains("Destination")
         composeRule.onNodeWithText("11h").assertIsDisplayed()
         composeRule.onNodeWithText("68°F").assertIsDisplayed()
         composeRule.onNodeWithTag("route_timeline_item_1").assertTextContains("6.21 mph")
@@ -59,6 +61,9 @@ class WeatherRouteTimelineTest {
         composeRule.onNodeWithText("40%").assertIsDisplayed()
         composeRule.onNodeWithText("Weather unavailable").assertIsDisplayed()
         composeRule.onNodeWithText("—").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_timeline_item_2").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("route_timeline_item_2")
+            .assertTextContains("Destination")
     }
 
     @Test

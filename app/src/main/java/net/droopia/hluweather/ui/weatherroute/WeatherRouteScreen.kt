@@ -35,12 +35,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
+import kotlin.math.roundToInt
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import net.droopia.hluweather.data.distanceText
+import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherRouteResult
 import net.droopia.hluweather.ui.settings.DistanceUnit
@@ -269,6 +271,34 @@ private fun RouteSummary(result: WeatherRouteResult, distanceUnit: DistanceUnit)
             Text("${result.start.label} to ${result.end.label}", style = MaterialTheme.typography.titleMedium)
             Text((result.route.distanceMeters / 1_000.0).distanceText(distanceUnit))
             Text("Average speed: ${result.averageSpeedKmh} km/h")
+            Text(
+                "Routing provider: ${result.route.providerName}",
+                modifier = Modifier.testTag("route_summary_provider")
+            )
+            Text(
+                "OSRM duration: ${routeDurationText(result.route.providerDurationSeconds)}",
+                modifier = Modifier.testTag("route_summary_osrm_duration")
+            )
+            Text(
+                "Departure: ${result.departure.dateTimeText()}",
+                modifier = Modifier.testTag("route_summary_departure")
+            )
+            Text(
+                "Expected arrival: ${(result.samples.lastOrNull()?.arrivalTime ?: result.departure)
+                    .dateTimeText()}",
+                modifier = Modifier.testTag("route_summary_expected_arrival")
+            )
         }
+    }
+}
+
+private fun routeDurationText(durationSeconds: Double): String {
+    val totalMinutes = (durationSeconds / 60.0).roundToInt().coerceAtLeast(0)
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return if (hours == 0) {
+        "$minutes min"
+    } else {
+        "${hours}h ${minutes}min"
     }
 }

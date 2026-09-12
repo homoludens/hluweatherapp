@@ -8,8 +8,28 @@ uses the route geometry returned by the routing service, a user-selected average
 speed, and the selected local departure time. Route results are kept in memory
 only.
 
-The approved architecture is described in the [Weather On Route design
-specification](superpowers/specs/2026-09-12-weather-on-route-design.md).
+The approved architecture is summarized below because the design-spec file is
+not present in this branch.
+
+## Approved Architecture Summary
+
+The planner uses a dedicated `weather_route` navigation destination and
+`WeatherRouteViewModel`. The ViewModel owns planner inputs, validation, request
+cancellation, retries, and in-memory results without changing the existing
+weather forecast flow.
+
+The data layer uses replaceable source interfaces:
+
+- `RoutingSource` supplies a driving polyline, distance, and provider estimate;
+  `OsrmRoutingSource` is the v1 implementation.
+- `PlaceSearchSource` supplies normalized place results; Photon is the default
+  and Open-Meteo geocoding is selectable.
+- `RouteWeatherSource` enriches ordered route samples; Open-Meteo is the only
+  v1 implementation.
+
+The shared route models flow from these sources through the ViewModel to the
+Compose route screen, MapLibre map, and timeline. This keeps routing and search
+providers replaceable without changing the planner UI or sampling logic.
 
 ## Opening The Planner
 
@@ -111,13 +131,15 @@ distinct departure and destination samples.
 
 After routing, the screen contains:
 
-- A route summary with the resolved endpoints, route distance, and entered
-  average speed.
+- A route summary with the resolved endpoints, route distance, entered average
+  speed, routing provider label, OSRM duration, local departure, and expected
+  arrival.
 - A MapLibre map using the app's OpenFreeMap light or dark map style.
 - The OSRM route line and start/destination markers.
 - A weather marker for every route sample.
 - A scrollable timeline containing local sample time, travelled distance,
   condition, temperature, wind, and precipitation probability.
+- A visible `Destination` label on the final timeline item.
 
 Weather markers use these normalized severity groups:
 

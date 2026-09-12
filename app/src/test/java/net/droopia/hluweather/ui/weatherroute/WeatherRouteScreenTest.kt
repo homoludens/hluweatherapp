@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertTextContains
 import java.util.TimeZone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
 import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.DrivingRoute
@@ -113,8 +115,29 @@ class WeatherRouteScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("route_summary").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("weather down").assertIsDisplayed()
-        composeRule.onNodeWithTag("route_weather_retry").assertIsDisplayed()
+        composeRule.onNodeWithText("weather down").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("route_weather_retry").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun route_summary_shows_provider_duration_departure_and_expected_arrival() {
+        val viewModel = viewModel().also { chooseEndpoints(it) }
+        val departure = now + 1.hours
+        val arrival = departure + 1.hours
+        render(viewModel)
+
+        composeRule.onNodeWithTag("route_calculate").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("route_summary").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithTag("route_summary_provider")
+            .assertTextContains("Routing provider: OSRM")
+        composeRule.onNodeWithTag("route_summary_osrm_duration")
+            .assertTextContains("OSRM duration: 1h 0min")
+        composeRule.onNodeWithTag("route_summary_departure")
+            .assertTextContains("Departure: ${departure.dateTimeText()}", substring = true)
+        composeRule.onNodeWithTag("route_summary_expected_arrival")
+            .assertTextContains("Expected arrival: ${arrival.dateTimeText()}", substring = true)
     }
 
     private fun render(viewModel: WeatherRouteViewModel) {
