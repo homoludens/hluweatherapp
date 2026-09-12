@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -22,6 +24,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
@@ -111,6 +115,49 @@ class CurrentWeatherCardTest {
     }
 
     @Test
+    fun dark_theme_current_values_ignore_a_dark_inherited_content_color() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = true) {
+                CompositionLocalProvider(LocalContentColor provides Color.Black) {
+                    CurrentWeatherCard(location = forecast.location, forecast = forecast)
+                }
+            }
+        }
+
+        assertTrue(
+            composeRule.onNodeWithTag("current_temperature")
+                .captureToImage()
+                .hasLightForeground()
+        )
+    }
+
+    @Test
+    fun current_card_is_compact_without_the_moon() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    modifier = androidx.compose.ui.Modifier.testTag("current_weather_card")
+                )
+            }
+        }
+
+        val cardHeight = composeRule.onNodeWithTag("current_weather_card")
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .height
+        assertTrue(
+            "Current weather card should stay compact: $cardHeight px",
+            cardHeight <= with(composeRule.density) { 280.dp.toPx() }
+        )
+    }
+
+    @Test
     fun location_row_exposes_a_merged_change_location_action() {
         val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
 
@@ -165,5 +212,14 @@ class CurrentWeatherCardTest {
         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) == true)
         val result = results.single()
         assertFalse("$text must not clip horizontally", result.didOverflowWidth)
+    }
+
+    private fun ImageBitmap.hasLightForeground(): Boolean {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return pixels.any {
+            val color = Color(it)
+            color.red > 0.6f && color.green > 0.6f && color.blue > 0.6f
+        }
     }
 }

@@ -7,7 +7,12 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -15,6 +20,7 @@ import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,6 +72,26 @@ class WeatherHeroTest {
 
         composeRule.onNodeWithText("Daily").performClick()
         assertEquals(ForecastMode.DAILY, selected)
+    }
+
+    @Test
+    fun expanded_tab_labels_stay_on_one_line_at_narrow_width() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                Box(Modifier.width(320.dp)) {
+                    WeatherHero(
+                        selected = ForecastMode.HOURLY,
+                        onSelected = {},
+                        onSettingsClick = {}
+                    )
+                }
+            }
+        }
+
+        val layoutResults = mutableListOf<TextLayoutResult>()
+        val textNode = composeRule.onNodeWithText("Hourly").fetchSemanticsNode()
+        assertTrue(textNode.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layoutResults) == true)
+        assertEquals(1, layoutResults.single().lineCount)
     }
 
     @Test

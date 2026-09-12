@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneId
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.HourForecast
@@ -46,6 +47,7 @@ import net.droopia.hluweather.ui.components.HluWeatherIcon
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
+import kotlin.time.Clock
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -55,11 +57,12 @@ fun HourlyForecast(
     onDaySelected: (Int) -> Unit,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    now: Instant = Clock.System.now(),
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
-    val tableData = remember(forecast) {
-        forecast.toHourlyTableData()
+    val tableData = remember(forecast, now) {
+        forecast.toHourlyTableData(now = now)
     }
     val selectedDayDate = tableData.nearestDayForIndex(selectedDayIndex)?.date
     val listState = rememberLazyListState()

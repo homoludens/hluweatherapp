@@ -41,7 +41,6 @@ import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
-import net.droopia.hluweather.ui.components.MoonPhase
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
@@ -59,12 +58,13 @@ fun CurrentWeatherCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = LocalHluColors.current.weatherCard
+            containerColor = LocalHluColors.current.weatherCard,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(22.dp)
+            modifier = Modifier.padding(12.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -90,7 +90,8 @@ fun CurrentWeatherCard(
                 Text(
                     text = location.name,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -99,30 +100,27 @@ fun CurrentWeatherCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(8.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = forecast.current.temperature.temperatureValueText(temperatureUnit),
                     modifier = Modifier.testTag("current_temperature"),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium,
-                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 70.sp)
+                     autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 56.sp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    MoonPhase(
-                        phase = forecast.moonPhase,
-                        modifier = Modifier.size(62.dp)
-                    )
-                    Spacer(Modifier.width(18.dp))
                     Text(
                         text = forecast.current.condition.label(),
                         modifier = Modifier.weight(1f),
-                        fontSize = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Row {
                     Column(modifier = Modifier.weight(1f)) {
@@ -164,16 +162,16 @@ private fun WeatherMetric(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 0.dp),
         verticalAlignment = Alignment.Top
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(21.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -181,6 +179,7 @@ private fun WeatherMetric(
             )
             Text(
                 text = value,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold
             )

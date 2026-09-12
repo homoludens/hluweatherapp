@@ -12,6 +12,7 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -74,6 +75,32 @@ class DailySummaryWorkerTest {
         assertTrue(publisher.summaries.single().contains("25.0"))
         assertTrue(publisher.summaries.single().contains("12.0"))
         assertTrue(publisher.summaries.single().contains("4.5"))
+    }
+
+    @Test
+    fun summary_includes_the_daily_rain_window_and_amount() = runBlocking {
+        val publisher = SummaryPublisher()
+        val result = build(
+            settings = PersistedSettings(selectedLocationId = location.id, dailySummary = true),
+            weather = SummaryWeatherRepository(
+                ForecastLoad(
+                    summaryForecast().copy(
+                        hourly = listOf(
+                            hour("2026-09-10T12:00:00Z", 0.0),
+                            hour("2026-09-10T13:00:00Z", 1.2),
+                            hour("2026-09-10T14:00:00Z", 3.3),
+                            hour("2026-09-10T15:00:00Z", 0.0)
+                        )
+                    )
+                )
+            ),
+            publisher = publisher
+        ).doWork()
+
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+        assertEquals(1, publisher.summaries.size)
+        assertTrue(publisher.summaries.single().contains("Rain 15:00-16:00, 4.5 mm."))
+        assertTrue(!publisher.summaries.single().contains("probability"))
     }
 
     @Test
@@ -229,6 +256,18 @@ class DailySummaryWorkerTest {
         precipitation,
         null,
         null
+    )
+
+    private fun hour(time: String, precipitation: Double) = HourForecast(
+        time = Instant.parse(time),
+        temperature = 20.0,
+        apparentTemperature = null,
+        humidity = null,
+        dewPoint = null,
+        precipitation = precipitation,
+        precipitationProbability = null,
+        condition = WeatherCondition.RAIN,
+        isDay = true
     )
 }
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +54,7 @@ fun WeatherHero(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (compact) Modifier else Modifier.testTag("weather_hero"))
             .height(if (compact) 96.dp else 176.dp)
             .background(
                 Brush.verticalGradient(
@@ -149,8 +151,7 @@ private fun NavigationTabs(
     )
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth()
     ) {
         items.forEach { (mode, title, icon) ->
             WeatherNavButton(
@@ -159,7 +160,7 @@ private fun NavigationTabs(
                 selected = selected == mode,
                 compact = compact,
                 onClick = { onSelected(mode) },
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -186,15 +187,16 @@ private fun WeatherNavButton(
                 onClick = onClick
             ),
         shape = RoundedCornerShape(28.dp),
-        color = if (selected) colors.navSelected else Color.Transparent
+        color = if (selected) colors.navSelected else Color.Transparent,
+        contentColor = if (selected) colors.navSelectedText else colors.heroSecondaryText
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (compact) 16.dp else 20.dp,
+                horizontal = if (compact) 16.dp else 4.dp,
                 vertical = if (compact) 8.dp else 10.dp
             ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 9.dp else 2.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -208,7 +210,7 @@ private fun WeatherNavButton(
             if (!compact) {
                 Text(
                     text = text,
-                    fontSize = 18.sp,
+                    fontSize = if (compact) 18.sp else 14.sp,
                     color = if (selected) {
                         colors.navSelectedText
                     } else {

@@ -80,7 +80,8 @@ private fun DailyRow(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = LocalHluColors.current.weatherCard
+            containerColor = LocalHluColors.current.weatherCard,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
@@ -95,6 +96,7 @@ private fun DailyRow(
             ) {
                 Text(
                     text = day.date.dayText(displayZone),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
@@ -114,6 +116,7 @@ private fun DailyRow(
             Text(
                 text = "${day.temperatureMin.temperatureValueText(temperatureUnit)} – " +
                     day.temperatureMax.temperatureValueText(temperatureUnit),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
 

@@ -11,6 +11,7 @@ import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
 import kotlinx.datetime.Instant
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -49,6 +50,41 @@ class WeatherMapTest {
 
         assertFalse(markers.first { it.location.id == "one" }.isActive)
         assertTrue(markers.first { it.location.id == "two" }.isActive)
+    }
+
+    @Test
+    fun location_markers_do_not_show_name_initials() {
+        val source = File("app/src/main/java/net/droopia/hluweather/ui/map/WeatherMap.kt")
+            .takeIf { it.isFile }
+            ?: File("src/main/java/net/droopia/hluweather/ui/map/WeatherMap.kt")
+
+        assertFalse(source.readText().contains("text = marker.location.name.take(1).uppercase()"))
+    }
+
+    @Test
+    fun viewport_contains_all_saved_locations() {
+        val viewport = weatherMapViewport(
+            listOf(
+                WeatherLocation("one", "One", 44.0, 21.0),
+                WeatherLocation("two", "Two", 45.0, 22.0)
+            )
+        )
+
+        assertEquals(44.5, viewport.center.latitude, 0.0001)
+        assertEquals(21.5, viewport.center.longitude, 0.0001)
+        assertTrue(viewport.zoom < 11.0)
+    }
+
+    @Test
+    fun viewport_can_include_the_current_location_when_fitting_saved_locations() {
+        val viewport = weatherMapViewport(
+            locations = listOf(WeatherLocation("one", "One", 44.0, 21.0)),
+            fallbackCenter = GeoPoint(46.0, 23.0),
+            includeFallbackInBounds = true
+        )
+
+        assertEquals(45.0, viewport.center.latitude, 0.0001)
+        assertEquals(22.0, viewport.center.longitude, 0.0001)
     }
 
     @Test

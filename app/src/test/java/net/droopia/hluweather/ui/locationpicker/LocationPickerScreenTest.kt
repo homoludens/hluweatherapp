@@ -30,6 +30,8 @@ import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -93,6 +95,33 @@ class LocationPickerScreenTest {
         composeRule.onNodeWithContentDescription("Back").assertHasClickAction()
         composeRule.onNodeWithText("Use my location").assertHasClickAction()
         composeRule.onNodeWithText("Save").assertHasClickAction()
+    }
+
+    @Test
+    fun shows_a_spinner_while_waiting_for_the_location_name() {
+        val viewModel = LocationPickerViewModel(
+            locationRepository = TestLocationRepository(),
+            deviceLocationSource = object : DeviceLocationSource {
+                override suspend fun currentLocation() = GpsResult.Unavailable
+            },
+            reverseGeocoder = object : ReverseGeocoder {
+                override suspend fun reverse(point: net.droopia.hluweather.data.model.GeoPoint): String? {
+                    kotlinx.coroutines.awaitCancellation()
+                }
+            }
+        )
+        render(viewModel)
+
+        viewModel.onCameraIdle(net.droopia.hluweather.data.model.GeoPoint(44.8176, 20.4633))
+        assertTrue(viewModel.state.value.isNameLoading)
+        composeRule.onNodeWithTag("location_picker_scroll").performTouchInput { swipeUp() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("location_name_loading").assertIsDisplayed()
+    }
+
+    @Test
+    fun location_name_spinner_rotates_while_loading() {
+        assertNotEquals(nameSpinnerRotation(0L), nameSpinnerRotation(400L))
     }
 
     private fun render(

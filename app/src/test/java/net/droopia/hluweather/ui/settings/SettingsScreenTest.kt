@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -17,12 +18,18 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -73,6 +80,17 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Notifications").assertIsDisplayed()
         scrollTo(6)
         composeRule.onNodeWithText("Data & Cache").assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_title_uses_light_foreground_in_dark_theme() {
+        renderSettings(darkTheme = true, inheritedContentColor = Color.Black)
+
+        assertTrue(
+            composeRule.onNodeWithText("Settings")
+                .captureToImage()
+                .hasLightForeground()
+        )
     }
 
     @Test
@@ -271,32 +289,52 @@ class SettingsScreenTest {
         onDailySummaryTimeChange: (LocalTime) -> Unit = {},
         notificationsPermissionGranted: Boolean = true,
         onOpenNotificationSettings: () -> Unit = {},
-        onClearCacheClick: () -> Unit = {}
+        onClearCacheClick: () -> Unit = {},
+        darkTheme: Boolean = false,
+        inheritedContentColor: Color? = null
     ) {
         composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
-                SettingsScreen(
-                    state = state(),
-                    onBackClick = onBackClick,
-                    onProviderChange = onProviderChange,
-                    onProviderInfoClick = onProviderInfoClick,
-                    onTrackMeChange = onTrackMeChange,
-                    onLocationSelect = onLocationSelect,
-                    onLocationMenuClick = onLocationMenuClick,
-                    onAddLocationClick = onAddLocationClick,
-                    onThemeChange = onThemeChange,
-                    onTemperatureUnitChange = onTemperatureUnitChange,
-                    onWindUnitChange = onWindUnitChange,
-                    onDistanceUnitChange = onDistanceUnitChange,
-                    onPrecipitationUnitChange = onPrecipitationUnitChange,
-                    onWeatherAlertsChange = onWeatherAlertsChange,
-                    onDailySummaryChange = onDailySummaryChange,
-                    onDailySummaryTimeChange = onDailySummaryTimeChange,
-                    notificationsPermissionGranted = notificationsPermissionGranted,
-                    onOpenNotificationSettings = onOpenNotificationSettings,
-                    onClearCacheClick = onClearCacheClick
-                )
+            HluWeatherTheme(darkTheme = darkTheme) {
+                val content: @Composable () -> Unit = {
+                    SettingsScreen(
+                        state = state(),
+                        onBackClick = onBackClick,
+                        onProviderChange = onProviderChange,
+                        onProviderInfoClick = onProviderInfoClick,
+                        onTrackMeChange = onTrackMeChange,
+                        onLocationSelect = onLocationSelect,
+                        onLocationMenuClick = onLocationMenuClick,
+                        onAddLocationClick = onAddLocationClick,
+                        onThemeChange = onThemeChange,
+                        onTemperatureUnitChange = onTemperatureUnitChange,
+                        onWindUnitChange = onWindUnitChange,
+                        onDistanceUnitChange = onDistanceUnitChange,
+                        onPrecipitationUnitChange = onPrecipitationUnitChange,
+                        onWeatherAlertsChange = onWeatherAlertsChange,
+                        onDailySummaryChange = onDailySummaryChange,
+                        onDailySummaryTimeChange = onDailySummaryTimeChange,
+                        notificationsPermissionGranted = notificationsPermissionGranted,
+                        onOpenNotificationSettings = onOpenNotificationSettings,
+                        onClearCacheClick = onClearCacheClick
+                    )
+                }
+                if (inheritedContentColor != null) {
+                    CompositionLocalProvider(LocalContentColor provides inheritedContentColor) {
+                        content()
+                    }
+                } else {
+                    content()
+                }
             }
+        }
+    }
+
+    private fun ImageBitmap.hasLightForeground(): Boolean {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return pixels.any {
+            val color = Color(it)
+            color.red > 0.6f && color.green > 0.6f && color.blue > 0.6f
         }
     }
 

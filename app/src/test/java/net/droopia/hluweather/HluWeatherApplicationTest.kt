@@ -40,17 +40,12 @@ class HluWeatherApplicationTest {
             .getApplicationContext<HluWeatherApplication>()
         val applicationInfo = application.applicationInfo
         val icon = applicationInfo.icon
-        val roundIcon = R.mipmap.ic_launcher_round
         val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
 
         assertNotEquals(0, icon)
-        assertNotEquals(0, roundIcon)
-        assertEquals("ic_launcher", application.resources.getResourceEntryName(icon))
-        assertEquals("mipmap", application.resources.getResourceTypeName(icon))
-        assertEquals("ic_launcher_round", application.resources.getResourceEntryName(roundIcon))
-        assertEquals("mipmap", application.resources.getResourceTypeName(roundIcon))
-        assertEquals("adaptive-icon", application.resources.getXml(icon).rootElementName())
-        assertEquals("adaptive-icon", application.resources.getXml(roundIcon).rootElementName())
+        assertEquals(R.drawable.hluweatherapp_icon, icon)
+        assertEquals("hluweatherapp_icon", application.resources.getResourceEntryName(icon))
+        assertEquals("drawable", application.resources.getResourceTypeName(icon))
         assertEquals(32, packageInfo.versionCode)
         assertEquals("3.2.0", packageInfo.versionName)
     }
@@ -118,11 +113,4 @@ class HluWeatherApplicationTest {
             activeLocation: ActiveLocation.Saved
         ) = Unit
     }
-}
-
-private fun org.xmlpull.v1.XmlPullParser.rootElementName(): String {
-    while (next() != org.xmlpull.v1.XmlPullParser.START_TAG) {
-        // Advance past the XML declaration and whitespace.
-    }
-    return name
 }

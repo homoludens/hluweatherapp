@@ -51,6 +51,7 @@ data class LocationPickerUiState(
     val altitude: Int? = null,
     val name: String = NEW_LOCATION_NAME,
     val isNameEditing: Boolean = false,
+    val isNameLoading: Boolean = false,
     val gpsStatus: GpsStatus = GpsStatus.Idle,
     val initialization: LocationPickerInitialization = LocationPickerInitialization.Ready
 ) {
@@ -87,6 +88,9 @@ class LocationPickerViewModel(
         get() = editingLocationId != null && _state.value.initialization == LocationPickerInitialization.Ready
 
     init {
+        if (initialLocation == null && locationId == null) {
+            requestReverseGeocode(_state.value.point)
+        }
         if (initialLocation == null && locationId != null) {
             _state.update { it.copy(initialization = LocationPickerInitialization.Loading) }
             viewModelScope.launch {
@@ -109,13 +113,18 @@ class LocationPickerViewModel(
     }
 
     fun onNameChanged(name: String) {
-        _state.update { it.copy(name = name, isNameEditing = true) }
+        _state.update {
+            it.copy(name = name, isNameEditing = true, isNameLoading = false)
+        }
     }
 
     fun onReverseGeocoded(name: String?) {
         val generatedName = name?.trim()?.takeIf(String::isNotEmpty) ?: NEW_LOCATION_NAME
         _state.update { state ->
-            if (state.isNameEditing) state else state.copy(name = generatedName)
+            state.copy(
+                name = if (state.isNameEditing) state.name else generatedName,
+                isNameLoading = false
+            )
         }
     }
 
@@ -222,6 +231,7 @@ class LocationPickerViewModel(
 
     private fun requestReverseGeocode(point: GeoPoint) {
         reverseGeocodingJob?.cancel()
+        _state.update { it.copy(isNameLoading = !it.isNameEditing) }
         reverseGeocodingJob = viewModelScope.launch {
             try {
                 delay(reverseGeocodeDebounceMillis)

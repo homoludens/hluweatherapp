@@ -69,6 +69,25 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun reverse_geocoding_exposes_name_loading_state() {
+        val viewModel = picker(geocoder = PendingReverseGeocoder())
+
+        viewModel.onCameraIdle(viewModelPoint)
+
+        assertTrue(viewModel.state.value.isNameLoading)
+    }
+
+    @Test
+    fun new_location_starts_waiting_for_its_name() {
+        val viewModel = picker(
+            geocoder = PendingReverseGeocoder(),
+            reverseGeocodeDebounceMillis = 300L
+        )
+
+        assertTrue(viewModel.state.value.isNameLoading)
+    }
+
+    @Test
     fun add_save_persists_without_waiting_for_reverse_geocoding() = runTest {
         val repository = FakeLocationRepository()
         val viewModel = picker(repository = repository, geocoder = PendingReverseGeocoder())

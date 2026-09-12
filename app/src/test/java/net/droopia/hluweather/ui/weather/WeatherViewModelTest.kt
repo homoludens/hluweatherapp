@@ -557,6 +557,34 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun location_change_keeps_current_forecast_visible_until_new_request_finishes() = runTest {
+        val firstLocation = Svilajnac
+        val secondLocation = WeatherLocation("belgrade", "Belgrade", 44.81, 20.46)
+        val firstResult = CompletableDeferred<WeatherForecast>()
+        val secondResult = CompletableDeferred<WeatherForecast>()
+        val repository = DeferredWeatherRepository(
+            firstLocation to firstResult,
+            secondLocation to secondResult
+        )
+        val locations = TestLocationRepository(ActiveLocation.Saved(firstLocation))
+        val viewModel = WeatherViewModel(repository, TestSettingsRepository(), locations)
+
+        firstResult.complete(buildMockForecast(firstLocation, Instant.fromEpochSeconds(1L)))
+        advanceUntilIdle()
+        locations.emitActive(ActiveLocation.Saved(secondLocation))
+
+        assertEquals(firstLocation, viewModel.state.value.forecast?.location)
+        assertEquals(secondLocation, viewModel.state.value.activeLocation)
+        assertTrue(viewModel.state.value.isRefreshing)
+        assertFalse(viewModel.state.value.isLoading)
+
+        secondResult.complete(buildMockForecast(secondLocation, Instant.fromEpochSeconds(2L)))
+        advanceUntilIdle()
+
+        assertEquals(secondLocation, viewModel.state.value.forecast?.location)
+    }
+
+    @Test
     fun obsolete_same_location_provider_result_cannot_update_state() = runTest {
         val oldForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
         val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))

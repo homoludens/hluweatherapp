@@ -49,8 +49,16 @@ import java.time.ZoneId
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -78,6 +86,7 @@ fun WeatherScreen(
     darkTheme: Boolean = false,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    now: Instant? = null,
     modifier: Modifier = Modifier,
     mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
         { mapLocation, locations, activeLocationId, mapDarkTheme, onRecenterClick ->
@@ -86,6 +95,7 @@ fun WeatherScreen(
                 activeLocationId = activeLocationId,
                 center = GeoPoint(mapLocation.latitude, mapLocation.longitude),
                 darkTheme = mapDarkTheme,
+                fitLocations = true,
                 onLocationClick = viewModel::selectLocation,
                 onRecenterClick = onRecenterClick
             )
@@ -177,12 +187,6 @@ fun WeatherScreen(
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    if (state.isStale) {
-                        StaleForecastBanner(
-                            fetchedAt = forecast.fetchedAt.toString(),
-                            onRetry = viewModel::refresh
-                        )
-                    }
                     if (state.forecastMode == ForecastMode.HOURLY) {
                         HourlyWeatherContent(
                             forecast = forecast,
@@ -190,6 +194,7 @@ fun WeatherScreen(
                             selectedDayIndex = state.selectedDayIndex,
                             temperatureUnit = temperatureUnit,
                             precipitationUnit = precipitationUnit,
+                            now = now,
                             onDaySelected = viewModel::onDaySelected,
                             onForecastModeSelected = viewModel::onForecastModeSelected,
                             onSettingsClick = onSettingsClick,
@@ -204,16 +209,18 @@ fun WeatherScreen(
                             onSettingsClick = onSettingsClick
                         )
 
-                        CurrentWeatherCard(
-                            location = location,
-                            forecast = forecast,
-                            temperatureUnit = temperatureUnit,
-                            precipitationUnit = precipitationUnit,
-                            onLocationClick = { locationSwitcherVisible = true },
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .offset(y = (-8).dp)
-                        )
+                        if (state.forecastMode != ForecastMode.DAILY) {
+                            CurrentWeatherCard(
+                                location = location,
+                                forecast = forecast,
+                                temperatureUnit = temperatureUnit,
+                                precipitationUnit = precipitationUnit,
+                                onLocationClick = { locationSwitcherVisible = true },
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .offset(y = (-8).dp)
+                            )
+                        }
 
                         when (state.forecastMode) {
                             ForecastMode.DAILY -> {
@@ -302,28 +309,6 @@ fun WeatherScreen(
     }
 }
 
-@Composable
-private fun StaleForecastBanner(fetchedAt: String, onRetry: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.tertiaryContainer)
-            .testTag("stale_forecast_banner")
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Showing cached data from $fetchedAt",
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
-            style = MaterialTheme.typography.bodySmall
-        )
-        Button(onClick = onRetry) {
-            Text("Retry")
-        }
-    }
-}
-
 private fun trackMeStatusText(status: TrackMeStatus, enabled: Boolean): String? {
     if (!enabled) return null
     return when (status) {
@@ -334,6 +319,30 @@ private fun trackMeStatusText(status: TrackMeStatus, enabled: Boolean): String? 
         TrackMeStatus.LocationDisabled -> "Location is disabled"
         TrackMeStatus.Unavailable -> "Location unavailable"
     }
+}
+
+@Composable
+private fun rememberWeatherNow(timezone: String, fixedNow: Instant?): Instant {
+    var liveNow by remember(timezone) { mutableStateOf(Clock.System.now()) }
+    LaunchedEffect(timezone, fixedNow) {
+        if (fixedNow != null) return@LaunchedEffect
+        while (true) {
+            val current = Clock.System.now()
+            liveNow = current
+            val local = current.toLocalDateTime(TimeZone.of(timezone))
+            val nextHour = LocalDateTime(
+                year = local.year,
+                month = local.month,
+                day = local.day,
+                hour = local.hour,
+                minute = 0,
+                second = 0,
+                nanosecond = 0
+            ).toInstant(TimeZone.of(timezone)) + 1.hours
+            delay((nextHour - current).inWholeMilliseconds.coerceAtLeast(1L))
+        }
+    }
+    return fixedNow ?: liveNow
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -348,16 +357,18 @@ private fun HourlyWeatherContent(
     onForecastModeSelected: (ForecastMode) -> Unit,
     onSettingsClick: () -> Unit,
     onLocationClick: () -> Unit,
+    now: Instant?,
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
+    val tableNow = rememberWeatherNow(forecast.timezone, now)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val isCollapsed by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
-    val tableData = remember(forecast) {
-        forecast.toHourlyTableData()
+    val tableData = remember(forecast, tableNow) {
+        forecast.toHourlyTableData(now = tableNow)
     }
     val tableItemStartIndex = hourlyListPrefixKeys.size
     val firstListItemIndexByDay = remember(tableData) {
