@@ -111,4 +111,28 @@ class HluNavHostTest {
 
         composeRule.onAllNodesWithText("70°F").onFirst().assertIsDisplayed()
     }
+
+    @Test
+    fun map_mode_opens_weather_on_route_and_back_returns_to_weather() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    weatherMapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize()) },
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Map").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_route_open").performClick()
+        composeRule.mainClock.advanceTimeBy(5_000)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Weather on route").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+    }
 }

@@ -150,6 +150,10 @@ class WeatherRouteViewModel(
         )
     }
 
+    fun selectMapEndpoint(slot: RouteEndpointSlot, endpoint: RouteEndpoint) {
+        setEndpoint(slot, endpoint)
+    }
+
     fun selectCurrentLocation(slot: RouteEndpointSlot) {
         viewModelScope.launch {
             try {
