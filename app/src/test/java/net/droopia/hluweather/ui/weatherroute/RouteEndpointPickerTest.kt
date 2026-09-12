@@ -14,7 +14,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.click
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RouteEndpoint
@@ -132,6 +134,38 @@ class RouteEndpointPickerTest {
         composeRule.waitForIdle()
 
         assertEquals(RouteEndpoint("Selected map point", GeoPoint(46.05, 14.51)), selectedEndpoint)
+    }
+
+    @Test
+    fun saved_location_scrim_blocks_underlying_actions_and_cancel_dismisses_overlay() {
+        var currentLocationClicks = 0
+
+        render(
+            onCurrentLocationSelected = { currentLocationClicks++ }
+        )
+
+        composeRule.onNodeWithTag("route_start_saved_locations").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("route_saved_locations_scrim").assertIsDisplayed()
+
+        val scrim = composeRule.onNodeWithTag("route_saved_locations_scrim")
+        val scrimBounds = scrim.fetchSemanticsNode().boundsInRoot
+        val currentLocationBounds = composeRule
+            .onNodeWithTag("route_start_current_location")
+            .fetchSemanticsNode().boundsInRoot
+        scrim.performTouchInput {
+            click(currentLocationBounds.center - scrimBounds.topLeft)
+        }
+        assertEquals(0, currentLocationClicks)
+
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.waitForIdle()
+        assertTrue(
+            composeRule.onAllNodesWithTag("route_saved_locations_scrim")
+                .fetchSemanticsNodes().isEmpty()
+        )
+        composeRule.onNodeWithTag("route_start_current_location").performClick()
+        assertEquals(1, currentLocationClicks)
     }
 
     private fun render(
