@@ -2,6 +2,9 @@ package net.droopia.hluweather.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -11,12 +14,15 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.ui.locationpicker.LocationPickerScreen
 import net.droopia.hluweather.ui.locationpicker.LocationPickerViewModel
 import net.droopia.hluweather.ui.settings.SettingsScreen
 import net.droopia.hluweather.ui.settings.SettingsViewModel
 import net.droopia.hluweather.ui.weather.WeatherScreen
 import net.droopia.hluweather.ui.weather.WeatherViewModel
+import net.droopia.hluweather.ui.weatherroute.WeatherRouteScreen
+import net.droopia.hluweather.ui.weatherroute.WeatherRouteViewModel
 
 @Composable
 fun HluNavHost(
@@ -31,10 +37,15 @@ fun HluNavHost(
 ) {
     val navController = rememberNavController()
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
+    val application = LocalContext.current.applicationContext as HluWeatherApplication
+    val routeLocations = application.locationRepository.locations
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .value
 
     NavHost(
         navController = navController,
-        startDestination = "weather"
+        startDestination = "weather",
+        modifier = Modifier.fillMaxSize()
     ) {
         composable("weather") {
             if (weatherMapContent == null) {
@@ -42,6 +53,7 @@ fun HluNavHost(
                     viewModel = weatherViewModel
                         ?: viewModel(factory = WeatherViewModel.Factory),
                     onSettingsClick = { navController.navigate("settings") },
+                    onWeatherRouteClick = { navController.navigate("weather_route") },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
@@ -53,6 +65,7 @@ fun HluNavHost(
                     viewModel = weatherViewModel
                         ?: viewModel(factory = WeatherViewModel.Factory),
                     onSettingsClick = { navController.navigate("settings") },
+                    onWeatherRouteClick = { navController.navigate("weather_route") },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
@@ -61,6 +74,26 @@ fun HluNavHost(
                     mapContent = weatherMapContent
                 )
             }
+        }
+
+        composable("weather_route") {
+            WeatherRouteScreen(
+                viewModel = viewModel(
+                    factory = WeatherRouteViewModel.Factory(
+                        routingSource = application.routingSource,
+                        placeSearchSources = application.routePlaceSearchSources.values.toList(),
+                        routeWeatherSource = application.routeWeatherSource,
+                        locationRepository = application.locationRepository,
+                        deviceLocationSource = application.deviceLocationSource
+                    )
+                ),
+                savedLocations = routeLocations,
+                darkTheme = darkTheme,
+                temperatureUnit = settingsState.temperatureUnit,
+                windUnit = settingsState.windUnit,
+                distanceUnit = settingsState.distanceUnit,
+                onBackClick = { navController.popBackStack() }
+            )
         }
 
         composable("settings") {

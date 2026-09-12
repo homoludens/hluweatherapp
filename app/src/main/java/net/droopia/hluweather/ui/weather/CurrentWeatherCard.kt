@@ -108,7 +108,7 @@ fun CurrentWeatherCard(
                     modifier = Modifier.testTag("current_temperature"),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium,
-                     autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 56.sp)
+                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 56.sp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(

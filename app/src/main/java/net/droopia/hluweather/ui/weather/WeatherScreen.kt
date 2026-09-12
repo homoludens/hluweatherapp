@@ -81,6 +81,7 @@ private val hourlyListPrefixKeys = listOf(
 fun WeatherScreen(
     viewModel: WeatherViewModel = viewModel(factory = WeatherViewModel.Factory),
     onSettingsClick: () -> Unit = {},
+    onWeatherRouteClick: () -> Unit = {},
     onTrackMeClick: () -> Unit = {},
     trackMeSelected: Boolean = false,
     darkTheme: Boolean = false,
@@ -248,6 +249,18 @@ fun WeatherScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (forecast != null && location != null && state.forecastMode == ForecastMode.MAP) {
+            Button(
+                onClick = onWeatherRouteClick,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .testTag("weather_route_open")
+            ) {
+                Text("Weather on route")
             }
         }
 

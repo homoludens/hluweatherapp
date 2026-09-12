@@ -459,6 +459,30 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun map_mode_displays_weather_on_route_action() {
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        var routeClicked = false
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onSettingsClick = {},
+                    onWeatherRouteClick = { routeClicked = true },
+                    mapContent = { _, _, _, _, _ ->
+                        Text("Map", Modifier.testTag("weather_map"))
+                    }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Map").performClick()
+        composeRule.onNodeWithTag("weather_route_open").assertIsDisplayed().performClick()
+
+        assertTrue(routeClicked)
+    }
+
+    @Test
     fun settings_icon_reports_click() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         var settingsClicked = false

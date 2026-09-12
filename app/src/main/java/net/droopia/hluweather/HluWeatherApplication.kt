@@ -24,11 +24,23 @@ import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.network.KtorMetNoApi
 import net.droopia.hluweather.data.network.KtorNominatimApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
+import net.droopia.hluweather.data.network.KtorOpenMeteoGeocodingApi
+import net.droopia.hluweather.data.network.KtorOpenMeteoRouteWeatherApi
+import net.droopia.hluweather.data.network.KtorOsrmApi
+import net.droopia.hluweather.data.network.KtorPhotonApi
 import net.droopia.hluweather.data.repository.NominatimReverseGeocoder
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.MetNoWeatherRepository
+import net.droopia.hluweather.data.repository.OpenMeteoPlaceSearchSource
+import net.droopia.hluweather.data.repository.OpenMeteoRouteWeatherSource
 import net.droopia.hluweather.data.repository.OpenMeteoWeatherRepository
+import net.droopia.hluweather.data.repository.OsrmRoutingSource
+import net.droopia.hluweather.data.repository.PhotonPlaceSearchSource
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
+import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.ReverseGeocoder
+import net.droopia.hluweather.data.repository.RouteWeatherSource
+import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.applicationDataStore
@@ -104,6 +116,23 @@ class HluWeatherApplication : Application(), Configuration.Provider {
 
     val deviceLocationSource: DeviceLocationSource by lazy {
         AndroidDeviceLocationSource(this)
+    }
+
+    val routingSource: RoutingSource by lazy {
+        OsrmRoutingSource(KtorOsrmApi(httpClient))
+    }
+
+    val routePlaceSearchSources: Map<PlaceSearchProvider, PlaceSearchSource> by lazy {
+        mapOf(
+            PlaceSearchProvider.PHOTON to PhotonPlaceSearchSource(KtorPhotonApi(httpClient)),
+            PlaceSearchProvider.OPEN_METEO to OpenMeteoPlaceSearchSource(
+                KtorOpenMeteoGeocodingApi(httpClient)
+            )
+        )
+    }
+
+    val routeWeatherSource: RouteWeatherSource by lazy {
+        OpenMeteoRouteWeatherSource(KtorOpenMeteoRouteWeatherApi(httpClient))
     }
 
     val notificationStateRepository: NotificationStateRepository by lazy {
