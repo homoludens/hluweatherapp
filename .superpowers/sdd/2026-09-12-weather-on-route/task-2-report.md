@@ -116,3 +116,59 @@ Exact output: no output, exit code 0.
   tested through compile SDK 36.1 while this project uses compile SDK 37.
 - Only the two requested OSRM unit-test classes were run; the full project
   unit-test suite was not run.
+
+## Task 2 Review Fix
+
+Reviewer finding: public OSRM requests omitted a descriptive `User-Agent`.
+
+### Changes
+
+- Added an injectable `userAgent` constructor parameter to `KtorOsrmApi`.
+- Defaulted it to the existing app convention:
+  `HluWeather/1.0 https://net.droopia.hluweather`.
+- Added the `HttpHeaders.UserAgent` request header.
+- Added a request-header assertion to `OsrmApiTest`.
+- Kept `OsrmApi` and `RoutingSource` interfaces unchanged.
+
+### TDD Verification
+
+The exact requested command was run after adding the assertion but before the
+production header change:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.data.network.OsrmApiTest --tests net.droopia.hluweather.data.repository.OsrmRoutingSourceTest
+```
+
+Exact failure summary:
+
+```text
+OsrmApiTest > route_sends_driving_geojson_full_overview_request FAILED
+    java.lang.AssertionError at OsrmApiTest.kt:27
+
+6 tests completed, 1 failed
+```
+
+After adding the injectable/default header, the same exact command was run:
+
+```text
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.data.network.OsrmApiTest --tests net.droopia.hluweather.data.repository.OsrmRoutingSourceTest
+```
+
+Exact final output:
+
+```text
+BUILD SUCCESSFUL in 6s
+28 actionable tasks: 5 executed, 23 up-to-date
+```
+
+### Fix Self-Review
+
+- Confirmed the default value matches the existing `KtorNominatimApi`
+  User-Agent convention exactly.
+- Confirmed callers can inject a different User-Agent without changing either
+  public source interface.
+- Confirmed the header is attached to every OSRM route request.
+- Confirmed the test captures and asserts the outgoing request header.
+- Confirmed the targeted OSRM tests pass after the fix.
+- Confirmed the Android Gradle compile-SDK warning is pre-existing and does not
+  affect the targeted test result.

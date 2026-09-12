@@ -42,6 +42,10 @@ class OsrmApiTest {
         assertEquals("geojson", request.url.parameters["geometries"])
         assertEquals("full", request.url.parameters["overview"])
         assertEquals("false", request.url.parameters["steps"])
+        assertEquals(
+            "HluWeather/1.0 https://net.droopia.hluweather",
+            request.headers[HttpHeaders.UserAgent]
+        )
         assertEquals("Ok", route.code)
 
         client.close()
