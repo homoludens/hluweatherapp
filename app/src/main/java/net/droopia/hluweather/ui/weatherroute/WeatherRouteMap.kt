@@ -1,0 +1,250 @@
+package net.droopia.hluweather.ui.weatherroute
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.WeatherRouteResult
+import net.droopia.hluweather.data.weatherroute.WeatherSeverity
+import net.droopia.hluweather.data.weatherroute.weatherSeverity
+import net.droopia.hluweather.ui.map.mapStyleUrl
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.compose.expressions.value.LineCap
+import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.layers.LineLayer
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.StyleLoadState
+import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.overlay.MapOverlay
+import org.maplibre.compose.overlay.include
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.compose.sources.GeoJsonData
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.spatialk.geojson.BoundingBox
+import org.maplibre.spatialk.geojson.LineString
+import org.maplibre.spatialk.geojson.Position
+import org.maplibre.spatialk.geojson.toJson
+
+data class WeatherRouteMarker(
+    val sampleIndex: Int,
+    val point: GeoPoint,
+    val severity: WeatherSeverity,
+    val color: Color,
+    val isSelected: Boolean
+)
+
+fun weatherRouteMarkers(
+    result: WeatherRouteResult,
+    selectedSampleIndex: Int?
+): List<WeatherRouteMarker> = result.samples.mapIndexed { index, sample ->
+    val severity = weatherSeverity(sample.condition)
+    WeatherRouteMarker(
+        sampleIndex = index,
+        point = sample.point,
+        severity = severity,
+        color = weatherRouteMarkerColor(severity),
+        isSelected = index == selectedSampleIndex
+    )
+}
+
+fun weatherRouteMarkerColor(severity: WeatherSeverity): Color = when (severity) {
+    WeatherSeverity.FAVORABLE -> Color(0xFF2E7D32)
+    WeatherSeverity.CAUTION -> Color(0xFFF9A825)
+    WeatherSeverity.ADVERSE -> Color(0xFFEF6C00)
+    WeatherSeverity.SEVERE -> Color(0xFFC62828)
+    WeatherSeverity.UNAVAILABLE -> Color(0xFF7A808A)
+}
+
+fun routeLineGeoJson(polyline: List<GeoPoint>): String =
+    LineString(polyline.map { Position(longitude = it.longitude, latitude = it.latitude) }).toJson()
+
+@Composable
+fun WeatherRouteMap(
+    result: WeatherRouteResult,
+    selectedSampleIndex: Int? = null,
+    darkTheme: Boolean,
+    modifier: Modifier = Modifier,
+    onSampleSelected: (Int) -> Unit = {}
+) {
+    val initialPoint = result.route.polyline.firstOrNull() ?: result.start.point
+    val mapState = rememberMapState(
+        baseStyle = BaseStyle.Uri(
+            mapStyleUrl(darkTheme)
+        ),
+        initialCameraPosition = CameraPosition(
+            target = initialPoint.toPosition(),
+            zoom = 10.0
+        )
+    )
+    LaunchedEffect(mapState, result.route.polyline) {
+        if (result.route.polyline.size >= 2) {
+            mapState.fitCameraToBounds(
+                routeBounds(result.route.polyline),
+                padding = androidx.compose.foundation.layout.PaddingValues(48.dp)
+            )
+        }
+    }
+
+    LaunchedEffect(selectedSampleIndex) {
+        result.samples.getOrNull(selectedSampleIndex ?: -1)?.let { sample ->
+            mapState.animateCameraPosition(
+                CameraPosition(
+                    target = sample.point.toPosition(),
+                    zoom = mapState.cameraPosition.zoom.coerceAtLeast(12.0)
+                )
+            )
+        }
+    }
+
+    Box(modifier = modifier.testTag("weather_route_map")) {
+        MaplibreMap(
+            modifier = Modifier.fillMaxSize(),
+            state = mapState
+        ) {
+            include(MapOverlay.Default)
+            val routeSource = rememberGeoJsonSource(
+                GeoJsonData.JsonString(routeLineGeoJson(result.route.polyline))
+            )
+            LineLayer(
+                id = "weather_route_line",
+                source = routeSource,
+                color = const(MaterialTheme.colorScheme.primary),
+                width = const(5.dp),
+                cap = const(LineCap.Round),
+                join = const(LineJoin.Round)
+            )
+
+            RouteEndpointMarker(
+                label = "Start",
+                text = "S",
+                modifier = Modifier
+                    .placedAt(result.start.point.toPosition(), Alignment.BottomCenter)
+                    .testTag("route_weather_start_marker")
+            )
+            RouteEndpointMarker(
+                label = result.end.label,
+                text = "D",
+                modifier = Modifier
+                    .placedAt(result.end.point.toPosition(), Alignment.BottomCenter)
+                    .testTag("route_weather_end_marker")
+            )
+            weatherRouteMarkers(result, selectedSampleIndex).forEach { marker ->
+                WeatherRouteSampleMarker(
+                    marker = marker,
+                    onSelected = onSampleSelected,
+                    modifier = Modifier.placedAt(
+                        marker.point.toPosition(),
+                        Alignment.BottomCenter
+                    )
+                )
+            }
+        }
+
+        if (mapState.style.loadState is StyleLoadState.Failed) {
+            Text(
+                text = "Map tiles unavailable",
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                    .padding(12.dp)
+                    .testTag("weather_route_map_error"),
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+internal fun WeatherRouteMapMarkers(
+    result: WeatherRouteResult,
+    selectedSampleIndex: Int?,
+    onSampleSelected: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        weatherRouteMarkers(result, selectedSampleIndex).forEach { marker ->
+            WeatherRouteSampleMarker(marker, onSampleSelected)
+        }
+    }
+}
+
+@Composable
+private fun WeatherRouteSampleMarker(
+    marker: WeatherRouteMarker,
+    onSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .size(if (marker.isSelected) 56.dp else 48.dp)
+            .border(
+                width = if (marker.isSelected) 3.dp else 0.dp,
+                color = MaterialTheme.colorScheme.onSurface,
+                shape = CircleShape
+            )
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Show weather sample ${marker.sampleIndex + 1}"
+            ) {
+                onSelected(marker.sampleIndex)
+            }
+            .semantics {
+                contentDescription = "Weather sample ${marker.sampleIndex + 1}, ${marker.severity}"
+            }
+            .testTag("route_weather_marker_${marker.sampleIndex}"),
+        shape = CircleShape,
+        color = marker.color
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(text = "${marker.sampleIndex + 1}", color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun RouteEndpointMarker(
+    label: String,
+    text: String,
+    modifier: Modifier
+) {
+    Surface(
+        modifier = modifier
+            .size(48.dp)
+            .semantics { contentDescription = label },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primary
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(text = text, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
+
+private fun routeBounds(polyline: List<GeoPoint>): BoundingBox = BoundingBox(
+    west = polyline.minOf { it.longitude },
+    south = polyline.minOf { it.latitude },
+    east = polyline.maxOf { it.longitude },
+    north = polyline.maxOf { it.latitude }
+)
+
+private fun GeoPoint.toPosition() = Position(longitude = longitude, latitude = latitude)
