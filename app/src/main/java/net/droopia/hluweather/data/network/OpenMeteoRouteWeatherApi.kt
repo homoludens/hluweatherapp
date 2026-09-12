@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -66,7 +67,11 @@ class KtorOpenMeteoRouteWeatherApi(
         val element = json.parseToJsonElement(this)
         return when (element) {
             is JsonArray -> element.map {
-                json.decodeFromJsonElement<OpenMeteoRouteResponse>(it)
+                try {
+                    json.decodeFromJsonElement<OpenMeteoRouteResponse>(it)
+                } catch (_: SerializationException) {
+                    OpenMeteoRouteResponse()
+                }
             }
             else -> listOf(json.decodeFromJsonElement<OpenMeteoRouteResponse>(element))
         }

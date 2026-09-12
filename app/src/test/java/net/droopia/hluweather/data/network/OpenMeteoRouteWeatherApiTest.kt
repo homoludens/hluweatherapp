@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.GeoPoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -64,6 +65,27 @@ class OpenMeteoRouteWeatherApiTest {
 
         assertEquals(1, response.size)
         assertEquals(listOf(1_789_000_000L), response.single().hourly!!.time)
+
+        client.close()
+    }
+
+    @Test
+    fun forecast_makes_only_a_malformed_array_location_unavailable() = runTest {
+        val client = mockClient { respondJson(malformedLocationResponse) }
+
+        val response = KtorOpenMeteoRouteWeatherApi(client, "https://open-meteo.test")
+            .forecast(
+                listOf(
+                    GeoPoint(44.8, 20.4),
+                    GeoPoint(45.2, 17.0),
+                    GeoPoint(45.6, 13.7)
+                )
+            )
+
+        assertEquals(3, response.size)
+        assertNotNull(response[0].hourly)
+        assertNull(response[1].hourly)
+        assertEquals(listOf(1789007200L), response[2].hourly!!.time)
 
         client.close()
     }
@@ -127,6 +149,38 @@ class OpenMeteoRouteWeatherApiTest {
                   "weather_code": [61],
                   "wind_speed_10m": [14.0],
                   "precipitation_probability": [20]
+                }
+              }
+            ]
+        """.trimIndent()
+
+        val malformedLocationResponse = """
+            [
+              {
+                "hourly": {
+                  "time": [1789000000],
+                  "temperature_2m": [20.0],
+                  "weather_code": [1],
+                  "wind_speed_10m": [12.0],
+                  "precipitation_probability": [10]
+                }
+              },
+              {
+                "hourly": {
+                  "time": [1789003600],
+                  "temperature_2m": ["not-a-number"],
+                  "weather_code": [61],
+                  "wind_speed_10m": [14.0],
+                  "precipitation_probability": [20]
+                }
+              },
+              {
+                "hourly": {
+                  "time": [1789007200],
+                  "temperature_2m": [22.0],
+                  "weather_code": [2],
+                  "wind_speed_10m": [10.0],
+                  "precipitation_probability": [0]
                 }
               }
             ]
