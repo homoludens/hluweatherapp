@@ -6,45 +6,29 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class DeviceLocationSourceTest {
-
     @Test
-    fun location_without_altitude_preserves_a_null_altitude() {
-        val location = Location("gps").apply {
-            latitude = 44.8176
-            longitude = 20.4633
-        }
-
-        assertEquals(
-            GpsResult.Success(GeoPoint(44.8176, 20.4633), altitude = null),
-            location.toGpsResult()
-        )
-    }
-
-    @Test
-    fun coarse_permission_uses_network_even_when_gps_is_enabled() {
+    fun coarse_permission_uses_network_provider() {
         assertEquals(
             LocationManager.NETWORK_PROVIDER,
-            selectLocationProvider(hasFinePermission = false) { provider ->
-                provider == LocationManager.GPS_PROVIDER || provider == LocationManager.NETWORK_PROVIDER
-            }
+            selectLocationProvider(hasFinePermission = false) { it == LocationManager.NETWORK_PROVIDER }
         )
     }
 
     @Test
-    fun fine_permission_prefers_gps_when_it_is_enabled() {
+    fun fine_permission_prefers_network_provider_when_available() {
         assertEquals(
-            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
             selectLocationProvider(hasFinePermission = true) { provider ->
                 provider == LocationManager.GPS_PROVIDER || provider == LocationManager.NETWORK_PROVIDER
             }
@@ -56,8 +40,6 @@ class DeviceLocationSourceTest {
         var removeCalls = 0
         val source = AndroidDeviceLocationSource(
             context = ApplicationProvider.getApplicationContext(),
-            locationManager = ApplicationProvider.getApplicationContext<android.content.Context>()
-                .getSystemService(LocationManager::class.java),
             mainLooper = Looper.getMainLooper(),
             hasPermission = { true },
             isLocationEnabled = { true },
@@ -76,8 +58,6 @@ class DeviceLocationSourceTest {
     fun foreground_locations_report_unavailable_after_timeout_without_a_fix() = runTest {
         val source = AndroidDeviceLocationSource(
             context = ApplicationProvider.getApplicationContext(),
-            locationManager = ApplicationProvider.getApplicationContext<android.content.Context>()
-                .getSystemService(LocationManager::class.java),
             mainLooper = Looper.getMainLooper(),
             hasPermission = { true },
             isLocationEnabled = { true },

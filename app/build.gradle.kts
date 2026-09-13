@@ -68,18 +68,20 @@ android {
         }
     }
 
-    applicationVariants.all {
-        if (name == "googleRelease" && hasReleaseSigning) {
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
-
     buildFeatures {
         compose = true
     }
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release").withFlavor("distribution", "google")) { variant ->
+        if (hasReleaseSigning) {
+            variant.signingConfig.setConfig(android.signingConfigs.getByName("release"))
+        }
     }
 }
 
