@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -26,12 +27,23 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.map.shouldRefresh
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import kotlinx.datetime.Instant
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+private const val CURRENT_LOCATION_NAME = "Current location"
+private const val CURRENT_LOCATION_ID = "current"
+private const val LOCATION_NAME_MOVEMENT_THRESHOLD_METERS = 3_000.0
+private val LOCATION_NAME_MIN_INTERVAL = 1.hours
 
 data class WeatherUiState(
     val activeLocation: WeatherLocation? = null,
@@ -60,7 +72,8 @@ class WeatherViewModel(
     private val settingsRepository: SettingsRepository,
     private val locationRepository: LocationRepository,
     private val deviceLocationSource: DeviceLocationSource? = null,
-    private val now: () -> Instant = { Clock.System.now() }
+    private val now: () -> Instant = { Clock.System.now() },
+    private val reverseGeocoder: ReverseGeocoder? = null
 ) : ViewModel() {
 
     constructor(repository: WeatherRepository, location: WeatherLocation) : this(
@@ -79,6 +92,11 @@ class WeatherViewModel(
     private var lastLoadedProvider: WeatherProvider? = null
     private var handledRefresh = 0
     private var observedLocationMode: LocationMode? = null
+    private var latestCurrentPoint: GeoPoint? = null
+    private var currentLocationName = CURRENT_LOCATION_NAME
+    private var lastLocationNamePoint: GeoPoint? = null
+    private var lastLocationNameRequestAt: Instant? = null
+    private var locationNameJob: Job? = null
 
     val state = _state.asStateFlow()
 
@@ -121,8 +139,10 @@ class WeatherViewModel(
         source.foregroundLocations().collect { result ->
             when (result) {
                 is GpsResult.Success -> {
+                    latestCurrentPoint = result.point
                     locationRepository.setCurrentLocation(result.point, result.altitude)
                     _state.update { it.copy(trackMeStatus = TrackMeStatus.Active) }
+                    requestCurrentLocationName(result.point)
                 }
                 GpsResult.PermissionRequired ->
                     _state.update { it.copy(trackMeStatus = TrackMeStatus.PermissionRequired) }
@@ -168,7 +188,7 @@ class WeatherViewModel(
     }
 
     private suspend fun load(request: WeatherLoadRequest) {
-        val currentLocation = request.activeLocation.toWeatherLocation()
+        val currentLocation = request.activeLocation.toWeatherLocation(currentLocationName)
         if (currentLocation == null) {
             if (requestGeneration != request.generation) return
             _state.update {
@@ -291,6 +311,58 @@ class WeatherViewModel(
         }
     }
 
+    private fun requestCurrentLocationName(point: GeoPoint) {
+        val geocoder = reverseGeocoder ?: return
+        val requestAt = now()
+        val movementIsLargeEnough = lastLocationNamePoint?.let { previous ->
+            distanceMeters(previous, point) >= LOCATION_NAME_MOVEMENT_THRESHOLD_METERS
+        } ?: true
+        val intervalHasPassed = lastLocationNameRequestAt?.let { previous ->
+            requestAt - previous >= LOCATION_NAME_MIN_INTERVAL
+        } ?: true
+        if (!movementIsLargeEnough || !intervalHasPassed) return
+
+        lastLocationNamePoint = point
+        lastLocationNameRequestAt = requestAt
+        currentLocationName = CURRENT_LOCATION_NAME
+        _state.update { state ->
+            val active = state.activeLocation
+            if (active?.id == CURRENT_LOCATION_ID &&
+                active.latitude == point.latitude &&
+                active.longitude == point.longitude
+            ) {
+                state.copy(activeLocation = active.copy(name = CURRENT_LOCATION_NAME))
+            } else {
+                state
+            }
+        }
+        locationNameJob?.cancel()
+        locationNameJob = viewModelScope.launch {
+            val name = try {
+                geocoder.reverse(point)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                null
+            }
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+            if (latestCurrentPoint != point) return@launch
+            currentLocationName = name ?: CURRENT_LOCATION_NAME
+            _state.update { state ->
+                val active = state.activeLocation
+                if (active?.id == CURRENT_LOCATION_ID &&
+                    active.latitude == point.latitude &&
+                    active.longitude == point.longitude
+                ) {
+                    state.copy(activeLocation = active.copy(name = currentLocationName))
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -301,7 +373,8 @@ class WeatherViewModel(
                     application.weatherRepository,
                     application.settingsRepository,
                     application.locationRepository,
-                    application.deviceLocationSource
+                    application.deviceLocationSource,
+                    reverseGeocoder = application.reverseGeocoder
                 )
             }
         }
@@ -317,11 +390,11 @@ private data class WeatherLoadRequest(
     val refresh: Int
 )
 
-private fun ActiveLocation?.toWeatherLocation(): WeatherLocation? = when (this) {
+private fun ActiveLocation?.toWeatherLocation(currentLocationName: String): WeatherLocation? = when (this) {
     is ActiveLocation.Saved -> location
     is ActiveLocation.Current -> WeatherLocation(
-        id = "current",
-        name = "Current location",
+        id = CURRENT_LOCATION_ID,
+        name = currentLocationName,
         latitude = point.latitude,
         longitude = point.longitude,
         altitude = altitude
@@ -351,4 +424,16 @@ private class FixedLocationRepository(
     override suspend fun selectSaved(id: String) = Unit
     override suspend fun setTrackMe(enabled: Boolean) = Unit
     override suspend fun setCurrentLocation(point: GeoPoint, altitude: Int?) = Unit
+}
+
+private fun distanceMeters(first: GeoPoint, second: GeoPoint): Double {
+    val earthRadiusMeters = 6_371_000.0
+    val latitudeDelta = Math.toRadians(second.latitude - first.latitude)
+    val longitudeDelta = Math.toRadians(second.longitude - first.longitude)
+    val firstLatitude = Math.toRadians(first.latitude)
+    val secondLatitude = Math.toRadians(second.latitude)
+    val haversine = sin(latitudeDelta / 2) * sin(latitudeDelta / 2) +
+        cos(firstLatitude) * cos(secondLatitude) *
+        sin(longitudeDelta / 2) * sin(longitudeDelta / 2)
+    return earthRadiusMeters * 2 * asin(sqrt(haversine))
 }

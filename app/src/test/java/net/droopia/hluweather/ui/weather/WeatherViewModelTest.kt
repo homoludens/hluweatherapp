@@ -37,6 +37,7 @@ import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.ForecastLoad
+import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ui.settings.PersistedSettings
@@ -731,6 +732,77 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun track_me_uses_the_reverse_geocoded_name_for_the_first_fix() = runTest {
+        val source = TestDeviceLocationSource()
+        val locations = TestLocationRepository(null).also { it.mode.value = LocationMode.TRACK_ME }
+        val geocoder = RecordingReverseGeocoder()
+        val viewModel = WeatherViewModel(
+            RecordingWeatherRepository(),
+            TestSettingsRepository(),
+            locations,
+            source,
+            reverseGeocoder = geocoder,
+            now = { Instant.fromEpochSeconds(1_000L) }
+        )
+        val tracking = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.trackMeWhileStarted()
+        }
+        val point = GeoPoint(44.8176, 20.4633)
+
+        source.emit(GpsResult.Success(point, null))
+        advanceUntilIdle()
+
+        assertEquals(listOf(point), geocoder.points)
+        assertEquals("Place 1", viewModel.state.value.activeLocation?.name)
+        tracking.cancel()
+    }
+
+    @Test
+    fun track_me_does_not_reverse_geocode_small_movements_or_too_often() = runTest {
+        val source = TestDeviceLocationSource()
+        val locations = TestLocationRepository(null).also { it.mode.value = LocationMode.TRACK_ME }
+        val geocoder = RecordingReverseGeocoder()
+        var now = Instant.fromEpochSeconds(1_000L)
+        val viewModel = WeatherViewModel(
+            RecordingWeatherRepository(),
+            TestSettingsRepository(),
+            locations,
+            source,
+            reverseGeocoder = geocoder,
+            now = { now }
+        )
+        val tracking = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.trackMeWhileStarted()
+        }
+        val first = GeoPoint(44.8176, 20.4633)
+        val smallMovement = GeoPoint(44.8400, 20.4633)
+        val largeMovement = GeoPoint(44.8536, 20.4633)
+
+        source.emit(GpsResult.Success(first, null))
+        advanceUntilIdle()
+        now = Instant.fromEpochSeconds(1_000L + 30 * 60)
+        source.emit(GpsResult.Success(smallMovement, null))
+        advanceUntilIdle()
+        assertEquals(listOf(first), geocoder.points)
+
+        source.emit(GpsResult.Success(largeMovement, null))
+        advanceUntilIdle()
+        assertEquals(listOf(first), geocoder.points)
+
+        now = Instant.fromEpochSeconds(1_000L + 60 * 60)
+        source.emit(GpsResult.Success(smallMovement, null))
+        advanceUntilIdle()
+        assertEquals(listOf(first), geocoder.points)
+
+        source.emit(GpsResult.Success(largeMovement, null))
+        advanceUntilIdle()
+
+        assertEquals(listOf(first, largeMovement), geocoder.points)
+        assertEquals("Place 2", viewModel.state.value.activeLocation?.name)
+        tracking.cancel()
+    }
+
+    @Test
     fun stale_track_me_result_does_not_advance_live_refresh_gate() = runTest {
         val source = TestDeviceLocationSource()
         val locations = TestLocationRepository(null)
@@ -979,6 +1051,15 @@ class WeatherViewModelTest {
 
         suspend fun emit(result: GpsResult) {
             updates.emit(result)
+        }
+    }
+
+    private class RecordingReverseGeocoder : ReverseGeocoder {
+        val points = mutableListOf<GeoPoint>()
+
+        override suspend fun reverse(point: GeoPoint): String {
+            points += point
+            return "Place ${points.size}"
         }
     }
 
