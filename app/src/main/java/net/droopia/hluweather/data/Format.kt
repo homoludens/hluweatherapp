@@ -3,6 +3,7 @@ package net.droopia.hluweather.data
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -88,7 +89,7 @@ private fun Instant.toJavaInstant(): java.time.Instant =
     java.time.Instant.ofEpochMilli(toEpochMilliseconds())
 
 private fun LocalDate.toJavaDate(): java.time.LocalDate =
-    java.time.LocalDate.of(year, monthNumber, dayOfMonth)
+    java.time.LocalDate.of(year, month.number, day)
 
 private fun Double.decimalText(): String =
     String.format(Locale.US, "%.2f", this)

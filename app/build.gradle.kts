@@ -30,8 +30,8 @@ android {
         applicationId = "net.droopia.hluweather"
         minSdk = 28
         targetSdk = 36
-        versionCode = 35
-        versionName = "3.4.1"
+        versionCode = 36
+        versionName = "3.4.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
