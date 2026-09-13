@@ -3,7 +3,7 @@ package net.droopia.hluweather.ui.preview
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast

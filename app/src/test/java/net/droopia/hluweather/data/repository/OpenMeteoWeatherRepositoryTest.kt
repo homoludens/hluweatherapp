@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data.repository
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json

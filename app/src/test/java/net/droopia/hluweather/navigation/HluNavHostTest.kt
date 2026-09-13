@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.DrivingRoute
 import net.droopia.hluweather.data.model.GeoPoint

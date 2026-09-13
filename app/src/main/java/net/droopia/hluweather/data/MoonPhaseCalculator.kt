@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 object MoonPhaseCalculator {
 

@@ -4,7 +4,7 @@ import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.cache.ForecastCacheKey
 import net.droopia.hluweather.data.cache.ForecastCacheStore
 import net.droopia.hluweather.data.model.ActiveLocation

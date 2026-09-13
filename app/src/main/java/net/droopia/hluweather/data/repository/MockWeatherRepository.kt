@@ -1,7 +1,7 @@
 package net.droopia.hluweather.data.repository
 
 import kotlin.time.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation

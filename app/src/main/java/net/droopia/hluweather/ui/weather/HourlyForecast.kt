@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneId
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.HourForecast

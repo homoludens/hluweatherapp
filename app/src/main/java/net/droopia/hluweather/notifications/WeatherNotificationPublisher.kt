@@ -1,6 +1,6 @@
 package net.droopia.hluweather.notifications
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.WeatherProvider
 
 data class WeatherAlertEvent(

@@ -2,7 +2,7 @@ package net.droopia.hluweather.data.cache
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.WeatherProvider

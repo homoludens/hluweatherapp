@@ -96,7 +96,7 @@ class DailySummaryWorker(
 }
 
 internal fun WeatherForecast.summaryBody(
-    deliveryTime: kotlinx.datetime.Instant,
+    deliveryTime: kotlin.time.Instant,
     temperatureUnit: TemperatureUnit,
     precipitationUnit: PrecipitationUnit
 ): String? {
@@ -143,7 +143,7 @@ private fun WeatherForecast.rainWindow(day: DayForecast): String? {
     return if (first == last) first else "$first-$last"
 }
 
-private fun WeatherForecast.dayForSummary(deliveryTime: kotlinx.datetime.Instant): DayForecast? {
+private fun WeatherForecast.dayForSummary(deliveryTime: kotlin.time.Instant): DayForecast? {
     val date = runCatching {
         deliveryTime.toLocalDateTime(TimeZone.of(timezone)).date
     }.getOrNull()

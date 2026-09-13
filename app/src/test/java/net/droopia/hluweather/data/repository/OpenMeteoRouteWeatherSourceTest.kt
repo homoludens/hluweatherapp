@@ -2,7 +2,7 @@ package net.droopia.hluweather.data.repository
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RouteWeatherSample
 import net.droopia.hluweather.data.model.WeatherCondition

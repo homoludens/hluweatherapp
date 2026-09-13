@@ -1,7 +1,7 @@
 package net.droopia.hluweather.ui.weather
 
 import java.util.TimeZone
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.data.toAppLocalDate

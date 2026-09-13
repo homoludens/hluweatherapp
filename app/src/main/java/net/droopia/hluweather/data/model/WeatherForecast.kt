@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 

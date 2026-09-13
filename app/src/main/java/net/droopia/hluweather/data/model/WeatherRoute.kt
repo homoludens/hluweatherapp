@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class RouteEndpoint(val label: String, val point: GeoPoint)
 

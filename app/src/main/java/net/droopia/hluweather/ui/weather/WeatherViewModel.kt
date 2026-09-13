@@ -32,7 +32,7 @@ import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.map.shouldRefresh
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.math.asin

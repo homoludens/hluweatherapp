@@ -11,7 +11,7 @@ import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
 import org.maplibre.compose.camera.CameraMoveReason
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

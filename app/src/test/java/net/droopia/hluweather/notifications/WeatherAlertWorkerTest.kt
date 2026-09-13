@@ -6,7 +6,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast

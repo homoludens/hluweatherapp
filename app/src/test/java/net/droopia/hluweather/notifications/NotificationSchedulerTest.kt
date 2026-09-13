@@ -63,7 +63,7 @@ class NotificationSchedulerTest {
         val event = WeatherAlertEvent(
             provider = WeatherProvider.OPEN_METEO,
             locationId = "belgrade",
-            periodStart = kotlinx.datetime.Instant.fromEpochSeconds(1_780_000_000)
+            periodStart = kotlin.time.Instant.fromEpochSeconds(1_780_000_000)
         )
 
         assertEquals("weather-alert:OPEN_METEO:belgrade:1780000000", event.key)

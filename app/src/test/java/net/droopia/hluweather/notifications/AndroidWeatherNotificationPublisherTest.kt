@@ -3,7 +3,7 @@ package net.droopia.hluweather.notifications
 import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

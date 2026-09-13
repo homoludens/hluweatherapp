@@ -41,7 +41,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.ActiveLocation

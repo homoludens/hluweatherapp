@@ -6,7 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.flow.first
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherCondition

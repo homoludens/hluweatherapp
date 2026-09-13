@@ -3,7 +3,7 @@ package net.droopia.hluweather.notifications
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import net.droopia.hluweather.data.model.WeatherProvider
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

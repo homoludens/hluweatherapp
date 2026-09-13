@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import net.droopia.hluweather.ui.settings.DistanceUnit
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
