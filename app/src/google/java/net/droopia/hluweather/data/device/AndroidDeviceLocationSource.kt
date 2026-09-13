@@ -42,7 +42,7 @@ class AndroidDeviceLocationSource internal constructor(
             throw exception
         } catch (_: SecurityException) {
             GpsResult.PermissionRequired
-        } catch (_: RuntimeException) {
+        } catch (_: Exception) {
             GpsResult.Unavailable
         }
     }
@@ -56,8 +56,17 @@ class AndroidDeviceLocationSource internal constructor(
         }
 
         val firstFix = CompletableDeferred<Unit>()
+        val registrationLock = Any()
         var registration: LocationUpdateRegistration? = null
+        var flowClosed = false
         var cachedFixReceived = false
+        fun removeRegistration() {
+            val registrationToRemove = synchronized(registrationLock) {
+                flowClosed = true
+                registration.also { registration = null }
+            }
+            registrationToRemove?.remove()
+        }
         try {
             val cached = fusedLocationGateway.lastLocation()
             if (cached != null) {
@@ -66,17 +75,26 @@ class AndroidDeviceLocationSource internal constructor(
                 trySend(cached.toGpsResult())
             }
 
-            registration = fusedLocationGateway.requestLocationUpdates(priority) { location ->
+            val newRegistration = fusedLocationGateway.requestLocationUpdates(priority) { location ->
                 firstFix.complete(Unit)
                 trySend(location.toGpsResult())
             }
+            val removeNewRegistration = synchronized(registrationLock) {
+                if (flowClosed) {
+                    true
+                } else {
+                    registration = newRegistration
+                    false
+                }
+            }
+            if (removeNewRegistration) newRegistration.remove()
         } catch (_: SecurityException) {
             trySend(GpsResult.PermissionRequired)
             close()
             return@callbackFlow
         } catch (exception: CancellationException) {
             throw exception
-        } catch (_: RuntimeException) {
+        } catch (_: Exception) {
             trySend(GpsResult.Unavailable)
             close()
             return@callbackFlow
@@ -88,7 +106,7 @@ class AndroidDeviceLocationSource internal constructor(
         }
 
         awaitClose {
-            registration?.remove()
+            removeRegistration()
         }
     }
 

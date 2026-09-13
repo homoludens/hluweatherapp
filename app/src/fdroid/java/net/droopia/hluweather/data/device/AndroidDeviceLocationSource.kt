@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import net.droopia.hluweather.data.model.GpsResult
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 @SuppressLint("MissingPermission")
@@ -109,24 +110,32 @@ class AndroidDeviceLocationSource(
         return withTimeoutOrNull(timeoutMillis) {
             suspendCancellableCoroutine { continuation ->
                 lateinit var listener: LocationListener
+                val removed = AtomicBoolean(false)
+                fun removeListener() {
+                    if (removed.compareAndSet(false, true)) {
+                        removeLocationUpdates(listener)
+                    }
+                }
                 listener = object : LocationListener {
                     override fun onLocationChanged(location: Location) {
                         if (continuation.isActive) {
-                            removeLocationUpdates(listener)
+                            removeListener()
                             continuation.resume(location.toGpsResult())
                         }
                     }
                 }
 
                 continuation.invokeOnCancellation {
-                    removeLocationUpdates(listener)
+                    removeListener()
                 }
 
                 try {
                     requestSingleUpdate(provider, listener)
                 } catch (_: SecurityException) {
+                    removeListener()
                     if (continuation.isActive) continuation.resume(GpsResult.PermissionRequired)
                 } catch (_: RuntimeException) {
+                    removeListener()
                     if (continuation.isActive) continuation.resume(GpsResult.Unavailable)
                 }
             }

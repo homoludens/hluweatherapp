@@ -70,4 +70,22 @@ class DeviceLocationSourceTest {
 
         assertEquals(GpsResult.Unavailable, source.foregroundLocations().first())
     }
+
+    @Test
+    fun current_location_removes_listener_when_request_fails() = runTest {
+        var removeCalls = 0
+        val source = AndroidDeviceLocationSource(
+            context = ApplicationProvider.getApplicationContext(),
+            mainLooper = Looper.getMainLooper(),
+            hasPermission = { true },
+            isLocationEnabled = { true },
+            isProviderEnabled = { it == LocationManager.NETWORK_PROVIDER },
+            requestLocationUpdates = { _, _, _, _ -> },
+            requestSingleUpdate = { _, _ -> throw IllegalStateException("provider failure") },
+            removeLocationUpdates = { removeCalls++ }
+        )
+
+        assertEquals(GpsResult.Unavailable, source.currentLocation())
+        assertEquals(1, removeCalls)
+    }
 }

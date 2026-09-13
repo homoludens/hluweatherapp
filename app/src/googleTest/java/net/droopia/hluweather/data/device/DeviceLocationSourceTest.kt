@@ -72,6 +72,20 @@ class DeviceLocationSourceTest {
     }
 
     @Test
+    fun checked_provider_failure_returns_unavailable() = runTest {
+        val gateway = RecordingFusedLocationGateway(failure = Exception("provider failure"))
+
+        assertEquals(GpsResult.Unavailable, source(gateway).currentLocation())
+    }
+
+    @Test
+    fun checked_foreground_provider_failure_returns_unavailable() = runTest {
+        val gateway = RecordingFusedLocationGateway(failure = Exception("provider failure"))
+
+        assertEquals(GpsResult.Unavailable, source(gateway).foregroundLocations().first())
+    }
+
+    @Test
     fun foreground_flow_removes_fused_registration_when_cancelled() = runTest {
         val gateway = RecordingFusedLocationGateway()
         val result = async {
@@ -122,7 +136,8 @@ class DeviceLocationSourceTest {
 
     private class RecordingFusedLocationGateway(
         private val last: Location? = null,
-        private val current: Location? = null
+        private val current: Location? = null,
+        private val failure: Exception? = null
     ) : FusedLocationGateway {
         var lastLocationCalls = 0
         var currentLocationCalls = 0
@@ -132,6 +147,7 @@ class DeviceLocationSourceTest {
 
         override suspend fun lastLocation(): Location? {
             lastLocationCalls++
+            failure?.let { throw it }
             return last
         }
 
