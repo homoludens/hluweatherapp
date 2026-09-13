@@ -77,6 +77,12 @@ class WeatherMapTest {
     }
 
     @Test
+    fun map_fit_zoom_is_one_step_out_from_the_fitted_zoom() {
+        assertEquals(9.0, zoomOutWeatherMapFit(10.0), 0.0)
+        assertEquals(0.0, zoomOutWeatherMapFit(0.5), 0.0)
+    }
+
+    @Test
     fun viewport_can_include_the_current_location_when_fitting_saved_locations() {
         val viewport = weatherMapViewport(
             locations = listOf(WeatherLocation("one", "One", 44.0, 21.0)),

@@ -60,6 +60,7 @@ private const val MAP_DEFAULT_LONGITUDE = 21.1970
 private const val MAP_MINIMUM_SPAN_DEGREES = 0.005
 private const val MAP_PADDING_FACTOR = 1.2
 private const val MAP_MAX_ZOOM = 15.0
+private const val MAP_FIT_ZOOM_OUT_STEPS = 1.0
 
 data class WeatherMapMarker(
     val location: WeatherLocation,
@@ -187,6 +188,9 @@ fun recenterWeatherMap(onRecenter: () -> Unit) {
 fun shouldAnimateWeatherMapCenter(current: GeoPoint, requested: GeoPoint): Boolean =
     current != requested
 
+internal fun zoomOutWeatherMapFit(zoom: Double): Double =
+    (zoom - MAP_FIT_ZOOM_OUT_STEPS).coerceAtLeast(0.0)
+
 fun shouldRefresh(
     lastPoint: GeoPoint?,
     currentPoint: GeoPoint,
@@ -270,6 +274,13 @@ fun WeatherMap(
                 mapState.animateCameraToBounds(
                     weatherMapBounds(points),
                     padding = PaddingValues(32.dp)
+                )
+                val fittedCamera = mapState.cameraPosition
+                mapState.animateCameraPosition(
+                    CameraPosition(
+                        target = fittedCamera.target,
+                        zoom = zoomOutWeatherMapFit(fittedCamera.zoom)
+                    )
                 )
             }
         }
