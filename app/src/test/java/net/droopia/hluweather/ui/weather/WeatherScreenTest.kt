@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
@@ -25,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
@@ -55,6 +58,7 @@ import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+import androidx.compose.material3.LocalContentColor
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -567,6 +571,42 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun empty_saved_locations_use_light_foreground_in_dark_theme() {
+        val viewModel = WeatherViewModel(
+            repository = MockWeatherRepository(),
+            settingsRepository = object : net.droopia.hluweather.ui.settings.SettingsRepository {
+                override val settings = MutableStateFlow(
+                    net.droopia.hluweather.ui.settings.PersistedSettings()
+                )
+
+                override suspend fun save(
+                    settings: net.droopia.hluweather.ui.settings.PersistedSettings
+                ) = Unit
+            },
+            locationRepository = EmptyLocationRepository()
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = true) {
+                CompositionLocalProvider(LocalContentColor provides Color.Black) {
+                    WeatherScreen(viewModel = viewModel)
+                }
+            }
+        }
+
+        listOf(
+            "Add your first location",
+            "Choose a saved place to see the weather.",
+            "Add location"
+        ).forEach { text ->
+            assertTrue(
+                "$text should use a light foreground",
+                composeRule.onNodeWithText(text).captureToImage().hasLightForeground()
+            )
+        }
+    }
+
+    @Test
     fun scrolling_hourly_collapses_header_to_icons_and_days() {
         val viewModel = WeatherViewModel(
             MockWeatherRepository(baseTime = Instant.fromEpochSeconds(0L)),
@@ -695,6 +735,15 @@ class WeatherScreenTest {
         override suspend fun selectSaved(id: String) = Unit
 
         override suspend fun setTrackMe(enabled: Boolean) = Unit
+    }
+
+    private fun ImageBitmap.hasLightForeground(): Boolean {
+        val pixels = IntArray(width * height)
+        readPixels(pixels)
+        return pixels.any {
+            val color = Color(it)
+            color.red > 0.6f && color.green > 0.6f && color.blue > 0.6f
+        }
     }
 
     private class DeferredWeatherRepository(

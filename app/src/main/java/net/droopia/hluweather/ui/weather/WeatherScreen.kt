@@ -175,9 +175,13 @@ fun WeatherScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "Add your first location",
-                                style = MaterialTheme.typography.titleLarge
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onBackground
                             )
-                            Text("Choose a saved place to see the weather.")
+                            Text(
+                                text = "Choose a saved place to see the weather.",
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
                             Button(onClick = onSettingsClick) {
                                 Text("Add location")
                             }
