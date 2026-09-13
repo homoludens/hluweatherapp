@@ -8,19 +8,20 @@
 
 ## 3.4.0 Artifact
 
-- Optimized release APK built with minification and resource shrinking enabled.
-- APK: `app/build/outputs/apk/release/app-release.apk`
-- SHA-256: `6a92c385087657b5eb289e5d54c3353822898888d6bcac0fbceac667c677504b`
-- APK Signature Scheme v2 verification passed with one signer.
+- Signed Google and F-Droid release APKs are deferred to manual distribution
+  testing.
+- Debug artifacts will be recorded after the final flavor verification.
 
 ## Signing
 
-- Release signing is enabled only when all four environment variables are
-  nonblank: `HLUWEATHER_STORE_FILE`, `HLUWEATHER_STORE_PASSWORD`,
+- Google release signing is enabled only when all four environment variables
+  are nonblank: `HLUWEATHER_STORE_FILE`, `HLUWEATHER_STORE_PASSWORD`,
   `HLUWEATHER_KEY_ALIAS`, and `HLUWEATHER_KEY_PASSWORD`.
+- F-Droid release builds remain unsigned for F-Droid's external signing
+  pipeline, even when the Google signing environment is present.
 - Gradle project properties are not accepted for signing credentials.
-- Without all four environment variables, `assembleRelease` produces the
-  unsigned local fallback.
+- Without all four environment variables, `assembleFdroidRelease` and
+  `assembleGoogleRelease` produce unsigned local fallbacks.
 - No keystore or signing secret is committed.
 
 ## Privacy And Location
@@ -54,16 +55,17 @@
   `WeatherScreenTest.empty_saved_locations_show_setup_action` at
   `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt:570`.
 
-- [x] Full debug unit test suite.
+- [ ] Full distribution debug unit test suite.
 
   Command:
 
   ```text
-  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew test
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew testFdroidDebugUnitTest testGoogleDebugUnitTest
   ```
 
-  Result: `BUILD SUCCESSFUL`; `:app:test` completed with 28 actionable tasks
-  and no test failures.
+  Result: The F-Droid test task has one pre-existing failure in
+  `WeatherScreenTest.empty_saved_locations_show_setup_action` at
+  `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt:570`.
 
 - [ ] Distribution debug lint and assembly, with distribution debug unit tests.
 
@@ -87,11 +89,11 @@
   APK paths:
 
   ```text
-  app/build/outputs/apk/debug/app-debug.apk
-  app/build/outputs/apk/release/app-release-unsigned.apk
+  app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
+  app/build/outputs/apk/google/debug/app-google-debug.apk
   ```
 
-- [x] Signing matrix for no credentials, partial credentials, project
+- [ ] Signing matrix for no credentials, partial credentials, project
   properties only, and all four environment values.
 
   Command:
@@ -100,28 +102,36 @@
   ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./scripts/verify-release-signing-matrix.sh
   ```
 
-  Result:
+  Result: Deferred until signed release testing.
+
+  Previous result:
 
   ```text
   Signing matrix uses a temporary keystore outside the repository under /tmp.
-  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS no-signing fallback: app/build/outputs/apk/release/app-release-unsigned.apk
-  PASS signed release: app/build/outputs/apk/release/app-release.apk
+  PASS no-signing fallback: app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/google/release/app-google-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/google/release/app-google-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/google/release/app-google-release-unsigned.apk
+  PASS no-signing fallback: app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+  PASS signed release: app/build/outputs/apk/google/release/app-google-release.apk
   ```
 
   The script creates and removes its keystore outside the repository under
   `/tmp`.
 
-- [x] Signed release APK verification.
+- [ ] Signed release APK verification.
 
   Command:
 
   ```text
-  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/google/release/app-google-release.apk
   ```
 
-  Result:
+  Result: Deferred until signed release testing.
+
+  Previous result:
 
   ```text
   Verifies
@@ -134,26 +144,26 @@
   Number of signers: 1
   ```
 
-- [x] Unsigned release limitation documented and verified.
+- [ ] Unsigned release limitation documented and verified.
 
   Command:
 
   ```text
-  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release-unsigned.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
   ```
 
   Expected result for the intentionally unsigned local fallback: exit code
   `1`, `DOES NOT VERIFY`, `ERROR: Missing META-INF/MANIFEST.MF`.
 
-- [x] Release version metadata verified from the signed APK.
+- [ ] Release version metadata verified from the signed APK.
 
   Command:
 
   ```text
-  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk
+  "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/36.0.0/aapt" dump badging app/build/outputs/apk/google/release/app-google-release.apk
   ```
 
-  Relevant output:
+  Relevant output from the previous unflavored artifact:
 
   ```text
   package: name='net.droopia.hluweather' versionCode='32' versionName='3.2.0' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'

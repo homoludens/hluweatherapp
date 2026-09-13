@@ -34,7 +34,7 @@ run_gradle_without_environment() {
         -u HLUWEATHER_KEY_PASSWORD \
         ANDROID_HOME="$android_home" \
         ANDROID_SDK_ROOT="$android_home" \
-        "$gradlew" :app:clean :app:assembleRelease "$@" >/dev/null
+        "$gradlew" :app:clean :app:assembleFdroidRelease :app:assembleGoogleRelease "$@" >/dev/null
 }
 
 run_gradle_with_environment() {
@@ -49,11 +49,12 @@ run_gradle_with_environment() {
         HLUWEATHER_KEY_PASSWORD="$password" \
         ANDROID_HOME="$android_home" \
         ANDROID_SDK_ROOT="$android_home" \
-        "$gradlew" :app:clean :app:assembleRelease >/dev/null
+        "$gradlew" :app:clean :app:assembleFdroidRelease :app:assembleGoogleRelease >/dev/null
 }
 
 assert_unsigned() {
-    local apk="$repo_root/app/build/outputs/apk/release/app-release-unsigned.apk"
+    local flavor=$1
+    local apk="$repo_root/app/build/outputs/apk/$flavor/release/app-$flavor-release-unsigned.apk"
     test -f "$apk"
     if "$apksigner" verify "$apk" >/dev/null 2>&1; then
         printf 'Expected unsigned APK, but apksigner accepted: %s\n' "$apk" >&2
@@ -63,7 +64,8 @@ assert_unsigned() {
 }
 
 assert_signed() {
-    local apk="$repo_root/app/build/outputs/apk/release/app-release.apk"
+    local flavor=$1
+    local apk="$repo_root/app/build/outputs/apk/$flavor/release/app-$flavor-release.apk"
     test -f "$apk"
     "$apksigner" verify --verbose "$apk" >/dev/null
     printf 'PASS signed release: %s\n' "$apk"
@@ -73,7 +75,8 @@ printf 'Signing matrix uses temporary keystore outside repository: %s\n' "$keyst
 
 printf 'Case: no credentials\n'
 run_gradle_without_environment
-assert_unsigned
+assert_unsigned fdroid
+assert_unsigned google
 
 printf 'Case: partial credentials\n'
 env \
@@ -83,8 +86,9 @@ env \
     HLUWEATHER_STORE_FILE="$keystore" \
     ANDROID_HOME="$android_home" \
     ANDROID_SDK_ROOT="$android_home" \
-    "$gradlew" :app:clean :app:assembleRelease >/dev/null
-assert_unsigned
+    "$gradlew" :app:clean :app:assembleFdroidRelease :app:assembleGoogleRelease >/dev/null
+assert_unsigned fdroid
+assert_unsigned google
 
 printf 'Case: project properties only\n'
 run_gradle_without_environment \
@@ -92,8 +96,10 @@ run_gradle_without_environment \
     -PHLUWEATHER_STORE_PASSWORD="$password" \
     -PHLUWEATHER_KEY_ALIAS="$alias_name" \
     -PHLUWEATHER_KEY_PASSWORD="$password"
-assert_unsigned
+assert_unsigned fdroid
+assert_unsigned google
 
 printf 'Case: all four environment values\n'
 run_gradle_with_environment
-assert_signed
+assert_unsigned fdroid
+assert_signed google

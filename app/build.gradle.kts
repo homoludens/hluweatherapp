@@ -35,17 +35,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    flavorDimensions += "distribution"
-
-    productFlavors {
-        create("google") {
-            dimension = "distribution"
-        }
-        create("fdroid") {
-            dimension = "distribution"
-        }
-    }
-
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
@@ -57,17 +46,31 @@ android {
         }
     }
 
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("google") {
+            dimension = "distribution"
+        }
+        create("fdroid") {
+            dimension = "distribution"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    applicationVariants.all {
+        if (name == "googleRelease" && hasReleaseSigning) {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
