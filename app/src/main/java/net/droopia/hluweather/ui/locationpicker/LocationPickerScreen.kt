@@ -129,9 +129,7 @@ fun LocationPickerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .navigationBarsPadding()
-                .testTag("location_picker_scroll")
-                .verticalScroll(rememberScrollState()),
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Column(
@@ -181,7 +179,7 @@ fun LocationPickerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(320.dp)
+                    .weight(0.5f)
             ) {
                 mapContent(state.point, darkTheme, viewModel::onCameraIdle)
                 Box(
@@ -196,92 +194,101 @@ fun LocationPickerScreen(
                 }
             }
 
-            Card(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    .weight(1f)
+                    .testTag("location_picker_scroll")
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    OutlinedTextField(
-                        value = state.name,
-                        onValueChange = viewModel::onNameChanged,
-                        label = { Text("Location name") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("location_picker_name"),
-                        singleLine = true
-                    )
-                    if (state.isNameLoading) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            LocationNameSpinner(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .testTag("location_name_loading")
-                            )
-                            Text("Finding location name...", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Text(
-                        text = coordinateText(state.point),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.testTag("location_picker_coordinates")
-                    )
-                    state.altitude?.let { altitude ->
-                        Text("Altitude: ${altitude} m", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    when (state.initialization) {
-                        LocationPickerInitialization.Ready -> Unit
-                        LocationPickerInitialization.Loading ->
-                            Text("Loading location...", style = MaterialTheme.typography.bodySmall)
-                        LocationPickerInitialization.MissingEditLocation ->
-                            Text(
-                                "Location not found",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                    }
-                    gpsStatusText(state.gpsStatus)?.let { status ->
-                        Text(
-                            text = status,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        TextButton(onClick = viewModel::onGpsClick) {
-                            Icon(Icons.Outlined.MyLocation, contentDescription = null)
-                            Spacer(Modifier.size(8.dp))
-                            Text("Use my location")
-                        }
-                        Spacer(Modifier.weight(1f))
-                        if (viewModel.isEditMode) {
-                            TextButton(onClick = { viewModel.delete() }) {
-                                Text("Delete")
+                        OutlinedTextField(
+                            value = state.name,
+                            onValueChange = viewModel::onNameChanged,
+                            label = { Text("Location name") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("location_picker_name"),
+                            singleLine = true
+                        )
+                        if (state.isNameLoading) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                LocationNameSpinner(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .testTag("location_name_loading")
+                                )
+                                Text("Finding location name...", style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        Button(
-                            enabled = state.initialization == LocationPickerInitialization.Ready &&
-                                !state.isNameLoading,
-                            onClick = { viewModel.save() }
+                        Text(
+                            text = coordinateText(state.point),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.testTag("location_picker_coordinates")
+                        )
+                        state.altitude?.let { altitude ->
+                            Text("Altitude: ${altitude} m", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        when (state.initialization) {
+                            LocationPickerInitialization.Ready -> Unit
+                            LocationPickerInitialization.Loading ->
+                                Text("Loading location...", style = MaterialTheme.typography.bodySmall)
+                            LocationPickerInitialization.MissingEditLocation ->
+                                Text(
+                                    "Location not found",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                        }
+                        gpsStatusText(state.gpsStatus)?.let { status ->
+                            Text(
+                                text = status,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Save")
+                            TextButton(onClick = viewModel::onGpsClick) {
+                                Icon(Icons.Outlined.MyLocation, contentDescription = null)
+                                Spacer(Modifier.size(8.dp))
+                                Text("Use my location")
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (viewModel.isEditMode) {
+                                TextButton(onClick = { viewModel.delete() }) {
+                                    Text("Delete")
+                                }
+                            }
+                            Button(
+                                enabled = state.initialization == LocationPickerInitialization.Ready &&
+                                    !state.isNameLoading,
+                                onClick = { viewModel.save() }
+                            ) {
+                                Text("Save")
+                            }
                         }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
+import org.maplibre.compose.camera.CameraMoveReason
 import kotlinx.datetime.Instant
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -88,6 +89,44 @@ class WeatherMapTest {
     }
 
     @Test
+    fun viewport_for_one_saved_location_uses_a_close_zoom() {
+        val viewport = weatherMapViewport(
+            listOf(WeatherLocation("one", "One", 44.0, 21.0))
+        )
+
+        assertTrue(viewport.zoom > 12.0)
+    }
+
+    @Test
+    fun bounds_for_one_location_have_a_small_area_to_fit() {
+        val bounds = weatherMapBounds(listOf(GeoPoint(44.0, 21.0)))
+
+        assertEquals(44.0, (bounds.south + bounds.north) / 2.0, 0.0001)
+        assertEquals(21.0, (bounds.west + bounds.east) / 2.0, 0.0001)
+        assertTrue(bounds.north - bounds.south <= 0.0051)
+        assertTrue(bounds.east - bounds.west <= 0.0051)
+    }
+
+    @Test
+    fun viewport_and_bounds_handle_locations_across_the_antimeridian() {
+        val points = listOf(
+            GeoPoint(44.0, 179.0),
+            GeoPoint(44.0, -179.0)
+        )
+
+        val viewport = weatherMapViewport(
+            points.mapIndexed { index, point ->
+                WeatherLocation(index.toString(), index.toString(), point.latitude, point.longitude)
+            }
+        )
+        val bounds = weatherMapBounds(points)
+
+        assertTrue(kotlin.math.abs(viewport.center.longitude) > 179.9)
+        assertEquals(179.0, bounds.west, 0.0001)
+        assertEquals(-179.0, bounds.east, 0.0001)
+    }
+
+    @Test
     fun marker_selection_reports_the_selected_location_and_recenter_runs_callback() {
         val location = WeatherLocation("one", "One", 44.0, 21.0)
         var selected: WeatherLocation? = null
@@ -106,6 +145,18 @@ class WeatherMapTest {
 
         assertFalse(shouldAnimateWeatherMapCenter(point, point))
         assertTrue(shouldAnimateWeatherMapCenter(point, GeoPoint(45.0, 22.0)))
+    }
+
+    @Test
+    fun camera_idle_updates_are_only_reported_for_user_camera_moves() {
+        assertTrue(shouldReportWeatherMapCameraIdle(CameraMoveReason.GESTURE))
+        assertFalse(shouldReportWeatherMapCameraIdle(CameraMoveReason.PROGRAMMATIC))
+        assertFalse(shouldReportWeatherMapCameraIdle(CameraMoveReason.NONE))
+    }
+
+    @Test
+    fun camera_move_while_gesture_is_active_is_not_reported_as_idle() {
+        assertFalse(shouldReportWeatherMapCameraIdle(CameraMoveReason.GESTURE, cameraIsMoving = true))
     }
 
     @Test

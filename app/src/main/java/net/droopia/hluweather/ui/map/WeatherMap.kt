@@ -3,6 +3,7 @@ package net.droopia.hluweather.ui.map
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,21 +30,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
+import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.interaction.ClickResult
 import org.maplibre.compose.interaction.MapInteractions
-import org.maplibre.compose.map.MapEvent
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.StyleLoadState
 import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
 import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import kotlin.math.asin
 import kotlin.math.cos
@@ -55,6 +57,9 @@ const val OPEN_FREE_MAP_LIBERTY_STYLE = "https://tiles.openfreemap.org/styles/li
 const val OPEN_FREE_MAP_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark"
 private const val MAP_DEFAULT_LATITUDE = 44.2380
 private const val MAP_DEFAULT_LONGITUDE = 21.1970
+private const val MAP_MINIMUM_SPAN_DEGREES = 0.005
+private const val MAP_PADDING_FACTOR = 1.2
+private const val MAP_MAX_ZOOM = 15.0
 
 data class WeatherMapMarker(
     val location: WeatherLocation,
@@ -64,6 +69,13 @@ data class WeatherMapMarker(
 data class WeatherMapViewport(
     val center: GeoPoint,
     val zoom: Double
+)
+
+private data class WeatherMapLongitudeBounds(
+    val west: Double,
+    val east: Double,
+    val center: Double,
+    val span: Double
 )
 
 fun mapStyleUrl(darkTheme: Boolean): String =
@@ -87,20 +99,77 @@ fun weatherMapViewport(
         if (includeFallbackInBounds) listOf(fallbackCenter) else emptyList()
     val minLatitude = points.minOf(GeoPoint::latitude)
     val maxLatitude = points.maxOf(GeoPoint::latitude)
-    val minLongitude = points.minOf(GeoPoint::longitude)
-    val maxLongitude = points.maxOf(GeoPoint::longitude)
-    val latitudeSpan = (maxLatitude - minLatitude).coerceAtLeast(0.02)
-    val longitudeSpan = (maxLongitude - minLongitude).coerceAtLeast(0.02)
-    val span = maxOf(latitudeSpan, longitudeSpan)
-    val zoom = (ln(360.0 / (span * 1.35)) / ln(2.0)).coerceIn(0.0, 12.0)
+    val latitudeSpan = (maxLatitude - minLatitude).coerceAtLeast(MAP_MINIMUM_SPAN_DEGREES)
+    val longitudeBounds = weatherMapLongitudeBounds(points)
+    val longitudeSpan = longitudeBounds.span.coerceAtLeast(MAP_MINIMUM_SPAN_DEGREES)
+    val span = maxOf(latitudeSpan, longitudeSpan) * MAP_PADDING_FACTOR
+    val zoom = (ln(360.0 / span) / ln(2.0)).coerceIn(0.0, MAP_MAX_ZOOM)
 
     return WeatherMapViewport(
         center = GeoPoint(
             latitude = (minLatitude + maxLatitude) / 2.0,
-            longitude = (minLongitude + maxLongitude) / 2.0
+            longitude = longitudeBounds.center
         ),
         zoom = zoom
     )
+}
+
+internal fun weatherMapBounds(points: List<GeoPoint>): BoundingBox {
+    require(points.isNotEmpty())
+    val minLatitude = points.minOf(GeoPoint::latitude)
+    val maxLatitude = points.maxOf(GeoPoint::latitude)
+    val longitudeBounds = weatherMapLongitudeBounds(points)
+    val latitudePadding = if (minLatitude == maxLatitude) {
+        MAP_MINIMUM_SPAN_DEGREES / 2.0
+    } else {
+        0.0
+    }
+    val longitudePadding = if (longitudeBounds.span == 0.0) {
+        MAP_MINIMUM_SPAN_DEGREES / 2.0
+    } else {
+        0.0
+    }
+    return BoundingBox(
+        west = longitudeFrom360(longitudeBounds.west - longitudePadding),
+        south = minLatitude - latitudePadding,
+        east = longitudeFrom360(longitudeBounds.east + longitudePadding),
+        north = maxLatitude + latitudePadding
+    )
+}
+
+private fun weatherMapLongitudeBounds(points: List<GeoPoint>): WeatherMapLongitudeBounds {
+    val longitudes = points.map { longitude ->
+        (longitude.longitude % 360.0 + 360.0) % 360.0
+    }.sorted()
+    var largestGap = -1.0
+    var largestGapIndex = 0
+    longitudes.indices.forEach { index ->
+        val next = if (index == longitudes.lastIndex) {
+            longitudes.first() + 360.0
+        } else {
+            longitudes[index + 1]
+        }
+        val gap = next - longitudes[index]
+        if (gap > largestGap) {
+            largestGap = gap
+            largestGapIndex = index
+        }
+    }
+    val west360 = longitudes[(largestGapIndex + 1) % longitudes.size]
+    val east360 = longitudes[largestGapIndex]
+    val span = (east360 - west360 + 360.0) % 360.0
+    val center360 = (west360 + span / 2.0) % 360.0
+    return WeatherMapLongitudeBounds(
+        west = longitudeFrom360(west360),
+        east = longitudeFrom360(east360),
+        center = longitudeFrom360(center360),
+        span = span
+    )
+}
+
+private fun longitudeFrom360(longitude: Double): Double {
+    val normalized = (longitude % 360.0 + 360.0) % 360.0
+    return if (normalized > 180.0) normalized - 360.0 else normalized
 }
 
 fun selectWeatherMapLocation(
@@ -169,12 +238,12 @@ fun WeatherMap(
     }
 
     LaunchedEffect(mapState) {
-        mapState.events
-            .filterIsInstance<MapEvent.Idle>()
-            .collect {
+        snapshotFlow { mapState.isCameraMoving to mapState.cameraMoveReason }.collect { (isMoving, reason) ->
+            if (shouldReportWeatherMapCameraIdle(reason, isMoving)) {
                 val position = mapState.cameraPosition.target
                 onCameraIdle(GeoPoint(position.latitude, position.longitude))
             }
+        }
     }
 
     LaunchedEffect(center) {
@@ -195,24 +264,12 @@ fun WeatherMap(
 
     LaunchedEffect(locations, fitLocations, center, activeLocationId) {
         if (fitLocations) {
-            val target = weatherMapViewport(
-                locations,
-                center ?: GeoPoint(MAP_DEFAULT_LATITUDE, MAP_DEFAULT_LONGITUDE),
-                includeFallbackInBounds = activeLocationId == null && center != null
-            )
-            if (shouldAnimateWeatherMapCenter(
-                    GeoPoint(
-                        mapState.cameraPosition.target.latitude,
-                        mapState.cameraPosition.target.longitude
-                    ),
-                    target.center
-                ) || mapState.cameraPosition.zoom != target.zoom
-            ) {
-                mapState.animateCameraPosition(
-                    CameraPosition(
-                        target = target.center.toPosition(),
-                        zoom = target.zoom
-                    )
+            val points = locations.map { it.toGeoPoint() } +
+                if (activeLocationId == null && center != null) listOf(center) else emptyList()
+            if (points.isNotEmpty()) {
+                mapState.animateCameraToBounds(
+                    weatherMapBounds(points),
+                    padding = PaddingValues(32.dp)
                 )
             }
         }
@@ -295,6 +352,11 @@ fun WeatherMap(
         }
     }
 }
+
+internal fun shouldReportWeatherMapCameraIdle(
+    reason: CameraMoveReason,
+    cameraIsMoving: Boolean = false
+): Boolean = reason == CameraMoveReason.GESTURE && !cameraIsMoving
 
 @Composable
 internal fun WeatherMapRecenterButton(

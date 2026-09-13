@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -96,6 +97,18 @@ class LocationPickerScreenTest {
         composeRule.onNodeWithContentDescription("Back").assertHasClickAction()
         composeRule.onNodeWithText("Use my location").assertHasClickAction()
         composeRule.onNodeWithText("Save").assertHasClickAction()
+    }
+
+    @Test
+    fun dragging_the_map_does_not_scroll_the_page_around_it() {
+        render()
+        val map = composeRule.onNodeWithTag("location_picker_map")
+        val topBefore = map.getUnclippedBoundsInRoot().top.value
+
+        map.performTouchInput { swipeUp() }
+        composeRule.waitForIdle()
+
+        assertEquals(topBefore, map.getUnclippedBoundsInRoot().top.value, 0.1f)
     }
 
     @Test
