@@ -42,16 +42,17 @@
 
 ## Local Verification
 
-- [x] Focused metadata and resource tests.
+- [ ] Focused metadata and resource tests.
 
   Command:
 
   ```text
-  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew :app:testDebugUnitTest --tests net.droopia.hluweather.HluWeatherApplicationTest --tests net.droopia.hluweather.ReleaseResourceSourceTest
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew :app:testFdroidDebugUnitTest :app:testGoogleDebugUnitTest --tests net.droopia.hluweather.HluWeatherApplicationTest --tests net.droopia.hluweather.ReleaseResourceSourceTest
   ```
 
-  Result: `BUILD SUCCESSFUL`; 2 targeted test classes completed without
-  failures.
+  Result: The F-Droid test task currently has one pre-existing failure in
+  `WeatherScreenTest.empty_saved_locations_show_setup_action` at
+  `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt:570`.
 
 - [x] Full debug unit test suite.
 
@@ -64,16 +65,24 @@
   Result: `BUILD SUCCESSFUL`; `:app:test` completed with 28 actionable tasks
   and no test failures.
 
-- [x] Debug and release lint, and debug and release assembly.
+- [ ] Distribution debug lint and assembly, with distribution debug unit tests.
 
   Command:
 
   ```text
-  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew assembleDebug assembleRelease lintDebug lintRelease
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew testFdroidDebugUnitTest testGoogleDebugUnitTest assembleFdroidDebug assembleGoogleDebug lintFdroidDebug lintGoogleDebug
   ```
 
-  Result: `BUILD SUCCESSFUL`; 94 actionable tasks, including `assembleDebug`,
-  `assembleRelease`, `lintDebug`, and `lintRelease`.
+  Result: Assembly and lint passed for both distribution debug variants. The
+  combined command has one pre-existing failure in
+  `WeatherScreenTest.empty_saved_locations_show_setup_action` at
+  `app/src/test/java/net/droopia/hluweather/ui/weather/WeatherScreenTest.kt:570`.
+
+  When signing environment variables are available:
+
+  ```text
+  ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}" ./gradlew assembleFdroidRelease assembleGoogleRelease
+  ```
 
   APK paths:
 

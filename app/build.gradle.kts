@@ -35,6 +35,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("google") {
+            dimension = "distribution"
+        }
+        create("fdroid") {
+            dimension = "distribution"
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
@@ -74,6 +85,8 @@ kotlin {
 }
 
 dependencies {
+    add("googleImplementation", libs.play.services.location)
+
     implementation(libs.core.ktx)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
