@@ -85,6 +85,7 @@ private val hourlyListPrefixKeys = listOf(
 fun WeatherScreen(
     viewModel: WeatherViewModel = viewModel(factory = WeatherViewModel.Factory),
     onSettingsClick: () -> Unit = {},
+    onAddLocationClick: () -> Unit = {},
     onWeatherRouteClick: () -> Unit = {},
     onTrackMeClick: () -> Unit = {},
     trackMeSelected: Boolean = false,
@@ -182,7 +183,7 @@ fun WeatherScreen(
                                 text = "Choose a saved place to see the weather.",
                                 color = MaterialTheme.colorScheme.onBackground
                             )
-                            Button(onClick = onSettingsClick) {
+                            Button(onClick = onAddLocationClick) {
                                 Text("Add location")
                             }
                         }

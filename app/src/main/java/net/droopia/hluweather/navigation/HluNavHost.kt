@@ -66,6 +66,7 @@ fun HluNavHost(
                     viewModel = weatherViewModel
                         ?: viewModel(factory = WeatherViewModel.Factory),
                     onSettingsClick = { navController.navigate("settings") },
+                    onAddLocationClick = { navController.navigate("location_picker") },
                     onWeatherRouteClick = { navController.navigate(WEATHER_ROUTE) },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
@@ -81,6 +82,7 @@ fun HluNavHost(
                     viewModel = weatherViewModel
                         ?: viewModel(factory = WeatherViewModel.Factory),
                     onSettingsClick = { navController.navigate("settings") },
+                    onAddLocationClick = { navController.navigate("location_picker") },
                     onWeatherRouteClick = { navController.navigate(WEATHER_ROUTE) },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,

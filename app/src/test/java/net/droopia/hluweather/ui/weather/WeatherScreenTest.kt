@@ -571,6 +571,37 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun empty_saved_locations_add_action_reports_direct_picker_navigation() {
+        val viewModel = WeatherViewModel(
+            repository = MockWeatherRepository(),
+            settingsRepository = object : net.droopia.hluweather.ui.settings.SettingsRepository {
+                override val settings = MutableStateFlow(
+                    net.droopia.hluweather.ui.settings.PersistedSettings()
+                )
+
+                override suspend fun save(
+                    settings: net.droopia.hluweather.ui.settings.PersistedSettings
+                ) = Unit
+            },
+            locationRepository = EmptyLocationRepository()
+        )
+        var pickerClicked = false
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onAddLocationClick = { pickerClicked = true }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Add location").performClick()
+
+        assertTrue(pickerClicked)
+    }
+
+    @Test
     fun empty_saved_locations_use_light_foreground_in_dark_theme() {
         val viewModel = WeatherViewModel(
             repository = MockWeatherRepository(),
