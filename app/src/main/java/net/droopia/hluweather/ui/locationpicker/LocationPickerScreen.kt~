@@ -129,9 +129,7 @@ fun LocationPickerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .navigationBarsPadding()
-                .testTag("location_picker_scroll")
-                .verticalScroll(rememberScrollState()),
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Column(
@@ -181,7 +179,7 @@ fun LocationPickerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(400.dp)
+                    .weight(1f)
             ) {
                 mapContent(state.point, darkTheme, viewModel::onCameraIdle)
                 Box(
@@ -199,34 +197,15 @@ fun LocationPickerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .weight(1f)
+                    .testTag("location_picker_scroll")
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = viewModel::onGpsClick) {
-                        Icon(Icons.Outlined.MyLocation, contentDescription = null)
-                        Spacer(Modifier.size(8.dp))
-                        Text("Use my location")
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (viewModel.isEditMode) {
-                        TextButton(onClick = { viewModel.delete() }) {
-                            Text("Delete")
-                        }
-                    }
-                    Button(
-                        enabled = state.initialization == LocationPickerInitialization.Ready &&
-                            !state.isNameLoading,
-                        onClick = { viewModel.save() }
-                    ) {
-                        Text("Save")
-                    }
-                }
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -244,7 +223,8 @@ fun LocationPickerScreen(
                         )
                         if (state.isNameLoading) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
@@ -281,6 +261,29 @@ fun LocationPickerScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = viewModel::onGpsClick) {
+                                Icon(Icons.Outlined.MyLocation, contentDescription = null)
+                                Spacer(Modifier.size(8.dp))
+                                Text("Use my location")
+                            }
+                            Spacer(Modifier.weight(2f))
+                            if (viewModel.isEditMode) {
+                                TextButton(onClick = { viewModel.delete() }) {
+                                    Text("Delete")
+                                }
+                            }
+                            Button(
+                                enabled = state.initialization == LocationPickerInitialization.Ready &&
+                                    !state.isNameLoading,
+                                onClick = { viewModel.save() }
+                            ) {
+                                Text("Save")
+                            }
                         }
                     }
                 }

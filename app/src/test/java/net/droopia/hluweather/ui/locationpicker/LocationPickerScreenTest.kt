@@ -1,17 +1,22 @@
 package net.droopia.hluweather.ui.locationpicker
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.swipeUp
@@ -67,7 +72,8 @@ class LocationPickerScreenTest {
         composeRule.onNodeWithText("Location picker").assertIsDisplayed()
         composeRule.onNodeWithTag("location_picker_map").assertIsDisplayed()
         composeRule.onNodeWithTag("location_picker_center_marker").assertIsDisplayed()
-        composeRule.onNodeWithTag("location_picker_scroll").performTouchInput { swipeUp() }
+        composeRule.onNodeWithTag("location_picker_scroll")
+            .performScrollToNode(hasTestTag("location_picker_name"))
         composeRule.onNodeWithTag("location_picker_name").assertIsDisplayed()
     }
 
@@ -81,7 +87,8 @@ class LocationPickerScreenTest {
 
         composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.onNodeWithTag("location_picker_name").performTextInput("Belgrade")
-        composeRule.onNodeWithTag("location_picker_scroll").performTouchInput { swipeUp() }
+        composeRule.onNodeWithTag("location_picker_scroll")
+            .performScrollToNode(hasText("Save"))
         composeRule.onNodeWithText("Save").performClick()
         composeRule.waitForIdle()
 
@@ -112,6 +119,26 @@ class LocationPickerScreenTest {
     }
 
     @Test
+    fun action_buttons_are_before_location_details() {
+        render()
+
+        val useLocationBottom = composeRule
+            .onNodeWithText("Use my location")
+            .getUnclippedBoundsInRoot()
+            .bottom
+        val saveBottom = composeRule
+            .onNodeWithText("Save")
+            .getUnclippedBoundsInRoot()
+            .bottom
+        val nameTop = composeRule
+            .onNodeWithTag("location_picker_name")
+            .getUnclippedBoundsInRoot()
+            .top
+
+        assertTrue(nameTop >= maxOf(useLocationBottom, saveBottom))
+    }
+
+    @Test
     fun shows_a_spinner_while_waiting_for_the_location_name() {
         val viewModel = LocationPickerViewModel(
             locationRepository = TestLocationRepository(),
@@ -128,7 +155,8 @@ class LocationPickerScreenTest {
 
         viewModel.onCameraIdle(net.droopia.hluweather.data.model.GeoPoint(44.8176, 20.4633))
         assertTrue(viewModel.state.value.isNameLoading)
-        composeRule.onNodeWithTag("location_picker_scroll").performTouchInput { swipeUp() }
+        composeRule.onNodeWithTag("location_picker_scroll")
+            .performScrollToNode(hasTestTag("location_name_loading"))
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("location_name_loading").assertIsDisplayed()
     }
@@ -150,7 +178,14 @@ class LocationPickerScreenTest {
                     onBackClick = onBackClick,
                     onSaved = onSaved,
                     mapContent = { _, _, _ ->
-                        Box(Modifier.fillMaxSize().testTag("location_picker_map"))
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, _ -> change.consume() }
+                                }
+                                .testTag("location_picker_map")
+                        )
                     }
                 )
             }

@@ -47,6 +47,26 @@ class ReverseGeocoderTest {
     }
 
     @Test
+    fun reverse_prefers_a_neighborhood_over_a_city_or_municipality() = runTest {
+        val client = mockClient {
+            respond(
+                """
+                    {"address":{"city":"Belgrade","suburb":"Zvezdara","neighbourhood":"Lion","municipality":"Belgrade"}}
+                """.trimIndent(),
+                headers = jsonHeaders
+            )
+        }
+        val geocoder = NominatimReverseGeocoder(
+            KtorNominatimApi(client, "https://nominatim.test"),
+            throttle = NominatimRateLimiter(nowMillis = { 0 }, delayMillis = {})
+        )
+
+        assertEquals("Lion, Belgrade", geocoder.reverse(GeoPoint(44.8, 20.5)))
+
+        client.close()
+    }
+
+    @Test
     fun reverse_returns_null_for_http_and_json_failures() = runTest {
         var responseNumber = 0
         val client = mockClient {

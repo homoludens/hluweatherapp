@@ -12,6 +12,7 @@ data class NominatimResponse(
 
 @Serializable
 data class NominatimAddress(
+    val neighbourhood: String? = null,
     val city: String? = null,
     val town: String? = null,
     val village: String? = null,
@@ -24,16 +25,28 @@ data class NominatimAddress(
     val country: String? = null
 )
 
-fun NominatimResponse.usefulPlaceName(): String? = sequenceOf(
-    address?.city,
-    address?.town,
-    address?.village,
-    address?.municipality,
-    address?.hamlet,
-    address?.suburb,
-    address?.cityDistrict,
-    address?.county,
-    address?.state,
-    name,
-    displayName?.substringBefore(',')
-).firstOrNull { !it.isNullOrBlank() }?.trim()
+fun NominatimResponse.usefulPlaceName(): String? {
+    val neighbourhood = firstPlaceName(address?.neighbourhood, address?.suburb)
+    val townOrCity = firstPlaceName(address?.town, address?.city)
+    if (neighbourhood != null && townOrCity != null &&
+        !neighbourhood.equals(townOrCity, ignoreCase = true)
+    ) {
+        return "$neighbourhood, $townOrCity"
+    }
+
+    return firstPlaceName(
+        neighbourhood,
+        address?.hamlet,
+        address?.village,
+        address?.cityDistrict,
+        townOrCity,
+        address?.municipality,
+        address?.county,
+        address?.state,
+        name,
+        displayName?.substringBefore(',')
+    )
+}
+
+private fun firstPlaceName(vararg names: String?): String? =
+    names.firstOrNull { !it.isNullOrBlank() }?.trim()
