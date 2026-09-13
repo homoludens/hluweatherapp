@@ -109,10 +109,12 @@ private fun MetNoTimeSeries.toNormalizedHour(index: Int): NormalizedHour {
             apparentTemperature = null,
             humidity = details.relativeHumidity?.roundToInt(),
             dewPoint = details.dewPoint,
-            precipitation = precipitation ?: 0.0,
+            precipitation = precipitation,
             precipitationProbability = null,
             condition = symbol.condition,
-            isDay = symbol.isDay
+            isDay = symbol.isDay,
+            windSpeedKmh = details.windSpeed?.times(3.6),
+            windDirectionDegrees = details.windDirection
         ),
         precipitation = precipitation
     )

@@ -197,9 +197,25 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         viewModel.setTheme(ThemeMode.LIGHT)
-        repository.snapshot.complete(PersistedSettings(themeMode = ThemeMode.DARK))
+        repository.snapshot.complete(
+            PersistedSettings(
+                themeMode = ThemeMode.DARK,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                hourlyTableColumns = setOf(HourlyTableColumn.WIND_SPEED)
+            )
+        )
 
         assertEquals(ThemeMode.LIGHT, viewModel.state.value.themeMode)
+        assertEquals(TemperatureUnit.FAHRENHEIT, viewModel.state.value.temperatureUnit)
+        assertEquals(
+            setOf(HourlyTableColumn.WIND_SPEED),
+            viewModel.state.value.hourlyTableColumns
+        )
+        assertEquals(ThemeMode.LIGHT, repository.saved?.themeMode)
+        assertEquals(
+            setOf(HourlyTableColumn.WIND_SPEED),
+            repository.saved?.hourlyTableColumns
+        )
     }
 
     @Test
@@ -300,12 +316,15 @@ class SettingsViewModelTest {
 
     private class DeferredSettingsRepository : SettingsRepository {
         val snapshot = CompletableDeferred<PersistedSettings>()
+        var saved: PersistedSettings? = null
 
         override val settings = flow {
             emit(snapshot.await())
         }
 
-        override suspend fun save(settings: PersistedSettings) = Unit
+        override suspend fun save(settings: PersistedSettings) {
+            saved = settings
+        }
     }
 
     private class InMemoryLocationRepository(

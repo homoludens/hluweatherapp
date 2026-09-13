@@ -50,8 +50,11 @@ class OpenMeteoWeatherRepositoryTest {
         assertEquals(21.0, hour.apparentTemperature)
         assertEquals(51, hour.humidity)
         assertEquals(10.0, hour.dewPoint)
-        assertEquals(0.0, hour.precipitation, 0.0)
+        assertEquals(0.0, hour.precipitation!!, 0.0)
         assertEquals(0, hour.precipitationProbability)
+        assertEquals(12.5, hour.windSpeedKmh)
+        assertEquals(240.0, hour.windDirectionDegrees)
+        assertEquals(0.1, hour.evapotranspiration)
         assertEquals(WeatherCondition.CLEAR, hour.condition)
         assertTrue(hour.isDay!!)
 
@@ -79,7 +82,11 @@ class OpenMeteoWeatherRepositoryTest {
                 apparentTemperature = listOf(null),
                 humidity = listOf(null),
                 dewPoint = listOf(null),
+                precipitation = listOf(null),
                 precipitationProbability = listOf(null),
+                windSpeed = listOf(null),
+                windDirection = listOf(null),
+                evapotranspiration = listOf(null),
                 isDay = listOf(null)
             ),
             daily = validResponse.daily!!.copy(
@@ -99,7 +106,11 @@ class OpenMeteoWeatherRepositoryTest {
         assertNull(forecast.hourly.single().apparentTemperature)
         assertNull(forecast.hourly.single().humidity)
         assertNull(forecast.hourly.single().dewPoint)
+        assertNull(forecast.hourly.single().precipitation)
         assertNull(forecast.hourly.single().precipitationProbability)
+        assertNull(forecast.hourly.single().windSpeedKmh)
+        assertNull(forecast.hourly.single().windDirectionDegrees)
+        assertNull(forecast.hourly.single().evapotranspiration)
         assertNull(forecast.hourly.single().isDay)
         assertNull(forecast.daily.single().precipitation)
         assertNull(forecast.daily.single().sunrise)
@@ -294,6 +305,9 @@ class OpenMeteoWeatherRepositoryTest {
                 apparentTemperature = listOf(21.0),
                 precipitation = listOf(0.0),
                 precipitationProbability = listOf(0),
+                windSpeed = listOf(12.5),
+                windDirection = listOf(240.0),
+                evapotranspiration = listOf(0.1),
                 weatherCode = listOf(0),
                 isDay = listOf(1)
             ),

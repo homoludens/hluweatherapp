@@ -21,7 +21,8 @@ import net.droopia.hluweather.ui.theme.LocalHluColors
 fun HluWeatherIcon(
     condition: WeatherCondition,
     isDay: Boolean?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null
 ) {
     val colors = LocalHluColors.current
     val sunColor = Color(0xFFFFB300)
@@ -75,7 +76,7 @@ fun HluWeatherIcon(
 
     Icon(
         imageVector = imageVector,
-        contentDescription = null,
+        contentDescription = contentDescription,
         tint = tint,
         modifier = modifier
     )

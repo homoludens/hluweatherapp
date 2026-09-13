@@ -35,7 +35,9 @@ data class MetNoInstant(
 data class MetNoDetails(
     @SerialName("air_temperature") val airTemperature: Double? = null,
     @SerialName("relative_humidity") val relativeHumidity: Double? = null,
-    @SerialName("dew_point_temperature") val dewPoint: Double? = null
+    @SerialName("dew_point_temperature") val dewPoint: Double? = null,
+    @SerialName("wind_speed") val windSpeed: Double? = null,
+    @SerialName("wind_from_direction") val windDirection: Double? = null
 )
 
 @Serializable

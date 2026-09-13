@@ -20,10 +20,13 @@ data class HourForecast(
     val apparentTemperature: Double?,
     val humidity: Int?,
     val dewPoint: Double?,
-    val precipitation: Double,
+    val precipitation: Double?,
     val precipitationProbability: Int?,
     val condition: WeatherCondition,
-    val isDay: Boolean?
+    val isDay: Boolean?,
+    val windSpeedKmh: Double? = null,
+    val windDirectionDegrees: Double? = null,
+    val evapotranspiration: Double? = null
 )
 
 data class DayForecast(

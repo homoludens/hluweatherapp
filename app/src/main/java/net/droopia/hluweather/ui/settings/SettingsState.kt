@@ -26,6 +26,27 @@ enum class PrecipitationUnit {
     INCH
 }
 
+enum class HourlyTableColumn {
+    TIME,
+    WEATHER_ICON,
+    WEATHER_TEXT,
+    TEMPERATURE,
+    DEW_POINT,
+    RELATIVE_HUMIDITY,
+    PRECIPITATION,
+    WIND_SPEED,
+    WIND_DIRECTION,
+    EVAPOTRANSPIRATION
+}
+
+val defaultHourlyTableColumns = setOf(
+    HourlyTableColumn.WEATHER_ICON,
+    HourlyTableColumn.TEMPERATURE,
+    HourlyTableColumn.DEW_POINT,
+    HourlyTableColumn.RELATIVE_HUMIDITY,
+    HourlyTableColumn.PRECIPITATION
+)
+
 data class SettingsUiState(
     val provider: WeatherProvider = WeatherProvider.OPEN_METEO,
     val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
@@ -40,5 +61,6 @@ data class SettingsUiState(
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
-    val dailySummaryTime: LocalTime = LocalTime(8, 0)
+    val dailySummaryTime: LocalTime = LocalTime(8, 0),
+    val hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns
 )

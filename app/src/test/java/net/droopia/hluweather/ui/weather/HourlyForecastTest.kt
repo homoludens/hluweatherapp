@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -35,6 +36,8 @@ import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Before
 import org.junit.Assert.assertFalse
@@ -83,13 +86,41 @@ class HourlyForecastTest {
                 .isEmpty()
         )
         composeRule.onNodeWithText("Time").assertIsDisplayed()
-        composeRule.onNodeWithText("Weather").assertIsDisplayed()
+        composeRule.onNodeWithText("Icon").assertIsDisplayed()
         composeRule.onNodeWithText("Temp.").assertIsDisplayed()
         composeRule.onNodeWithText("Dew point").assertIsDisplayed()
         composeRule.onNodeWithText("Hum.").assertIsDisplayed()
         composeRule.onNodeWithText("Precip.").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_day_start_0").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_table").assertIsDisplayed()
+    }
+
+    @Test
+    fun weather_icon_is_shown_but_weather_text_is_hidden_by_default() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val firstHour = forecast.hourly.first()
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast,
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    now = firstHour.time
+                )
+            }
+        }
+
+        assertTrue(
+            composeRule.onAllNodesWithText(firstHour.condition.label())
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+        composeRule.onNodeWithText("Icon").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription(firstHour.condition.label()).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -175,7 +206,11 @@ class HourlyForecastTest {
                             .fillMaxHeight()
                             .testTag("hourly_row_width")
                     ) {
-                        ForecastRow(hour, java.time.ZoneId.of("UTC"))
+                        ForecastRow(
+                            weather = hour,
+                            displayZone = java.time.ZoneId.of("UTC"),
+                            columns = defaultHourlyTableColumns + HourlyTableColumn.WEATHER_TEXT
+                        )
                     }
                 }
             }
@@ -186,6 +221,39 @@ class HourlyForecastTest {
         assertTrue("Condition must expose a text layout result", node.config.contains(SemanticsActions.GetTextLayoutResult))
         assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) == true)
         assertFalse("Condition must wrap rather than truncate at 2x font scale", results.single().hasVisualOverflow)
+    }
+
+    @Test
+    fun unavailable_optional_values_are_shown_as_dash() {
+        val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+            .copy(
+                dewPoint = null,
+                humidity = null,
+                condition = WeatherCondition.UNKNOWN,
+                windSpeedKmh = null,
+                windDirectionDegrees = null,
+                evapotranspiration = null
+            )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                ForecastRow(
+                    weather = hour,
+                    displayZone = ZoneId.of("UTC"),
+                    columns = setOf(
+                        HourlyTableColumn.DEW_POINT,
+                        HourlyTableColumn.WEATHER_ICON,
+                        HourlyTableColumn.WEATHER_TEXT,
+                        HourlyTableColumn.RELATIVE_HUMIDITY,
+                        HourlyTableColumn.WIND_SPEED,
+                        HourlyTableColumn.WIND_DIRECTION,
+                        HourlyTableColumn.EVAPOTRANSPIRATION
+                    )
+                )
+            }
+        }
+
+        assertTrue(composeRule.onAllNodesWithText("-").fetchSemanticsNodes().size >= 7)
     }
 
     @Test
@@ -201,9 +269,10 @@ class HourlyForecastTest {
                 CompositionLocalProvider(LocalContentColor provides Color.Magenta) {
                     HourlyForecast(
                         forecast = forecast,
-                    selectedDayIndex = 0,
-                    onDaySelected = {},
-                    now = forecast.hourly.first().time
+                        selectedDayIndex = 0,
+                        onDaySelected = {},
+                        now = forecast.hourly.first().time,
+                        hourlyTableColumns = defaultHourlyTableColumns + HourlyTableColumn.WEATHER_TEXT
                     )
                 }
             }

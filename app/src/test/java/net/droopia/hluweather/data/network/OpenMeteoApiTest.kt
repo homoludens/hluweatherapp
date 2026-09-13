@@ -53,7 +53,7 @@ class OpenMeteoApiTest {
             request.url.parameters["current"]
         )
         assertEquals(
-            "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,precipitation_probability,weather_code,is_day",
+            "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m,evapotranspiration,weather_code,is_day",
             request.url.parameters["hourly"]
         )
         assertEquals(
@@ -140,6 +140,9 @@ class OpenMeteoApiTest {
                 "apparent_temperature": [21.0],
                 "precipitation": [0.0],
                 "precipitation_probability": [0],
+                "wind_speed_10m": [12.5],
+                "wind_direction_10m": [240.0],
+                "evapotranspiration": [0.1],
                 "weather_code": [0],
                 "is_day": [1]
               },

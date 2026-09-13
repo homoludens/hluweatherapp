@@ -91,5 +91,15 @@ class ForecastCacheTest {
         Svilajnac,
         Instant.parse("2026-09-10T12:00:00Z"),
         TimeZone.of("UTC")
-    )
+    ).let { forecast ->
+        forecast.copy(
+            hourly = forecast.hourly.map {
+                it.copy(
+                    windSpeedKmh = 18.0,
+                    windDirectionDegrees = 225.0,
+                    evapotranspiration = 0.2
+                )
+            }
+        )
+    }
 }

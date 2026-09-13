@@ -91,6 +91,11 @@ class SettingsRepositoryTest {
             windUnit = WindUnit.MPH,
             distanceUnit = DistanceUnit.MILES,
             precipitationUnit = PrecipitationUnit.INCH,
+            hourlyTableColumns = setOf(
+                HourlyTableColumn.WEATHER_ICON,
+                HourlyTableColumn.WIND_SPEED,
+                HourlyTableColumn.EVAPOTRANSPIRATION
+            ),
             weatherAlerts = false,
             dailySummary = true,
             dailySummaryTime = LocalTime(7, 30)
@@ -168,6 +173,23 @@ class SettingsRepositoryTest {
         val settings = DataStoreSettingsRepository(dataStore).settings.first()
 
         assertEquals(PersistedSettings(), settings)
+    }
+
+    @Test
+    fun invalid_hourly_table_columns_use_defaults_but_empty_columns_are_preserved() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val key = stringPreferencesKey("settings.hourly_table_columns")
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        dataStore.edit { it[key] = "NOT_A_COLUMN" }
+        assertEquals(defaultHourlyTableColumns, repository.settings.first().hourlyTableColumns)
+
+        dataStore.edit { it[key] = "" }
+        assertTrue(repository.settings.first().hourlyTableColumns.isEmpty())
     }
 
     @Test

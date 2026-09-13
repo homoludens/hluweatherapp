@@ -133,7 +133,8 @@ internal fun WeatherForecast.summaryBody(
 private fun WeatherForecast.rainWindow(day: DayForecast): String? {
     val timeZone = runCatching { TimeZone.of(timezone) }.getOrNull() ?: return null
     val rainHours = hourly.filter { hour ->
-        hour.precipitation > 0.0 && hour.time.toLocalDateTime(timeZone).date == day.date
+        hour.precipitation?.let { it > 0.0 } == true &&
+            hour.time.toLocalDateTime(timeZone).date == day.date
     }
     if (rainHours.isEmpty()) return null
 

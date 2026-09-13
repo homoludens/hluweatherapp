@@ -71,7 +71,9 @@ fun HluNavHost(
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
                     temperatureUnit = settingsState.temperatureUnit,
-                    precipitationUnit = settingsState.precipitationUnit
+                    precipitationUnit = settingsState.precipitationUnit,
+                    windUnit = settingsState.windUnit,
+                    hourlyTableColumns = settingsState.hourlyTableColumns
                 )
             } else {
                 WeatherScreen(
@@ -84,6 +86,8 @@ fun HluNavHost(
                     darkTheme = darkTheme,
                     temperatureUnit = settingsState.temperatureUnit,
                     precipitationUnit = settingsState.precipitationUnit,
+                    windUnit = settingsState.windUnit,
+                    hourlyTableColumns = settingsState.hourlyTableColumns,
                     mapContent = weatherMapContent
                 )
             }
@@ -148,8 +152,10 @@ fun HluNavHost(
                 onTemperatureUnitChange = settingsViewModel::setTemperatureUnit,
                 onWindUnitChange = settingsViewModel::setWindUnit,
                 onDistanceUnitChange = settingsViewModel::setDistanceUnit,
-                onPrecipitationUnitChange = settingsViewModel::setPrecipitationUnit,
-                onWeatherAlertsChange = { enabled ->
+                 onPrecipitationUnitChange = settingsViewModel::setPrecipitationUnit,
+                 hourlyTableColumns = settingsState.hourlyTableColumns,
+                 onHourlyTableColumnChange = settingsViewModel::setHourlyTableColumn,
+                 onWeatherAlertsChange = { enabled ->
                     settingsViewModel.setWeatherAlerts(enabled)
                     if (enabled) onNotificationPermissionRequest()
                 },

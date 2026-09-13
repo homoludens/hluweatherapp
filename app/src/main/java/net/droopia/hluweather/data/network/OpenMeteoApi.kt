@@ -43,7 +43,8 @@ class KtorOpenMeteoApi(
         const val CURRENT_VARIABLES =
             "temperature_2m,relative_humidity_2m,apparent_temperature,dew_point_2m,precipitation,weather_code,is_day"
         const val HOURLY_VARIABLES =
-            "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,precipitation_probability,weather_code,is_day"
+            "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,precipitation_probability," +
+                "wind_speed_10m,wind_direction_10m,evapotranspiration,weather_code,is_day"
         const val DAILY_VARIABLES =
             "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset,moon_phase"
     }

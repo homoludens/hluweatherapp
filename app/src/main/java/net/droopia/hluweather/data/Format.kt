@@ -51,6 +51,9 @@ fun Double?.windSpeedText(unit: WindUnit): String =
         "${speed.decimalText()} ${unit.symbol}"
     } ?: "—"
 
+fun Double?.windDirectionText(): String =
+    this?.let { "${it.roundToInt()}°" } ?: "—"
+
 fun Double?.distanceText(unit: DistanceUnit): String =
     this?.let {
         val distance = if (unit == DistanceUnit.MILES) it * 0.621371 else it

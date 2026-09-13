@@ -31,7 +31,8 @@ data class PersistedSettings(
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
-    val dailySummaryTime: LocalTime = LocalTime(8, 0)
+    val dailySummaryTime: LocalTime = LocalTime(8, 0),
+    val hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns
 )
 
 interface SettingsRepository {
@@ -72,7 +73,20 @@ class DataStoreSettingsRepository(
                 dailySummary = preferences.getBooleanOrNull(dailySummaryKey) ?: defaults.dailySummary,
                 dailySummaryTime = preferences.getStringOrNull(dailySummaryTimeKey)
                     ?.let(::parseSummaryTime)
-                    ?: defaults.dailySummaryTime
+                    ?: defaults.dailySummaryTime,
+                hourlyTableColumns = preferences.getStringOrNull(hourlyTableColumnsKey).let { value ->
+                    when {
+                        value == null -> defaults.hourlyTableColumns
+                        value.isEmpty() -> emptySet()
+                        else -> value.split(',')
+                            .mapNotNull { entry ->
+                                HourlyTableColumn.entries.firstOrNull { it.name == entry }
+                            }
+                            .toSet()
+                            .takeIf { it.isNotEmpty() }
+                            ?: defaults.hourlyTableColumns
+                    }
+                }
             )
         }
         .distinctUntilChanged()
@@ -90,6 +104,9 @@ class DataStoreSettingsRepository(
             preferences[weatherAlertsMigrationKey] = true
             preferences[dailySummaryKey] = settings.dailySummary
             preferences[dailySummaryTimeKey] = settings.dailySummaryTime.toPreferenceValue()
+            preferences[hourlyTableColumnsKey] = settings.hourlyTableColumns
+                .sortedBy(HourlyTableColumn::ordinal)
+                .joinToString(",") { it.name }
         }
     }
 
@@ -142,3 +159,4 @@ private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")
 private val weatherAlertsMigrationKey = booleanPreferencesKey("settings.weather_alerts_migrated")
 private val dailySummaryKey = booleanPreferencesKey("settings.daily_summary")
 private val dailySummaryTimeKey = stringPreferencesKey("settings.daily_summary_time")
+private val hourlyTableColumnsKey = stringPreferencesKey("settings.hourly_table_columns")

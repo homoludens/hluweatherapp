@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -39,13 +40,19 @@ import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.label
+import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
+import net.droopia.hluweather.data.windDirectionText
+import net.droopia.hluweather.data.windSpeedText
 import net.droopia.hluweather.ui.components.HluWeatherIcon
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
+import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.theme.LocalHluColors
 import kotlin.time.Clock
 
@@ -57,6 +64,8 @@ fun HourlyForecast(
     onDaySelected: (Int) -> Unit,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    windUnit: WindUnit = WindUnit.KMH,
+    hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     now: Instant = Clock.System.now(),
     modifier: Modifier = Modifier
 ) {
@@ -83,6 +92,7 @@ fun HourlyForecast(
         }
         stickyHeader {
             ForecastColumnHeader(
+                columns = hourlyTableColumns,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -105,6 +115,8 @@ fun HourlyForecast(
                         displayZone = displayZone,
                         temperatureUnit = temperatureUnit,
                         precipitationUnit = precipitationUnit,
+                        columns = hourlyTableColumns,
+                        windUnit = windUnit,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .then(
@@ -214,6 +226,7 @@ internal fun HourlyDateBoundary(
 
 @Composable
 internal fun ForecastColumnHeader(
+    columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -230,12 +243,12 @@ internal fun ForecastColumnHeader(
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ForecastCell("Time", 0.72f)
-        ForecastCell("Weather", 1.85f)
-        ForecastCell("Temp.", 0.8f)
-        ForecastCell("Dew point", 1f)
-        ForecastCell("Hum.", 0.8f)
-        ForecastCell("Precip.", 0.9f)
+        ForecastCell("Time", HourlyTableColumn.TIME.weight)
+        HourlyTableColumn.entries
+            .filter { it != HourlyTableColumn.TIME && it in columns }
+            .forEach { column ->
+            ForecastCell(column.header, column.weight)
+            }
     }
 }
 
@@ -259,6 +272,8 @@ internal fun ForecastRow(
     displayZone: ZoneId,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    windUnit: WindUnit = WindUnit.KMH,
+    columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     timeTestTag: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -281,51 +296,122 @@ internal fun ForecastRow(
         Text(
             text = weather.time.hourText(displayZone),
             modifier = Modifier
-                .weight(0.72f)
+                .weight(HourlyTableColumn.TIME.weight)
                 .then(timeTestTag?.let(Modifier::testTag) ?: Modifier),
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
 
-        Row(
-            modifier = Modifier.weight(1.85f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HluWeatherIcon(
-                condition = weather.condition,
-                isDay = weather.isDay,
-                modifier = Modifier.width(24.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = weather.condition.label(),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Text(
-            text = weather.temperature.temperatureValueText(temperatureUnit),
-            modifier = Modifier.weight(0.8f),
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            text = weather.dewPoint.temperatureValueText(temperatureUnit),
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Text(
-            text = weather.humidity.percentText(),
-            modifier = Modifier.weight(0.8f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Text(
-            text = weather.precipitation.precipitationText(precipitationUnit),
-            modifier = Modifier.weight(0.9f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        HourlyTableColumn.entries
+            .filter { it != HourlyTableColumn.TIME && it in columns }
+            .forEach { column ->
+                when (column) {
+                    HourlyTableColumn.WEATHER_ICON -> Box(
+                        modifier = Modifier.weight(column.weight),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (weather.condition == WeatherCondition.UNKNOWN) {
+                            Text("-", color = MaterialTheme.colorScheme.onSurface)
+                        } else {
+                            HluWeatherIcon(
+                                condition = weather.condition,
+                                isDay = weather.isDay,
+                                contentDescription = weather.condition.label(),
+                                modifier = Modifier
+                                    .width(24.dp)
+                                    .testTag("hourly_weather_icon")
+                            )
+                        }
+                    }
+                    HourlyTableColumn.WEATHER_TEXT -> ForecastValue(
+                        text = if (weather.condition == WeatherCondition.UNKNOWN) {
+                            "-"
+                        } else {
+                            weather.condition.label()
+                        },
+                        column = column
+                    )
+                    HourlyTableColumn.TEMPERATURE -> ForecastValue(
+                        text = weather.temperature.temperatureValueText(temperatureUnit).tableValueText(),
+                        column = column,
+                        emphasized = true
+                    )
+                    HourlyTableColumn.DEW_POINT -> ForecastValue(
+                        text = weather.dewPoint.temperatureValueText(temperatureUnit).tableValueText(),
+                        column = column,
+                        secondary = true
+                    )
+                    HourlyTableColumn.RELATIVE_HUMIDITY -> ForecastValue(
+                        text = weather.humidity.percentText().tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.PRECIPITATION -> ForecastValue(
+                        text = weather.precipitation.precipitationText(precipitationUnit).tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.WIND_SPEED -> ForecastValue(
+                        text = weather.windSpeedKmh.windSpeedText(windUnit).tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.WIND_DIRECTION -> ForecastValue(
+                        text = weather.windDirectionDegrees.windDirectionText().tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.EVAPOTRANSPIRATION -> ForecastValue(
+                        text = weather.evapotranspiration.precipitationText(precipitationUnit).tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.TIME -> Unit
+                }
+            }
     }
 }
+
+private fun String.tableValueText(): String = if (this == "—") "-" else this
+
+@Composable
+private fun RowScope.ForecastValue(
+    text: String,
+    column: HourlyTableColumn,
+    emphasized: Boolean = false,
+    secondary: Boolean = false
+) {
+    Text(
+        text = text,
+        modifier = Modifier.weight(column.weight),
+        color = if (secondary) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal
+    )
+}
+
+private val HourlyTableColumn.header: String
+    get() = when (this) {
+        HourlyTableColumn.TIME -> "Time"
+        HourlyTableColumn.WEATHER_ICON -> "Icon"
+        HourlyTableColumn.WEATHER_TEXT -> "Weather"
+        HourlyTableColumn.TEMPERATURE -> "Temp."
+        HourlyTableColumn.DEW_POINT -> "Dew point"
+        HourlyTableColumn.RELATIVE_HUMIDITY -> "Hum."
+        HourlyTableColumn.PRECIPITATION -> "Precip."
+        HourlyTableColumn.WIND_SPEED -> "Wind"
+        HourlyTableColumn.WIND_DIRECTION -> "Dir."
+        HourlyTableColumn.EVAPOTRANSPIRATION -> "ET"
+    }
+
+private val HourlyTableColumn.weight: Float
+    get() = when (this) {
+        HourlyTableColumn.TIME -> 0.72f
+        HourlyTableColumn.WEATHER_ICON -> 0.55f
+        HourlyTableColumn.WEATHER_TEXT -> 1.35f
+        HourlyTableColumn.TEMPERATURE -> 0.8f
+        HourlyTableColumn.DEW_POINT -> 1f
+        HourlyTableColumn.RELATIVE_HUMIDITY -> 0.8f
+        HourlyTableColumn.PRECIPITATION -> 0.9f
+        HourlyTableColumn.WIND_SPEED -> 0.95f
+        HourlyTableColumn.WIND_DIRECTION -> 0.85f
+        HourlyTableColumn.EVAPOTRANSPIRATION -> 0.9f
+    }

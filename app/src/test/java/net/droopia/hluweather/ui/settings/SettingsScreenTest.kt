@@ -77,10 +77,36 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Appearance").assertIsDisplayed()
         scrollTo(4)
         composeRule.onNodeWithText("Units").assertIsDisplayed()
-        scrollTo(5)
-        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
         scrollTo(6)
+        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
+        scrollTo(7)
         composeRule.onNodeWithText("Data & Cache").assertIsDisplayed()
+    }
+
+    @Test
+    fun hourly_table_column_controls_report_changes() {
+        val state = mutableStateOf(testSettingsState)
+
+        renderSettings(
+            state = { state.value },
+            onHourlyTableColumnChange = { column, enabled ->
+                state.value = state.value.copy(
+                    hourlyTableColumns = if (enabled) {
+                        state.value.hourlyTableColumns + column
+                    } else {
+                        state.value.hourlyTableColumns - column
+                    }
+                )
+            }
+        )
+
+        scrollTo(5)
+        composeRule.onNodeWithTag("settings_hourly_column_weather_icon").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_hourly_column_weather_text").performClick()
+        composeRule.onNodeWithTag("settings_hourly_column_weather_icon").performClick()
+
+        assertTrue(HourlyTableColumn.WEATHER_TEXT in state.value.hourlyTableColumns)
+        assertTrue(HourlyTableColumn.WEATHER_ICON !in state.value.hourlyTableColumns)
     }
 
     @Test
@@ -98,7 +124,7 @@ class SettingsScreenTest {
     fun notifications_show_best_effort_summary_time_without_trip_alerts() {
         renderSettings()
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithText("Daily summary time").assertIsDisplayed()
         composeRule.onNodeWithText("08:00").assertIsDisplayed()
         composeRule.onNodeWithText("Best effort; delivery may be delayed by Android.").assertIsDisplayed()
@@ -111,7 +137,7 @@ class SettingsScreenTest {
         var selectedTime: LocalTime? = null
         renderSettings(onDailySummaryTimeChange = { selectedTime = it })
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_daily_summary_time").performClick()
 
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -126,7 +152,7 @@ class SettingsScreenTest {
     fun summary_time_row_exposes_one_merged_action() {
         renderSettings()
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_daily_summary_time")
             .assertHasClickAction()
             .assertContentDescriptionEquals("Daily summary time, 08:00")
@@ -142,7 +168,7 @@ class SettingsScreenTest {
             onOpenNotificationSettings = { settingsClicks++ }
         )
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithText("Notifications are blocked").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_notification_permission").performClick()
 
@@ -161,7 +187,7 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("MET.no").performClick()
         composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
-        composeRule.onNodeWithText("Dark").performClick()
+        composeRule.onNodeWithTag("settings_theme_dark").performClick()
         composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
 
         assertEquals(WeatherProvider.MET_NO, state.value.provider)
@@ -181,7 +207,7 @@ class SettingsScreenTest {
         )
 
         composeRule.onNodeWithTag("settings_provider_met_no").performClick()
-        scrollTo(7)
+        scrollTo(8)
         composeRule.onNodeWithTag("settings_place_search_open_meteo").performClick()
         composeRule.onNodeWithTag("settings_place_search_open_meteo").assertIsSelected()
 
@@ -193,7 +219,7 @@ class SettingsScreenTest {
     fun location_search_provider_rows_have_no_dead_info_action() {
         renderSettings()
 
-        scrollTo(7)
+        scrollTo(8)
 
         composeRule.onNodeWithContentDescription("Information about Photon").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Information about Open-Meteo").assertDoesNotExist()
@@ -268,7 +294,7 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("mi").performClick()
         composeRule.onNodeWithText("in").performClick()
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_weather_alerts").performClick()
         composeRule.onNodeWithTag("settings_daily_summary").performClick()
 
@@ -276,7 +302,7 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag("settings_location_belgrade").performClick()
         composeRule.onNodeWithContentDescription("Location options Belgrade").performClick()
         composeRule.onNodeWithText("Add Location").performClick()
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithText("Clear cache").performClick()
 
         assertEquals(true, trackMe)
@@ -323,6 +349,7 @@ class SettingsScreenTest {
         notificationsPermissionGranted: Boolean = true,
         onOpenNotificationSettings: () -> Unit = {},
         onClearCacheClick: () -> Unit = {},
+        onHourlyTableColumnChange: (HourlyTableColumn, Boolean) -> Unit = { _, _ -> },
         darkTheme: Boolean = false,
         inheritedContentColor: Color? = null
     ) {
@@ -349,7 +376,9 @@ class SettingsScreenTest {
                         onDailySummaryTimeChange = onDailySummaryTimeChange,
                         notificationsPermissionGranted = notificationsPermissionGranted,
                         onOpenNotificationSettings = onOpenNotificationSettings,
-                        onClearCacheClick = onClearCacheClick
+                        onClearCacheClick = onClearCacheClick,
+                        hourlyTableColumns = state().hourlyTableColumns,
+                        onHourlyTableColumnChange = onHourlyTableColumnChange
                     )
                 }
                 if (inheritedContentColor != null) {

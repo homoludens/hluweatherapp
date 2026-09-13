@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WbTwilight
+import androidx.compose.material.icons.outlined.ViewColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -98,6 +99,8 @@ fun SettingsScreen(
     onDailySummaryChange: (Boolean) -> Unit,
     onDailySummaryTimeChange: (LocalTime) -> Unit,
     onClearCacheClick: () -> Unit,
+    hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
+    onHourlyTableColumnChange: (HourlyTableColumn, Boolean) -> Unit = { _, _ -> },
     notificationsPermissionGranted: Boolean = true,
     onOpenNotificationSettings: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -241,6 +244,34 @@ fun SettingsScreen(
                         onSecond = { onPrecipitationUnitChange(PrecipitationUnit.INCH) }
                     )
                 }
+            }
+        }
+
+        item {
+            SettingsCard {
+                SectionHeader(
+                    icon = Icons.Outlined.ViewColumn,
+                    title = "Hourly table",
+                    subtitle = "Choose which weather data to show"
+                )
+                HorizontalDivider()
+                HourlyTableColumn.entries
+                    .filter { it != HourlyTableColumn.TIME }
+                    .forEachIndexed { index, column ->
+                        if (index > 0) {
+                            HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        }
+                        ToggleRow(
+                            icon = Icons.Outlined.ViewColumn,
+                            title = column.settingsTitle,
+                            subtitle = column.settingsSubtitle,
+                            checked = column in hourlyTableColumns,
+                            tag = "settings_hourly_column_${column.name.lowercase()}",
+                            onCheckedChange = { enabled ->
+                                onHourlyTableColumnChange(column, enabled)
+                            }
+                        )
+                    }
             }
         }
 
@@ -621,6 +652,34 @@ private fun ThemeSelector(selected: ThemeMode, onSelected: (ThemeMode) -> Unit) 
         ThemeButton("Dark", Icons.Outlined.DarkMode, selected == ThemeMode.DARK, "settings_theme_dark", { onSelected(ThemeMode.DARK) }, Modifier.weight(1f))
     }
 }
+
+private val HourlyTableColumn.settingsTitle: String
+    get() = when (this) {
+        HourlyTableColumn.TIME -> "Time"
+        HourlyTableColumn.WEATHER_ICON -> "Weather icon"
+        HourlyTableColumn.WEATHER_TEXT -> "Weather text"
+        HourlyTableColumn.TEMPERATURE -> "Temperature"
+        HourlyTableColumn.DEW_POINT -> "Dew point"
+        HourlyTableColumn.RELATIVE_HUMIDITY -> "Relative humidity"
+        HourlyTableColumn.PRECIPITATION -> "Precipitation amount"
+        HourlyTableColumn.WIND_SPEED -> "Wind speed"
+        HourlyTableColumn.WIND_DIRECTION -> "Wind direction"
+        HourlyTableColumn.EVAPOTRANSPIRATION -> "Evapotranspiration"
+    }
+
+private val HourlyTableColumn.settingsSubtitle: String
+    get() = when (this) {
+        HourlyTableColumn.TIME -> "Always shown"
+        HourlyTableColumn.WEATHER_ICON -> "Weather condition icon"
+        HourlyTableColumn.WEATHER_TEXT -> "Weather condition description"
+        HourlyTableColumn.TEMPERATURE -> "Air temperature"
+        HourlyTableColumn.DEW_POINT -> "Dew point temperature"
+        HourlyTableColumn.RELATIVE_HUMIDITY -> "Relative humidity percentage"
+        HourlyTableColumn.PRECIPITATION -> "Precipitation amount"
+        HourlyTableColumn.WIND_SPEED -> "Wind speed"
+        HourlyTableColumn.WIND_DIRECTION -> "Wind direction in degrees"
+        HourlyTableColumn.EVAPOTRANSPIRATION -> "Evapotranspiration amount"
+    }
 
 @Composable
 private fun ThemeButton(

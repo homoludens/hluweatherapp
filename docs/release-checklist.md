@@ -2,9 +2,18 @@
 
 ## Metadata
 
-- `versionCode`: `32`
-- `versionName`: `3.2.0`
-- Declared in `app/build.gradle.kts` for the Plan 3.2 release.
+- `versionCode`: `33`
+- `versionName`: `3.3.0`
+- Declared in `app/build.gradle.kts` for the hourly-table settings release.
+
+## 3.3.0 Artifact
+
+- Optimized release APK built with minification and resource shrinking enabled.
+- APK: `app/build/outputs/apk/release/app-release-unsigned.apk`
+- SHA-256: `ebeff2e6a49f42b3694152f53636bba6228a0f41ad854c90909fed4059fc9940`
+- The local build is unsigned because release signing credentials are not
+  available in the environment. Do not use this APK for store distribution
+  until it is signed with the project's release keystore.
 
 ## Signing
 

@@ -65,6 +65,9 @@ import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
+import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.map.WeatherMap
 
 private const val WEATHER_HEADER_KEY = "weather_header"
@@ -87,6 +90,8 @@ fun WeatherScreen(
     darkTheme: Boolean = false,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    windUnit: WindUnit = WindUnit.KMH,
+    hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     now: Instant? = null,
     modifier: Modifier = Modifier,
     mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
@@ -195,6 +200,8 @@ fun WeatherScreen(
                             selectedDayIndex = state.selectedDayIndex,
                             temperatureUnit = temperatureUnit,
                             precipitationUnit = precipitationUnit,
+                            windUnit = windUnit,
+                            hourlyTableColumns = hourlyTableColumns,
                             now = now,
                             onDaySelected = viewModel::onDaySelected,
                             onForecastModeSelected = viewModel::onForecastModeSelected,
@@ -366,6 +373,8 @@ private fun HourlyWeatherContent(
     selectedDayIndex: Int,
     temperatureUnit: TemperatureUnit,
     precipitationUnit: PrecipitationUnit,
+    windUnit: WindUnit,
+    hourlyTableColumns: Set<HourlyTableColumn>,
     onDaySelected: (Int) -> Unit,
     onForecastModeSelected: (ForecastMode) -> Unit,
     onSettingsClick: () -> Unit,
@@ -495,6 +504,7 @@ private fun HourlyWeatherContent(
 
             stickyHeader(key = HOURLY_HEADER_KEY) {
                 ForecastColumnHeader(
+                    columns = hourlyTableColumns,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
@@ -516,6 +526,8 @@ private fun HourlyWeatherContent(
                             displayZone = displayZone,
                             temperatureUnit = temperatureUnit,
                             precipitationUnit = precipitationUnit,
+                            windUnit = windUnit,
+                            columns = hourlyTableColumns,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
                                 .then(

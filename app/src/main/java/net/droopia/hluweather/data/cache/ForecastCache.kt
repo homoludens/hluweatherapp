@@ -167,10 +167,13 @@ private data class HourDto(
     val apparentTemperature: Double?,
     val humidity: Int?,
     val dewPoint: Double?,
-    val precipitation: Double,
+    val precipitation: Double?,
     val precipitationProbability: Int?,
     val condition: String,
-    val isDay: Boolean?
+    val isDay: Boolean?,
+    val windSpeedKmh: Double? = null,
+    val windDirectionDegrees: Double? = null,
+    val evapotranspiration: Double? = null
 ) {
     fun toHourForecast() = HourForecast(
         time = Instant.parse(time),
@@ -181,7 +184,10 @@ private data class HourDto(
         precipitation = precipitation,
         precipitationProbability = precipitationProbability,
         condition = condition.toWeatherCondition(),
-        isDay = isDay
+        isDay = isDay,
+        windSpeedKmh = windSpeedKmh,
+        windDirectionDegrees = windDirectionDegrees,
+        evapotranspiration = evapotranspiration
     )
 }
 
@@ -235,7 +241,10 @@ private fun WeatherForecast.toDto() = ForecastDto(
             it.precipitation,
             it.precipitationProbability,
             it.condition.name,
-            it.isDay
+            it.isDay,
+            it.windSpeedKmh,
+            it.windDirectionDegrees,
+            it.evapotranspiration
         )
     },
     daily = daily.map {

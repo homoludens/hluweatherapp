@@ -44,6 +44,8 @@ class MetNoWeatherRepositoryTest {
         assertEquals(3, forecast.hourly.size)
         assertEquals(Instant.parse("2026-09-10T00:00:00Z"), forecast.hourly[0].time)
         assertEquals(5.0, forecast.hourly[1].temperature, 0.0)
+        assertEquals(36.0, forecast.hourly[0].windSpeedKmh!!, 0.0)
+        assertEquals(180.0, forecast.hourly[0].windDirectionDegrees!!, 0.0)
         assertEquals(WeatherCondition.RAIN, forecast.hourly[2].condition)
         assertEquals(false, forecast.hourly[2].isDay)
 
@@ -168,7 +170,7 @@ class MetNoWeatherRepositoryTest {
         assertNull(forecast.current.isDay)
         assertNull(forecast.current.humidity)
         assertNull(forecast.current.dewPoint)
-        assertEquals(0.0, forecast.hourly.single().precipitation, 0.0)
+        assertNull(forecast.hourly.single().precipitation)
         assertNull(forecast.hourly.single().precipitationProbability)
     }
 
@@ -189,7 +191,7 @@ class MetNoWeatherRepositoryTest {
         assertEquals(WeatherCondition.RAIN, forecast.current.condition)
         assertEquals(false, forecast.current.isDay)
         assertEquals(4.5, forecast.current.precipitation!!, 0.0)
-        assertEquals(4.5, forecast.hourly.single().precipitation, 0.0)
+        assertEquals(4.5, forecast.hourly.single().precipitation!!, 0.0)
         assertEquals(4.5, forecast.daily.single().precipitation!!, 0.0)
     }
 
@@ -221,7 +223,7 @@ class MetNoWeatherRepositoryTest {
         ).getForecast(location)
 
         assertEquals(WeatherCondition.RAIN, forecast.hourly[1].condition)
-        assertEquals(1.0, forecast.hourly[1].precipitation, 0.0)
+        assertEquals(1.0, forecast.hourly[1].precipitation!!, 0.0)
         assertEquals(2, forecast.daily.size)
         assertEquals(5.0, forecast.daily[0].temperatureMin, 0.0)
         assertEquals(20.0, forecast.daily[0].temperatureMax, 0.0)
@@ -294,12 +296,16 @@ class MetNoWeatherRepositoryTest {
         precipitation: Double? = 1.25,
         humidity: Int? = 60,
         dewPoint: Double? = 10.0,
+        windSpeed: Double? = null,
+        windDirection: Double? = null,
         next6Symbol: String? = null,
         next6Precipitation: Double? = null
     ) = MetNoTimeSeries(
         time = time,
         data = MetNoTimeSeriesData(
-            instant = MetNoInstant(MetNoDetails(temperature, humidity?.toDouble(), dewPoint)),
+            instant = MetNoInstant(
+                MetNoDetails(temperature, humidity?.toDouble(), dewPoint, windSpeed, windDirection)
+            ),
             next1Hours = symbol?.let {
                 MetNoData(
                     summary = MetNoSummary(it),
@@ -320,7 +326,13 @@ class MetNoWeatherRepositoryTest {
 
     private val aggregatedResponse: MetNoResponse
         get() = responseWithTimeseries(
-            timeSeries("clearsky_day", temperature = 20.0, precipitation = 0.25),
+            timeSeries(
+                "clearsky_day",
+                temperature = 20.0,
+                precipitation = 0.25,
+                windSpeed = 10.0,
+                windDirection = 180.0
+            ),
             timeSeries(
                 "cloudy_day",
                 temperature = 5.0,

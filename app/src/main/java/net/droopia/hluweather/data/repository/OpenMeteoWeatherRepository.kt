@@ -104,6 +104,9 @@ private fun net.droopia.hluweather.data.network.HourlyDto.toHourlyForecasts(
     validateOptionalLength("hourly", time, "dew_point_2m", dewPoint)
     validateOptionalLength("hourly", time, "apparent_temperature", apparentTemperature)
     validateOptionalLength("hourly", time, "precipitation_probability", precipitationProbability)
+    validateOptionalLength("hourly", time, "wind_speed_10m", windSpeed)
+    validateOptionalLength("hourly", time, "wind_direction_10m", windDirection)
+    validateOptionalLength("hourly", time, "evapotranspiration", evapotranspiration)
     validateOptionalLength("hourly", time, "is_day", isDay)
 
     return time.indices.map { index ->
@@ -113,10 +116,13 @@ private fun net.droopia.hluweather.data.network.HourlyDto.toHourlyForecasts(
             apparentTemperature = apparentTemperature?.get(index),
             humidity = humidity?.get(index),
             dewPoint = dewPoint?.get(index),
-            precipitation = precipitation[index].required("hourly.precipitation[$index]"),
+            precipitation = precipitation[index],
             precipitationProbability = precipitationProbability?.get(index),
             condition = weatherCode[index].required("hourly.weather_code[$index]").toWeatherCondition(),
-            isDay = isDay?.get(index).toDayFlag("hourly.is_day[$index]")
+            isDay = isDay?.get(index).toDayFlag("hourly.is_day[$index]"),
+            windSpeedKmh = windSpeed?.get(index),
+            windDirectionDegrees = windDirection?.get(index),
+            evapotranspiration = evapotranspiration?.get(index)
         )
     }
 }
