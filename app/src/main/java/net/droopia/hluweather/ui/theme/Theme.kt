@@ -1,14 +1,19 @@
 package net.droopia.hluweather.ui.theme
 
+import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
+import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF5367E8),
@@ -39,6 +44,7 @@ val LocalHluColors = staticCompositionLocalOf<HluColors> {
 }
 
 @Composable
+@Suppress("DEPRECATION")
 fun HluWeatherTheme(
     darkTheme: Boolean,
     content: @Composable () -> Unit
@@ -50,6 +56,16 @@ fun HluWeatherTheme(
         density = density.density,
         fontScale = density.fontScale.coerceAtMost(1f)
     )
+    val view = LocalView.current
+
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.navigationBarColor = materialColors.background.toArgb()
+            WindowCompat.getInsetsController(window, view)
+                .isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
 
     CompositionLocalProvider(
         LocalDensity provides cappedDensity,
