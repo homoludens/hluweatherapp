@@ -11,7 +11,9 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.ForecastLoad
@@ -49,6 +51,18 @@ class SettingsViewModelTest {
         viewModel.setTheme(ThemeMode.DARK)
 
         assertEquals(ThemeMode.DARK, viewModel.state.value.themeMode)
+    }
+
+    @Test
+    fun selecting_wind_direction_display_updates_and_persists_it() = runTest {
+        val repository = InMemorySettingsRepository()
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
+
+        viewModel.setWindDirectionDisplay(WindDirectionDisplay.EIGHT_POINT)
+        advanceUntilIdle()
+
+        assertEquals(WindDirectionDisplay.EIGHT_POINT, viewModel.state.value.windDirectionDisplay)
+        assertEquals(WindDirectionDisplay.EIGHT_POINT, repository.saved?.windDirectionDisplay)
     }
 
     @Test
@@ -201,12 +215,14 @@ class SettingsViewModelTest {
             PersistedSettings(
                 themeMode = ThemeMode.DARK,
                 temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                windDirectionDisplay = WindDirectionDisplay.EIGHT_POINT,
                 hourlyTableColumns = setOf(HourlyTableColumn.WIND_SPEED)
             )
         )
 
         assertEquals(ThemeMode.LIGHT, viewModel.state.value.themeMode)
         assertEquals(TemperatureUnit.FAHRENHEIT, viewModel.state.value.temperatureUnit)
+        assertEquals(WindDirectionDisplay.EIGHT_POINT, viewModel.state.value.windDirectionDisplay)
         assertEquals(
             setOf(HourlyTableColumn.WIND_SPEED),
             viewModel.state.value.hourlyTableColumns

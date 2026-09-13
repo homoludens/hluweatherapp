@@ -12,6 +12,7 @@ import net.droopia.hluweather.ui.settings.DistanceUnit
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.WindUnit
+import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 
 private val hourFormatter =
     DateTimeFormatter.ofPattern("HH'h'", java.util.Locale.US)
@@ -51,8 +52,19 @@ fun Double?.windSpeedText(unit: WindUnit): String =
         "${speed.decimalText()} ${unit.symbol}"
     } ?: "—"
 
-fun Double?.windDirectionText(): String =
-    this?.let { "${it.roundToInt()}°" } ?: "—"
+fun Double?.windDirectionText(): String = windDirectionText(WindDirectionDisplay.DEGREES)
+
+fun Double?.windDirectionText(display: WindDirectionDisplay): String = when (display) {
+    WindDirectionDisplay.DEGREES -> this?.let { "${it.roundToInt()}°" } ?: "—"
+    WindDirectionDisplay.EIGHT_POINT -> this?.let { eightPointDirection(it) } ?: "—"
+    WindDirectionDisplay.ARROW -> this?.let { "" } ?: "—"
+}
+
+private fun eightPointDirection(degrees: Double): String {
+    val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    val normalized = ((degrees % 360.0) + 360.0) % 360.0
+    return directions[((normalized + 22.5) / 45.0).toInt() % directions.size]
+}
 
 fun Double?.distanceText(unit: DistanceUnit): String =
     this?.let {

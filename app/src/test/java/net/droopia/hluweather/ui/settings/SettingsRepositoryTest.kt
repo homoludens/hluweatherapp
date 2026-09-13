@@ -40,6 +40,7 @@ class SettingsRepositoryTest {
         assertFalse(settings.weatherAlerts)
         assertFalse(settings.dailySummary)
         assertEquals(LocalTime(8, 0), settings.dailySummaryTime)
+        assertEquals(WindDirectionDisplay.ARROW, settings.windDirectionDisplay)
     }
 
     @Test
@@ -91,6 +92,7 @@ class SettingsRepositoryTest {
             windUnit = WindUnit.MPH,
             distanceUnit = DistanceUnit.MILES,
             precipitationUnit = PrecipitationUnit.INCH,
+            windDirectionDisplay = WindDirectionDisplay.EIGHT_POINT,
             hourlyTableColumns = setOf(
                 HourlyTableColumn.WEATHER_ICON,
                 HourlyTableColumn.WIND_SPEED,

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -133,6 +134,50 @@ fun LocationPickerScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = state.searchQuery,
+                    onValueChange = viewModel::onSearchQueryChanged,
+                    label = { Text("Search for a place") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("location_picker_search"),
+                    singleLine = true
+                )
+                if (state.isSearching) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Searching...", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                state.searchError?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("location_picker_search_error")
+                    )
+                }
+                state.searchResults.forEachIndexed { index, result ->
+                    TextButton(
+                        onClick = { viewModel.selectSearchResult(result) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("location_picker_search_result_$index")
+                    ) {
+                        Text(result.label, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

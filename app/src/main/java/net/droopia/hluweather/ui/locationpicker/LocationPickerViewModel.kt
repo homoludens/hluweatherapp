@@ -6,14 +6,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -23,6 +27,9 @@ import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
+import net.droopia.hluweather.data.repository.PlaceSearchResult
+import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import java.util.UUID
 
@@ -52,6 +59,10 @@ data class LocationPickerUiState(
     val name: String = NEW_LOCATION_NAME,
     val isNameEditing: Boolean = false,
     val isNameLoading: Boolean = false,
+    val searchQuery: String = "",
+    val searchResults: List<PlaceSearchResult> = emptyList(),
+    val isSearching: Boolean = false,
+    val searchError: String? = null,
     val gpsStatus: GpsStatus = GpsStatus.Idle,
     val initialization: LocationPickerInitialization = LocationPickerInitialization.Ready
 ) {
@@ -64,13 +75,17 @@ sealed interface LocationPickerEvent {
     data object Deleted : LocationPickerEvent
 }
 
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class LocationPickerViewModel(
     private val locationRepository: LocationRepository,
     private val deviceLocationSource: DeviceLocationSource,
     private val reverseGeocoder: ReverseGeocoder,
     private val locationId: String? = null,
     initialLocation: WeatherLocation? = null,
-    private val reverseGeocodeDebounceMillis: Long = 300L
+    private val reverseGeocodeDebounceMillis: Long = 300L,
+    private val placeSearchSources: List<PlaceSearchSource> = emptyList(),
+    private val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
+    private val placeSearchDebounceMillis: Long = 300L
 ) : ViewModel() {
     private val _state = MutableStateFlow(initialLocation.toPickerState())
     val state: StateFlow<LocationPickerUiState> = _state
@@ -83,11 +98,61 @@ class LocationPickerViewModel(
     private var reverseGeocodingJob: Job? = null
     private var gpsJob: Job? = null
     private var gpsRequestGeneration = 0L
+    private val searchInput = MutableStateFlow("")
     private val editingLocationId = initialLocation?.id ?: locationId
     val isEditMode: Boolean
         get() = editingLocationId != null && _state.value.initialization == LocationPickerInitialization.Ready
 
     init {
+        viewModelScope.launch {
+            searchInput
+                .debounce(placeSearchDebounceMillis)
+                .collectLatest { query ->
+                    if (query.isBlank()) {
+                        _state.update {
+                            it.copy(
+                                searchResults = emptyList(),
+                                isSearching = false,
+                                searchError = null
+                            )
+                        }
+                    } else {
+                        val source = placeSearchSources.firstOrNull {
+                            it.provider == placeSearchProvider
+                        }
+                        if (source == null) {
+                            _state.update {
+                                it.copy(
+                                    searchResults = emptyList(),
+                                    isSearching = false,
+                                    searchError = "Place search unavailable"
+                                )
+                            }
+                        } else {
+                            try {
+                                val results = source.search(query.trim()).take(5)
+                                _state.update {
+                                    it.copy(
+                                        searchResults = results,
+                                        isSearching = false,
+                                        searchError = null
+                                    )
+                                }
+                            } catch (exception: CancellationException) {
+                                throw exception
+                            } catch (_: Exception) {
+                                _state.update {
+                                    it.copy(
+                                        searchResults = emptyList(),
+                                        isSearching = false,
+                                        searchError = "Place search unavailable"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+        }
         if (initialLocation == null && locationId == null) {
             requestReverseGeocode(_state.value.point)
         }
@@ -116,6 +181,36 @@ class LocationPickerViewModel(
         _state.update {
             it.copy(name = name, isNameEditing = true, isNameLoading = false)
         }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _state.update {
+            it.copy(
+                searchQuery = query,
+                searchResults = emptyList(),
+                isSearching = query.isNotBlank(),
+                searchError = null
+            )
+        }
+        searchInput.value = query
+    }
+
+    fun selectSearchResult(result: PlaceSearchResult) {
+        _state.update {
+            it.copy(
+                latitude = result.point.latitude,
+                longitude = result.point.longitude,
+                altitude = null,
+                name = result.label,
+                isNameEditing = true,
+                isNameLoading = false,
+                searchQuery = "",
+                searchResults = emptyList(),
+                isSearching = false,
+                searchError = null
+            )
+        }
+        searchInput.value = ""
     }
 
     fun onReverseGeocoded(name: String?) {
@@ -247,7 +342,11 @@ class LocationPickerViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = factory(null)
 
-        fun factory(locationId: String?): ViewModelProvider.Factory = viewModelFactory {
+        fun factory(
+            locationId: String?,
+            placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
+            placeSearchSources: List<PlaceSearchSource> = emptyList()
+        ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[
                     ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY
@@ -256,7 +355,9 @@ class LocationPickerViewModel(
                     locationRepository = application.locationRepository,
                     deviceLocationSource = application.deviceLocationSource,
                     reverseGeocoder = application.reverseGeocoder,
-                    locationId = locationId
+                    locationId = locationId,
+                    placeSearchProvider = placeSearchProvider,
+                    placeSearchSources = placeSearchSources
                 )
             }
         }

@@ -2,18 +2,16 @@
 
 ## Metadata
 
-- `versionCode`: `33`
-- `versionName`: `3.3.0`
-- Declared in `app/build.gradle.kts` for the hourly-table settings release.
+- `versionCode`: `34`
+- `versionName`: `3.4.0`
+- Declared in `app/build.gradle.kts` for the wind display and location search release.
 
-## 3.3.0 Artifact
+## 3.4.0 Artifact
 
 - Optimized release APK built with minification and resource shrinking enabled.
-- APK: `app/build/outputs/apk/release/app-release-unsigned.apk`
-- SHA-256: `ebeff2e6a49f42b3694152f53636bba6228a0f41ad854c90909fed4059fc9940`
-- The local build is unsigned because release signing credentials are not
-  available in the environment. Do not use this APK for store distribution
-  until it is signed with the project's release keystore.
+- APK: `app/build/outputs/apk/release/app-release.apk`
+- SHA-256: `6a92c385087657b5eb289e5d54c3353822898888d6bcac0fbceac667c677504b`
+- APK Signature Scheme v2 verification passed with one signer.
 
 ## Signing
 

@@ -27,6 +27,7 @@ data class PersistedSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     val windUnit: WindUnit = WindUnit.KMH,
+    val windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val weatherAlerts: Boolean = false,
@@ -63,6 +64,10 @@ class DataStoreSettingsRepository(
                 themeMode = preferences.enum(themeModeKey, defaults.themeMode),
                 temperatureUnit = preferences.enum(temperatureUnitKey, defaults.temperatureUnit),
                 windUnit = preferences.enum(windUnitKey, defaults.windUnit),
+                windDirectionDisplay = preferences.enum(
+                    windDirectionDisplayKey,
+                    defaults.windDirectionDisplay
+                ),
                 distanceUnit = preferences.enum(distanceUnitKey, defaults.distanceUnit),
                 precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
                 weatherAlerts = if (preferences[weatherAlertsMigrationKey] == true) {
@@ -98,6 +103,7 @@ class DataStoreSettingsRepository(
             preferences[themeModeKey] = settings.themeMode.name
             preferences[temperatureUnitKey] = settings.temperatureUnit.name
             preferences[windUnitKey] = settings.windUnit.name
+            preferences[windDirectionDisplayKey] = settings.windDirectionDisplay.name
             preferences[distanceUnitKey] = settings.distanceUnit.name
             preferences[precipitationUnitKey] = settings.precipitationUnit.name
             preferences[weatherAlertsKey] = settings.weatherAlerts
@@ -153,6 +159,7 @@ private val selectedLocationIdKey = stringPreferencesKey("settings.selected_loca
 private val themeModeKey = stringPreferencesKey("settings.theme_mode")
 private val temperatureUnitKey = stringPreferencesKey("settings.temperature_unit")
 private val windUnitKey = stringPreferencesKey("settings.wind_unit")
+private val windDirectionDisplayKey = stringPreferencesKey("settings.wind_direction_display")
 private val distanceUnitKey = stringPreferencesKey("settings.distance_unit")
 private val precipitationUnitKey = stringPreferencesKey("settings.precipitation_unit")
 private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")

@@ -21,6 +21,9 @@ import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.PlaceSearchProvider
+import net.droopia.hluweather.data.repository.PlaceSearchResult
+import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -245,6 +248,28 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun place_search_is_debounced_and_exposes_results() = runTest {
+        val source = RecordingPlaceSearchSource(
+            listOf(PlaceSearchResult("Belgrade", viewModelPoint))
+        )
+        val viewModel = picker(
+            placeSearchSources = listOf(source),
+            placeSearchProvider = PlaceSearchProvider.PHOTON,
+            placeSearchDebounceMillis = 300L
+        )
+
+        viewModel.onSearchQueryChanged("Bel")
+        advanceTimeBy(299L)
+        assertTrue(viewModel.state.value.searchResults.isEmpty())
+        advanceTimeBy(1L)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Bel"), source.queries)
+        assertEquals(listOf("Belgrade"), viewModel.state.value.searchResults.map { it.label })
+        assertFalse(viewModel.state.value.isSearching)
+    }
+
+    @Test
     fun gps_cancellation_does_not_become_unavailable() = runTest {
         val viewModel = picker(gps = CancellingDeviceLocationSource())
 
@@ -315,15 +340,33 @@ class LocationPickerViewModelTest {
         geocoder: ReverseGeocoder = FakeReverseGeocoder(),
         initialLocation: WeatherLocation? = null,
         locationId: String? = null,
-        reverseGeocodeDebounceMillis: Long = 0L
+        reverseGeocodeDebounceMillis: Long = 0L,
+        placeSearchSources: List<PlaceSearchSource> = emptyList(),
+        placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
+        placeSearchDebounceMillis: Long = 300L
     ) = LocationPickerViewModel(
         locationRepository = repository,
         deviceLocationSource = gps,
         reverseGeocoder = geocoder,
         initialLocation = initialLocation,
         locationId = locationId,
-        reverseGeocodeDebounceMillis = reverseGeocodeDebounceMillis
+        reverseGeocodeDebounceMillis = reverseGeocodeDebounceMillis,
+        placeSearchSources = placeSearchSources,
+        placeSearchProvider = placeSearchProvider,
+        placeSearchDebounceMillis = placeSearchDebounceMillis
     )
+
+    private class RecordingPlaceSearchSource(
+        private val results: List<PlaceSearchResult>
+    ) : PlaceSearchSource {
+        override val provider = PlaceSearchProvider.PHOTON
+        val queries = mutableListOf<String>()
+
+        override suspend fun search(query: String): List<PlaceSearchResult> {
+            queries += query
+            return results
+        }
+    }
 
     private class FakeDeviceLocationSource(
         private val result: GpsResult

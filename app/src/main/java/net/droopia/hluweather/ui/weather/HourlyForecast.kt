@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -53,6 +56,7 @@ import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.settings.WindUnit
+import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.theme.LocalHluColors
 import kotlin.time.Clock
 
@@ -65,6 +69,7 @@ fun HourlyForecast(
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     windUnit: WindUnit = WindUnit.KMH,
+    windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     now: Instant = Clock.System.now(),
     modifier: Modifier = Modifier
@@ -117,6 +122,7 @@ fun HourlyForecast(
                         precipitationUnit = precipitationUnit,
                         columns = hourlyTableColumns,
                         windUnit = windUnit,
+                        windDirectionDisplay = windDirectionDisplay,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .then(
@@ -273,6 +279,7 @@ internal fun ForecastRow(
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     windUnit: WindUnit = WindUnit.KMH,
+    windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     timeTestTag: String? = null,
     modifier: Modifier = Modifier
@@ -353,10 +360,27 @@ internal fun ForecastRow(
                         text = weather.windSpeedKmh.windSpeedText(windUnit).tableValueText(),
                         column = column
                     )
-                    HourlyTableColumn.WIND_DIRECTION -> ForecastValue(
-                        text = weather.windDirectionDegrees.windDirectionText().tableValueText(),
-                        column = column
-                    )
+                    HourlyTableColumn.WIND_DIRECTION -> {
+                        val degrees = weather.windDirectionDegrees
+                        if (degrees == null) {
+                            ForecastValue(text = "-", column = column)
+                        } else if (windDirectionDisplay == WindDirectionDisplay.ARROW) {
+                            androidx.compose.material3.Icon(
+                                imageVector = Icons.Filled.Navigation,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .weight(column.weight)
+                                    .graphicsLayer { rotationZ = degrees.toFloat() }
+                                    .testTag("hourly_wind_direction_arrow"),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        } else {
+                            ForecastValue(
+                                text = degrees.windDirectionText(windDirectionDisplay).tableValueText(),
+                                column = column
+                            )
+                        }
+                    }
                     HourlyTableColumn.EVAPOTRANSPIRATION -> ForecastValue(
                         text = weather.evapotranspiration.precipitationText(precipitationUnit).tableValueText(),
                         column = column

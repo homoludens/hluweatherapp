@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MyLocation
+import androidx.compose.material.icons.outlined.Navigation
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Palette
@@ -93,6 +94,7 @@ fun SettingsScreen(
     onThemeChange: (ThemeMode) -> Unit,
     onTemperatureUnitChange: (TemperatureUnit) -> Unit,
     onWindUnitChange: (WindUnit) -> Unit,
+    onWindDirectionDisplayChange: (WindDirectionDisplay) -> Unit = {},
     onDistanceUnitChange: (DistanceUnit) -> Unit,
     onPrecipitationUnitChange: (PrecipitationUnit) -> Unit,
     onWeatherAlertsChange: (Boolean) -> Unit,
@@ -220,6 +222,11 @@ fun SettingsScreen(
                         onSecond = { onWindUnitChange(WindUnit.MPH) }
                     )
                 }
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                WindDirectionRow(
+                    selected = state.windDirectionDisplay,
+                    onSelected = onWindDirectionDisplayChange
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
                 UnitRow(Icons.Outlined.Straighten, "Distance") {
                     TwoOptionSelector(
@@ -677,7 +684,7 @@ private val HourlyTableColumn.settingsSubtitle: String
         HourlyTableColumn.RELATIVE_HUMIDITY -> "Relative humidity percentage"
         HourlyTableColumn.PRECIPITATION -> "Precipitation amount"
         HourlyTableColumn.WIND_SPEED -> "Wind speed"
-        HourlyTableColumn.WIND_DIRECTION -> "Wind direction in degrees"
+        HourlyTableColumn.WIND_DIRECTION -> "Wind direction display mode"
         HourlyTableColumn.EVAPOTRANSPIRATION -> "Evapotranspiration amount"
     }
 
@@ -729,6 +736,41 @@ private fun UnitRow(icon: ImageVector, title: String, selector: @Composable () -
 }
 
 @Composable
+private fun WindDirectionRow(
+    selected: WindDirectionDisplay,
+    onSelected: (WindDirectionDisplay) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.Navigation,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(21.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text("Wind direction", style = MaterialTheme.typography.bodyLarge)
+        }
+        ThreeOptionSelector(
+            modifier = Modifier.fillMaxWidth(),
+            options = listOf(
+                "Degrees" to WindDirectionDisplay.DEGREES,
+                "8-point" to WindDirectionDisplay.EIGHT_POINT,
+                "Arrow" to WindDirectionDisplay.ARROW
+            ),
+            selected = selected,
+            tagPrefix = "settings_wind_direction",
+            onSelected = onSelected
+        )
+    }
+}
+
+@Composable
 private fun TwoOptionSelector(
     first: String,
     second: String,
@@ -747,9 +789,15 @@ private fun TwoOptionSelector(
 }
 
 @Composable
-private fun SelectorOption(text: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+private fun SelectorOption(
+    text: String,
+    selected: Boolean,
+    tag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .testTag(tag),
@@ -762,6 +810,33 @@ private fun SelectorOption(text: String, selected: Boolean, tag: String, onClick
             color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
+    }
+}
+
+@Composable
+private fun <T> ThreeOptionSelector(
+    modifier: Modifier = Modifier,
+    options: List<Pair<String, T>>,
+    selected: T,
+    tagPrefix: String,
+    onSelected: (T) -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row {
+            options.forEach { (text, value) ->
+                SelectorOption(
+                    text = text,
+                    selected = value == selected,
+                    tag = "${tagPrefix}_${value.toString().lowercase()}",
+                    onClick = { onSelected(value) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
     }
 }
 

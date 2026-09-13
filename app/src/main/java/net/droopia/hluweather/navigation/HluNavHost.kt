@@ -73,6 +73,7 @@ fun HluNavHost(
                     temperatureUnit = settingsState.temperatureUnit,
                     precipitationUnit = settingsState.precipitationUnit,
                     windUnit = settingsState.windUnit,
+                    windDirectionDisplay = settingsState.windDirectionDisplay,
                     hourlyTableColumns = settingsState.hourlyTableColumns
                 )
             } else {
@@ -87,6 +88,7 @@ fun HluNavHost(
                     temperatureUnit = settingsState.temperatureUnit,
                     precipitationUnit = settingsState.precipitationUnit,
                     windUnit = settingsState.windUnit,
+                    windDirectionDisplay = settingsState.windDirectionDisplay,
                     hourlyTableColumns = settingsState.hourlyTableColumns,
                     mapContent = weatherMapContent
                 )
@@ -150,8 +152,9 @@ fun HluNavHost(
                 },
                 onThemeChange = settingsViewModel::setTheme,
                 onTemperatureUnitChange = settingsViewModel::setTemperatureUnit,
-                onWindUnitChange = settingsViewModel::setWindUnit,
-                onDistanceUnitChange = settingsViewModel::setDistanceUnit,
+                 onWindUnitChange = settingsViewModel::setWindUnit,
+                 onWindDirectionDisplayChange = settingsViewModel::setWindDirectionDisplay,
+                 onDistanceUnitChange = settingsViewModel::setDistanceUnit,
                  onPrecipitationUnitChange = settingsViewModel::setPrecipitationUnit,
                  hourlyTableColumns = settingsState.hourlyTableColumns,
                  onHourlyTableColumnChange = settingsViewModel::setHourlyTableColumn,
@@ -180,23 +183,43 @@ fun HluNavHost(
             )
         ) { backStackEntry ->
             val locationId = backStackEntry.arguments?.getString(LOCATION_ID_ARGUMENT)
-            if (locationPickerMapContent == null) {
-                LocationPickerScreen(
-                    viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
-                    onBackClick = { navController.popBackStack() },
-                    onSaved = { navController.popBackStack() },
-                    onDeleted = { navController.popBackStack() },
-                    darkTheme = darkTheme
-                )
+            if (!settingsState.isInitialized) {
+                Box(
+                    modifier = Modifier.fillMaxSize().testTag("location_picker_settings_loading"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Loading settings")
+                }
             } else {
-                LocationPickerScreen(
-                    viewModel = viewModel(factory = LocationPickerViewModel.factory(locationId)),
-                    onBackClick = { navController.popBackStack() },
-                    onSaved = { navController.popBackStack() },
-                    onDeleted = { navController.popBackStack() },
-                    darkTheme = darkTheme,
-                    mapContent = locationPickerMapContent
-                )
+                val locationPickerFactory = remember(
+                    application,
+                    locationId,
+                    settingsState.placeSearchProvider
+                ) {
+                    LocationPickerViewModel.factory(
+                        locationId = locationId,
+                        placeSearchProvider = settingsState.placeSearchProvider,
+                        placeSearchSources = application.routePlaceSearchSources.values.toList()
+                    )
+                }
+                if (locationPickerMapContent == null) {
+                    LocationPickerScreen(
+                        viewModel = viewModel(factory = locationPickerFactory),
+                        onBackClick = { navController.popBackStack() },
+                        onSaved = { navController.popBackStack() },
+                        onDeleted = { navController.popBackStack() },
+                        darkTheme = darkTheme
+                    )
+                } else {
+                    LocationPickerScreen(
+                        viewModel = viewModel(factory = locationPickerFactory),
+                        onBackClick = { navController.popBackStack() },
+                        onSaved = { navController.popBackStack() },
+                        onDeleted = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        mapContent = locationPickerMapContent
+                    )
+                }
             }
         }
     }

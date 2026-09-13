@@ -16,6 +16,12 @@ enum class WindUnit {
     MPH
 }
 
+enum class WindDirectionDisplay {
+    DEGREES,
+    EIGHT_POINT,
+    ARROW
+}
+
 enum class DistanceUnit {
     KM,
     MILES
@@ -57,6 +63,7 @@ data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     val windUnit: WindUnit = WindUnit.KMH,
+    val windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val weatherAlerts: Boolean = false,

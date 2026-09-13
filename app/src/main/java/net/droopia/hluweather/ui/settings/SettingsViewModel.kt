@@ -70,6 +70,10 @@ class SettingsViewModel(
                                 persisted.temperatureUnit
                             ),
                             windUnit = current.value(PersistedSetting.WIND_UNIT, persisted.windUnit),
+                            windDirectionDisplay = current.value(
+                                PersistedSetting.WIND_DIRECTION_DISPLAY,
+                                persisted.windDirectionDisplay
+                            ),
                             distanceUnit = current.value(PersistedSetting.DISTANCE_UNIT, persisted.distanceUnit),
                             precipitationUnit = current.value(
                                 PersistedSetting.PRECIPITATION_UNIT,
@@ -163,6 +167,12 @@ class SettingsViewModel(
         updateSettings(PersistedSetting.WIND_UNIT) { it.copy(windUnit = unit) }
     }
 
+    fun setWindDirectionDisplay(display: WindDirectionDisplay) {
+        updateSettings(PersistedSetting.WIND_DIRECTION_DISPLAY) {
+            it.copy(windDirectionDisplay = display)
+        }
+    }
+
     fun setDistanceUnit(unit: DistanceUnit) {
         updateSettings(PersistedSetting.DISTANCE_UNIT) { it.copy(distanceUnit = unit) }
     }
@@ -234,6 +244,7 @@ class SettingsViewModel(
             PersistedSetting.THEME_MODE -> themeMode
             PersistedSetting.TEMPERATURE_UNIT -> temperatureUnit
             PersistedSetting.WIND_UNIT -> windUnit
+            PersistedSetting.WIND_DIRECTION_DISPLAY -> windDirectionDisplay
             PersistedSetting.DISTANCE_UNIT -> distanceUnit
             PersistedSetting.PRECIPITATION_UNIT -> precipitationUnit
             PersistedSetting.WEATHER_ALERTS -> weatherAlerts
@@ -282,6 +293,7 @@ private fun PersistedSettings.toUiState(
         themeMode = themeMode,
         temperatureUnit = temperatureUnit,
         windUnit = windUnit,
+        windDirectionDisplay = windDirectionDisplay,
         distanceUnit = distanceUnit,
         precipitationUnit = precipitationUnit,
         weatherAlerts = weatherAlerts,
@@ -298,6 +310,7 @@ private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     themeMode = themeMode,
     temperatureUnit = temperatureUnit,
     windUnit = windUnit,
+    windDirectionDisplay = windDirectionDisplay,
     distanceUnit = distanceUnit,
     precipitationUnit = precipitationUnit,
     weatherAlerts = weatherAlerts,
@@ -319,6 +332,7 @@ private enum class PersistedSetting {
     THEME_MODE,
     TEMPERATURE_UNIT,
     WIND_UNIT,
+    WIND_DIRECTION_DISPLAY,
     DISTANCE_UNIT,
     PRECIPITATION_UNIT,
     WEATHER_ALERTS,

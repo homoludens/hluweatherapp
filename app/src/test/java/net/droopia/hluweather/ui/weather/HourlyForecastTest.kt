@@ -37,6 +37,7 @@ import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import org.junit.Before
@@ -195,6 +196,7 @@ class HourlyForecastTest {
     @Test
     fun large_font_hourly_condition_wraps_inside_the_weather_column() {
         val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+            .copy(windDirectionDegrees = 0.0)
             .copy(condition = WeatherCondition.PARTLY_CLOUDY)
 
         composeRule.setContent {
@@ -254,6 +256,44 @@ class HourlyForecastTest {
         }
 
         assertTrue(composeRule.onAllNodesWithText("-").fetchSemanticsNodes().size >= 7)
+    }
+
+    @Test
+    fun wind_direction_uses_the_selected_display_mode() {
+        val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+            .copy(windDirectionDegrees = 337.4)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                ForecastRow(
+                    weather = hour,
+                    displayZone = ZoneId.of("UTC"),
+                    windDirectionDisplay = WindDirectionDisplay.EIGHT_POINT,
+                    columns = setOf(HourlyTableColumn.WIND_DIRECTION)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("NW").assertIsDisplayed()
+    }
+
+    @Test
+    fun arrow_wind_direction_is_rendered_as_an_icon() {
+        val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+            .copy(windDirectionDegrees = 0.0)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                ForecastRow(
+                    weather = hour,
+                    displayZone = ZoneId.of("UTC"),
+                    windDirectionDisplay = WindDirectionDisplay.ARROW,
+                    columns = setOf(HourlyTableColumn.WIND_DIRECTION)
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("hourly_wind_direction_arrow").assertIsDisplayed()
     }
 
     @Test

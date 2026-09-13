@@ -68,6 +68,7 @@ import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.settings.WindUnit
+import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.map.WeatherMap
 
 private const val WEATHER_HEADER_KEY = "weather_header"
@@ -91,6 +92,7 @@ fun WeatherScreen(
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     windUnit: WindUnit = WindUnit.KMH,
+    windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     now: Instant? = null,
     modifier: Modifier = Modifier,
@@ -201,6 +203,7 @@ fun WeatherScreen(
                             temperatureUnit = temperatureUnit,
                             precipitationUnit = precipitationUnit,
                             windUnit = windUnit,
+                            windDirectionDisplay = windDirectionDisplay,
                             hourlyTableColumns = hourlyTableColumns,
                             now = now,
                             onDaySelected = viewModel::onDaySelected,
@@ -374,6 +377,7 @@ private fun HourlyWeatherContent(
     temperatureUnit: TemperatureUnit,
     precipitationUnit: PrecipitationUnit,
     windUnit: WindUnit,
+    windDirectionDisplay: WindDirectionDisplay,
     hourlyTableColumns: Set<HourlyTableColumn>,
     onDaySelected: (Int) -> Unit,
     onForecastModeSelected: (ForecastMode) -> Unit,
@@ -527,6 +531,7 @@ private fun HourlyWeatherContent(
                             temperatureUnit = temperatureUnit,
                             precipitationUnit = precipitationUnit,
                             windUnit = windUnit,
+                            windDirectionDisplay = windDirectionDisplay,
                             columns = hourlyTableColumns,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)

@@ -6,6 +6,7 @@ import net.droopia.hluweather.ui.settings.DistanceUnit
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.WindUnit
+import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.ZoneId
@@ -52,6 +53,25 @@ class FormatTest {
     fun wind_speed_formats_selected_unit() {
         assertEquals("100 km/h", 100.0.windSpeedText(WindUnit.KMH))
         assertEquals("62.14 mph", 100.0.windSpeedText(WindUnit.MPH))
+    }
+
+    @Test
+    fun wind_direction_formats_degrees_and_eight_point_compass_labels() {
+        assertEquals("270°", 270.0.windDirectionText(WindDirectionDisplay.DEGREES))
+        assertEquals("N", 0.0.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+        assertEquals("NE", 22.5.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+        assertEquals("E", 67.5.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+        assertEquals("NW", 337.4.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+        assertEquals("N", 360.0.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+    }
+
+    @Test
+    fun missing_wind_direction_is_unavailable_in_each_text_mode() {
+        val value: Double? = null
+
+        assertEquals("—", value.windDirectionText(WindDirectionDisplay.DEGREES))
+        assertEquals("—", value.windDirectionText(WindDirectionDisplay.EIGHT_POINT))
+        assertEquals("—", value.windDirectionText(WindDirectionDisplay.ARROW))
     }
 
     @Test

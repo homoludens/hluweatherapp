@@ -110,6 +110,18 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun wind_direction_controls_report_selected_display() {
+        var selected: WindDirectionDisplay? = null
+
+        renderSettings(onWindDirectionDisplayChange = { selected = it })
+
+        scrollTo(4)
+        composeRule.onNodeWithTag("settings_wind_direction_eight_point").performClick()
+
+        assertEquals(WindDirectionDisplay.EIGHT_POINT, selected)
+    }
+
+    @Test
     fun settings_title_uses_light_foreground_in_dark_theme() {
         renderSettings(darkTheme = true, inheritedContentColor = Color.Black)
 
@@ -341,6 +353,7 @@ class SettingsScreenTest {
         onThemeChange: (ThemeMode) -> Unit = {},
         onTemperatureUnitChange: (TemperatureUnit) -> Unit = {},
         onWindUnitChange: (WindUnit) -> Unit = {},
+        onWindDirectionDisplayChange: (WindDirectionDisplay) -> Unit = {},
         onDistanceUnitChange: (DistanceUnit) -> Unit = {},
         onPrecipitationUnitChange: (PrecipitationUnit) -> Unit = {},
         onWeatherAlertsChange: (Boolean) -> Unit = {},
@@ -369,6 +382,7 @@ class SettingsScreenTest {
                         onThemeChange = onThemeChange,
                         onTemperatureUnitChange = onTemperatureUnitChange,
                         onWindUnitChange = onWindUnitChange,
+                        onWindDirectionDisplayChange = onWindDirectionDisplayChange,
                         onDistanceUnitChange = onDistanceUnitChange,
                         onPrecipitationUnitChange = onPrecipitationUnitChange,
                         onWeatherAlertsChange = onWeatherAlertsChange,
