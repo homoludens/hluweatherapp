@@ -133,6 +133,17 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun settings_back_arrow_uses_light_foreground_in_dark_theme() {
+        renderSettings(darkTheme = true, inheritedContentColor = Color.Black)
+
+        assertTrue(
+            composeRule.onNodeWithContentDescription("Back")
+                .captureToImage()
+                .hasLightForeground()
+        )
+    }
+
+    @Test
     fun notifications_show_best_effort_summary_time_without_trip_alerts() {
         renderSettings()
 
