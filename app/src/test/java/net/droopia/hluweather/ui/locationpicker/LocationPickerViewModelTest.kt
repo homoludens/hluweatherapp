@@ -181,6 +181,29 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun map_movement_after_search_selection_refreshes_location_name() {
+        val viewModel = picker(initialLocation = existingLocation)
+
+        viewModel.selectSearchResult(PlaceSearchResult("Searched place", viewModelPoint))
+        viewModel.onCameraIdle(GeoPoint(45.6495, 13.7768))
+        viewModel.onReverseGeocoded("Moved place")
+
+        assertEquals("Moved place", viewModel.state.value.name)
+    }
+
+    @Test
+    fun gps_after_search_selection_refreshes_location_name() {
+        val viewModel = picker(initialLocation = existingLocation)
+        val gpsPoint = GeoPoint(45.6495, 13.7768)
+
+        viewModel.selectSearchResult(PlaceSearchResult("Searched place", viewModelPoint))
+        viewModel.onGpsResult(GpsResult.Success(gpsPoint, altitude = null))
+        viewModel.onReverseGeocoded("GPS place")
+
+        assertEquals("GPS place", viewModel.state.value.name)
+    }
+
+    @Test
     fun gps_result_statuses_are_exposed_without_changing_manual_coordinates() = runTest {
         val point = viewModelPoint
         for ((result, expected) in listOf(

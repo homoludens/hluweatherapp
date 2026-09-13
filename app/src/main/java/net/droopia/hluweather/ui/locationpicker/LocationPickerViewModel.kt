@@ -202,7 +202,7 @@ class LocationPickerViewModel(
                 longitude = result.point.longitude,
                 altitude = null,
                 name = result.label,
-                isNameEditing = true,
+                isNameEditing = false,
                 isNameLoading = false,
                 searchQuery = "",
                 searchResults = emptyList(),
