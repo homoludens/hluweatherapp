@@ -56,6 +56,7 @@ class DeviceLocationSourceTest {
 
     @Test
     fun foreground_locations_report_unavailable_after_timeout_without_a_fix() = runTest {
+        var removeCalls = 0
         val source = AndroidDeviceLocationSource(
             context = ApplicationProvider.getApplicationContext(),
             mainLooper = Looper.getMainLooper(),
@@ -65,10 +66,11 @@ class DeviceLocationSourceTest {
             timeoutMillis = 1_000L,
             requestLocationUpdates = { _, _, _, _ -> },
             requestSingleUpdate = { _, _ -> },
-            removeLocationUpdates = {}
+            removeLocationUpdates = { removeCalls++ }
         )
 
         assertEquals(GpsResult.Unavailable, source.foregroundLocations().first())
+        assertEquals(1, removeCalls)
     }
 
     @Test

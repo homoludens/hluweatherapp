@@ -8,6 +8,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -76,25 +77,52 @@ class AndroidDeviceLocationSource(
             }
         }
 
+        val registrationLock = Any()
+        var requestStarted = false
+        var requestCancelled = false
+        val removed = AtomicBoolean(false)
+        fun removeListener() {
+            val shouldRemove = synchronized(registrationLock) {
+                if (!requestStarted) {
+                    requestCancelled = true
+                    false
+                } else {
+                    removed.compareAndSet(false, true)
+                }
+            }
+            if (shouldRemove) removeLocationUpdates(listener)
+        }
+
         try {
-            requestLocationUpdates(provider, 5_000L, 10f, listener)
-        } catch (_: SecurityException) {
-            trySend(GpsResult.PermissionRequired)
-            close()
-            return@callbackFlow
-        } catch (_: RuntimeException) {
-            trySend(GpsResult.Unavailable)
-            close()
-            return@callbackFlow
-        }
+            try {
+                synchronized(registrationLock) {
+                    if (!requestCancelled) {
+                        requestStarted = true
+                        requestLocationUpdates(provider, 5_000L, 10f, listener)
+                    }
+                }
+            } catch (_: SecurityException) {
+                trySend(GpsResult.PermissionRequired)
+                close()
+                return@callbackFlow
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: RuntimeException) {
+                trySend(GpsResult.Unavailable)
+                close()
+                return@callbackFlow
+            }
 
-        if (withTimeoutOrNull(timeoutMillis) { firstFix.await() } == null) {
-            trySend(GpsResult.Unavailable)
-            close()
-        }
+            if (withTimeoutOrNull(timeoutMillis) { firstFix.await() } == null) {
+                trySend(GpsResult.Unavailable)
+                close()
+            }
 
-        awaitClose {
-            removeLocationUpdates(listener)
+            awaitClose {
+                removeListener()
+            }
+        } finally {
+            removeListener()
         }
     }
 
@@ -110,9 +138,20 @@ class AndroidDeviceLocationSource(
         return withTimeoutOrNull(timeoutMillis) {
             suspendCancellableCoroutine { continuation ->
                 lateinit var listener: LocationListener
+                val requestLock = Any()
+                var requestCancelled = false
+                var requestStarted = false
                 val removed = AtomicBoolean(false)
                 fun removeListener() {
-                    if (removed.compareAndSet(false, true)) {
+                    val shouldRemove = synchronized(requestLock) {
+                        if (!requestStarted) {
+                            requestCancelled = true
+                            false
+                        } else {
+                            removed.compareAndSet(false, true)
+                        }
+                    }
+                    if (shouldRemove) {
                         removeLocationUpdates(listener)
                     }
                 }
@@ -130,10 +169,18 @@ class AndroidDeviceLocationSource(
                 }
 
                 try {
-                    requestSingleUpdate(provider, listener)
+                    synchronized(requestLock) {
+                        if (!requestCancelled) {
+                            requestStarted = true
+                            requestSingleUpdate(provider, listener)
+                        }
+                    }
                 } catch (_: SecurityException) {
                     removeListener()
                     if (continuation.isActive) continuation.resume(GpsResult.PermissionRequired)
+                } catch (exception: CancellationException) {
+                    removeListener()
+                    throw exception
                 } catch (_: RuntimeException) {
                     removeListener()
                     if (continuation.isActive) continuation.resume(GpsResult.Unavailable)

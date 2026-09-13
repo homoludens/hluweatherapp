@@ -68,44 +68,48 @@ class AndroidDeviceLocationSource internal constructor(
             registrationToRemove?.remove()
         }
         try {
-            val cached = fusedLocationGateway.lastLocation()
-            if (cached != null) {
-                cachedFixReceived = true
-                firstFix.complete(Unit)
-                trySend(cached.toGpsResult())
-            }
-
-            val newRegistration = fusedLocationGateway.requestLocationUpdates(priority) { location ->
-                firstFix.complete(Unit)
-                trySend(location.toGpsResult())
-            }
-            val removeNewRegistration = synchronized(registrationLock) {
-                if (flowClosed) {
-                    true
-                } else {
-                    registration = newRegistration
-                    false
+            try {
+                val cached = fusedLocationGateway.lastLocation()
+                if (cached != null) {
+                    cachedFixReceived = true
+                    firstFix.complete(Unit)
+                    trySend(cached.toGpsResult())
                 }
+
+                val newRegistration = fusedLocationGateway.requestLocationUpdates(priority) { location ->
+                    firstFix.complete(Unit)
+                    trySend(location.toGpsResult())
+                }
+                val removeNewRegistration = synchronized(registrationLock) {
+                    if (flowClosed) {
+                        true
+                    } else {
+                        registration = newRegistration
+                        false
+                    }
+                }
+                if (removeNewRegistration) newRegistration.remove()
+            } catch (_: SecurityException) {
+                trySend(GpsResult.PermissionRequired)
+                close()
+                return@callbackFlow
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                trySend(GpsResult.Unavailable)
+                close()
+                return@callbackFlow
             }
-            if (removeNewRegistration) newRegistration.remove()
-        } catch (_: SecurityException) {
-            trySend(GpsResult.PermissionRequired)
-            close()
-            return@callbackFlow
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (_: Exception) {
-            trySend(GpsResult.Unavailable)
-            close()
-            return@callbackFlow
-        }
 
-        if (!cachedFixReceived && withTimeoutOrNull(timeoutMillis) { firstFix.await() } == null) {
-            trySend(GpsResult.Unavailable)
-            close()
-        }
+            if (!cachedFixReceived && withTimeoutOrNull(timeoutMillis) { firstFix.await() } == null) {
+                trySend(GpsResult.Unavailable)
+                close()
+            }
 
-        awaitClose {
+            awaitClose {
+                removeRegistration()
+            }
+        } finally {
             removeRegistration()
         }
     }
