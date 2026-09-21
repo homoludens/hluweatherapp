@@ -1,9 +1,12 @@
 package net.droopia.hluweather.data.cache
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -37,6 +40,55 @@ class ForecastCacheTest {
         ForecastCache(dataStore).put(key, forecast)
 
         assertEquals(forecast, ForecastCache(dataStore).get(key))
+    }
+
+    @Test
+    fun air_quality_values_round_trip_through_cache() = runTest {
+        val dataStore = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val forecast = fixedForecast().let { original ->
+            original.copy(
+                current = original.current.copy(
+                    europeanAqi = 42.0,
+                    pm10 = 12.5,
+                    pm2_5 = 8.2
+                ),
+                hourly = original.hourly.map {
+                    it.copy(
+                        europeanAqi = 42.0,
+                        pm10 = 12.5,
+                        pm2_5 = 8.2
+                    )
+                }
+            )
+        }
+
+        ForecastCache(dataStore).put(key, forecast)
+
+        assertEquals(forecast, ForecastCache(dataStore).get(key))
+    }
+
+    @Test
+    fun old_serialized_entry_without_air_quality_values_remains_readable() = runTest {
+        val dataStore = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val cache = ForecastCache(dataStore)
+        cache.put(key, fixedForecast())
+        val entriesKey = stringPreferencesKey("weather.forecast_cache")
+        val oldSerializedEntry = requireNotNull(dataStore.data.first()[entriesKey])
+        assertTrue("\"europeanAqi\"" !in oldSerializedEntry)
+        assertTrue("\"pm10\"" !in oldSerializedEntry)
+        assertTrue("\"pm2_5\"" !in oldSerializedEntry)
+
+        dataStore.edit { preferences -> preferences[entriesKey] = oldSerializedEntry }
+
+        val restored = requireNotNull(cache.get(key))
+        assertNull(restored.current.europeanAqi)
+        assertNull(restored.current.pm10)
+        assertNull(restored.current.pm2_5)
+        assertTrue(restored.hourly.all { hour ->
+            hour.europeanAqi == null && hour.pm10 == null && hour.pm2_5 == null
+        })
     }
 
     @Test

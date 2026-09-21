@@ -147,7 +147,10 @@ private data class CurrentDto(
     val dewPoint: Double?,
     val precipitation: Double?,
     val condition: String,
-    val isDay: Boolean?
+    val isDay: Boolean?,
+    val europeanAqi: Double? = null,
+    val pm10: Double? = null,
+    val pm2_5: Double? = null
 ) {
     fun toCurrentWeather() = CurrentWeather(
         temperature,
@@ -156,7 +159,10 @@ private data class CurrentDto(
         dewPoint,
         precipitation,
         condition.toWeatherCondition(),
-        isDay
+        isDay,
+        europeanAqi,
+        pm10,
+        pm2_5
     )
 }
 
@@ -173,7 +179,10 @@ private data class HourDto(
     val isDay: Boolean?,
     val windSpeedKmh: Double? = null,
     val windDirectionDegrees: Double? = null,
-    val evapotranspiration: Double? = null
+    val evapotranspiration: Double? = null,
+    val europeanAqi: Double? = null,
+    val pm10: Double? = null,
+    val pm2_5: Double? = null
 ) {
     fun toHourForecast() = HourForecast(
         time = Instant.parse(time),
@@ -187,7 +196,10 @@ private data class HourDto(
         isDay = isDay,
         windSpeedKmh = windSpeedKmh,
         windDirectionDegrees = windDirectionDegrees,
-        evapotranspiration = evapotranspiration
+        evapotranspiration = evapotranspiration,
+        europeanAqi = europeanAqi,
+        pm10 = pm10,
+        pm2_5 = pm2_5
     )
 }
 
@@ -229,7 +241,10 @@ private fun WeatherForecast.toDto() = ForecastDto(
         current.dewPoint,
         current.precipitation,
         current.condition.name,
-        current.isDay
+        current.isDay,
+        current.europeanAqi,
+        current.pm10,
+        current.pm2_5
     ),
     hourly = hourly.map {
         HourDto(
@@ -244,7 +259,10 @@ private fun WeatherForecast.toDto() = ForecastDto(
             it.isDay,
             it.windSpeedKmh,
             it.windDirectionDegrees,
-            it.evapotranspiration
+            it.evapotranspiration,
+            it.europeanAqi,
+            it.pm10,
+            it.pm2_5
         )
     },
     daily = daily.map {
