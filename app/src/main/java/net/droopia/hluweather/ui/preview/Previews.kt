@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -16,6 +17,21 @@ import net.droopia.hluweather.ui.weather.WeatherHero
 private val previewForecast = buildMockForecast(
     location = Svilajnac,
     baseTime = Instant.fromEpochSeconds(0L)
+)
+
+private val previewCardLocation = previewForecast.location.copy(
+    name = "Чубура, Градска општина Врачар"
+)
+
+private val previewCardForecast = previewForecast.copy(
+    location = previewCardLocation,
+    current = previewForecast.current.copy(
+        humidity = 43,
+        dewPoint = 8.0,
+        apparentTemperature = 19.0,
+        condition = WeatherCondition.CLOUDY,
+        isDay = true
+    )
 )
 
 @Preview(
@@ -60,8 +76,8 @@ private fun WeatherHeroDarkPreview() {
 private fun CurrentWeatherCardLightPreview() {
     HluWeatherTheme(darkTheme = false) {
         CurrentWeatherCard(
-            location = previewForecast.location,
-            forecast = previewForecast
+            location = previewCardLocation,
+            forecast = previewCardForecast
         )
     }
 }
@@ -76,8 +92,8 @@ private fun CurrentWeatherCardLightPreview() {
 private fun CurrentWeatherCardDarkPreview() {
     HluWeatherTheme(darkTheme = true) {
         CurrentWeatherCard(
-            location = previewForecast.location,
-            forecast = previewForecast
+            location = previewCardLocation,
+            forecast = previewCardForecast
         )
     }
 }

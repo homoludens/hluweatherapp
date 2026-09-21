@@ -158,6 +158,27 @@ class CurrentWeatherCardTest {
     }
 
     @Test
+    fun metrics_are_grouped_in_one_panel() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(location = forecast.location, forecast = forecast)
+            }
+        }
+
+        composeRule.onNodeWithTag("current_metrics").assertIsDisplayed()
+        listOf(
+            "current_metric_humidity",
+            "current_metric_dew_point",
+            "current_metric_feels_like",
+            "current_metric_precipitation"
+        ).forEach { tag ->
+            composeRule.onNodeWithTag(tag).assertIsDisplayed()
+        }
+    }
+
+    @Test
     fun location_row_exposes_a_merged_change_location_action() {
         val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
 

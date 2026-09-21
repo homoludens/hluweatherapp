@@ -8,6 +8,12 @@ Another motivation is the default hourly table view with numbers, since that is 
 
 Then I also added a "Trip weather" feature, which helps me decide when to start my journey, since I can avoid bad weather (heavy rain, snow, very cold, or very hot conditions) during my drive.
 
+"Track me" is useful for people always changing their location so they don't have to add new location for every place they are right now. 
+
+
+There are two flawors of the app: google build with google play services (for faster location access), and f-droid build that uses just GPS.
+
+
 ## Screenshots
 
 <table>
