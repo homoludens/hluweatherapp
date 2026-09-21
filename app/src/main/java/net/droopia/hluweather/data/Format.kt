@@ -41,6 +41,12 @@ fun Int?.percentText(): String =
 fun Double?.precipitationText(): String =
     this?.let { "${it.roundToInt()} mm" } ?: "—"
 
+fun Double?.airQualityIndexText(): String =
+    this?.roundToInt()?.toString() ?: "—"
+
+fun Double?.particulateMatterText(): String =
+    this?.let { "${it.decimalText()} µg/m³" } ?: "—"
+
 fun Double?.precipitationText(unit: PrecipitationUnit): String =
     this?.let {
         val precipitation = if (unit == PrecipitationUnit.INCH) it / 25.4 else it

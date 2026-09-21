@@ -37,6 +37,13 @@ class FormatTest {
     }
 
     @Test
+    fun air_quality_formats_index_and_particulate_matter() {
+        assertEquals("42", 42.4.airQualityIndexText())
+        assertEquals("12.5 µg/m³", 12.5.particulateMatterText())
+        assertEquals("—", null.particulateMatterText())
+    }
+
+    @Test
     fun temperature_formats_selected_unit() {
         assertEquals("20 degrees C", 20.0.temperatureText(TemperatureUnit.CELSIUS))
         assertEquals("68 degrees F", 20.0.temperatureText(TemperatureUnit.FAHRENHEIT))

@@ -259,6 +259,60 @@ class HourlyForecastTest {
     }
 
     @Test
+    fun air_quality_columns_show_headers_and_values() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val firstHour = forecast.hourly.first().copy(
+            europeanAqi = 42.4,
+            pm2_5 = 12.5,
+            pm10 = 18.75
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast.copy(hourly = listOf(firstHour)),
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    hourlyTableColumns = setOf(
+                        HourlyTableColumn.EUROPEAN_AQI,
+                        HourlyTableColumn.PM2_5,
+                        HourlyTableColumn.PM10
+                    ),
+                    now = firstHour.time
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("PM2.5").assertIsDisplayed()
+        composeRule.onNodeWithText("PM10").assertIsDisplayed()
+        composeRule.onNodeWithText("42").assertIsDisplayed()
+        composeRule.onNodeWithText("12.5 µg/m³").assertIsDisplayed()
+        composeRule.onNodeWithText("18.75 µg/m³").assertIsDisplayed()
+    }
+
+    @Test
+    fun null_air_quality_columns_show_dash_cells() {
+        val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                ForecastRow(
+                    weather = hour,
+                    displayZone = ZoneId.of("UTC"),
+                    columns = setOf(
+                        HourlyTableColumn.EUROPEAN_AQI,
+                        HourlyTableColumn.PM2_5,
+                        HourlyTableColumn.PM10
+                    )
+                )
+            }
+        }
+
+        assertTrue(composeRule.onAllNodesWithText("-").fetchSemanticsNodes().size >= 3)
+    }
+
+    @Test
     fun wind_direction_uses_the_selected_display_mode() {
         val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
             .copy(windDirectionDegrees = 337.4)

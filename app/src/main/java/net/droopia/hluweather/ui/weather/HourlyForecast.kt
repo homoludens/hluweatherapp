@@ -45,7 +45,9 @@ import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
+import net.droopia.hluweather.data.airQualityIndexText
 import net.droopia.hluweather.data.percentText
+import net.droopia.hluweather.data.particulateMatterText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.data.windDirectionText
@@ -385,8 +387,19 @@ internal fun ForecastRow(
                         text = weather.evapotranspiration.precipitationText(precipitationUnit).tableValueText(),
                         column = column
                     )
+                    HourlyTableColumn.EUROPEAN_AQI -> ForecastValue(
+                        text = weather.europeanAqi.airQualityIndexText().tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.PM2_5 -> ForecastValue(
+                        text = weather.pm2_5.particulateMatterText().tableValueText(),
+                        column = column
+                    )
+                    HourlyTableColumn.PM10 -> ForecastValue(
+                        text = weather.pm10.particulateMatterText().tableValueText(),
+                        column = column
+                    )
                     HourlyTableColumn.TIME -> Unit
-                    else -> Unit
                 }
             }
     }
@@ -425,7 +438,9 @@ private val HourlyTableColumn.header: String
         HourlyTableColumn.WIND_SPEED -> "Wind"
         HourlyTableColumn.WIND_DIRECTION -> "Dir."
         HourlyTableColumn.EVAPOTRANSPIRATION -> "ET"
-        else -> ""
+        HourlyTableColumn.EUROPEAN_AQI -> "AQI"
+        HourlyTableColumn.PM2_5 -> "PM2.5"
+        HourlyTableColumn.PM10 -> "PM10"
     }
 
 private val HourlyTableColumn.weight: Float
@@ -440,5 +455,7 @@ private val HourlyTableColumn.weight: Float
         HourlyTableColumn.WIND_SPEED -> 0.95f
         HourlyTableColumn.WIND_DIRECTION -> 0.85f
         HourlyTableColumn.EVAPOTRANSPIRATION -> 0.9f
-        else -> 0f
+        HourlyTableColumn.EUROPEAN_AQI -> 0.8f
+        HourlyTableColumn.PM2_5 -> 0.9f
+        HourlyTableColumn.PM10 -> 0.9f
     }
