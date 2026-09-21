@@ -352,6 +352,52 @@ class OpenMeteoWeatherRepositoryTest {
         assertNull(forecast.hourly.single().pm2_5)
     }
 
+    @Test
+    fun getForecast_keeps_weather_when_air_quality_hourly_array_lengths_mismatch() = runTest {
+        val airQuality = validAirQualityResponse.copy(
+            hourly = validAirQualityResponse.hourly!!.copy(pm10 = emptyList())
+        )
+
+        val forecast = repository(airQualityResponse = airQuality).getForecast(location)
+
+        assertEquals(21.0, forecast.current.temperature, 0.0)
+        assertEquals(21.0, forecast.hourly.single().temperature, 0.0)
+        assertNull(forecast.current.europeanAqi)
+        assertNull(forecast.current.pm10)
+        assertNull(forecast.current.pm2_5)
+        assertNull(forecast.hourly.single().europeanAqi)
+        assertNull(forecast.hourly.single().pm10)
+        assertNull(forecast.hourly.single().pm2_5)
+    }
+
+    @Test
+    fun getForecast_keeps_hourly_air_quality_when_current_block_is_missing() = runTest {
+        val forecast = repository(
+            airQualityResponse = validAirQualityResponse.copy(current = null)
+        ).getForecast(location)
+
+        assertNull(forecast.current.europeanAqi)
+        assertNull(forecast.current.pm10)
+        assertNull(forecast.current.pm2_5)
+        assertEquals(42.0, forecast.hourly.single().europeanAqi)
+        assertEquals(12.5, forecast.hourly.single().pm10)
+        assertEquals(8.2, forecast.hourly.single().pm2_5)
+    }
+
+    @Test
+    fun getForecast_keeps_current_air_quality_when_hourly_block_is_missing() = runTest {
+        val forecast = repository(
+            airQualityResponse = validAirQualityResponse.copy(hourly = null)
+        ).getForecast(location)
+
+        assertEquals(42.0, forecast.current.europeanAqi)
+        assertEquals(12.5, forecast.current.pm10)
+        assertEquals(8.2, forecast.current.pm2_5)
+        assertNull(forecast.hourly.single().europeanAqi)
+        assertNull(forecast.hourly.single().pm10)
+        assertNull(forecast.hourly.single().pm2_5)
+    }
+
     private fun assertRepositoryFailure(response: OpenMeteoResponse) {
         val exception = assertThrows(WeatherRepositoryException::class.java, ThrowingRunnable {
             runBlocking {
