@@ -110,6 +110,43 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun air_quality_hourly_columns_are_opt_in_and_report_changes() {
+        val state = mutableStateOf(testSettingsState)
+
+        assertTrue(HourlyTableColumn.EUROPEAN_AQI !in defaultHourlyTableColumns)
+        assertTrue(HourlyTableColumn.PM2_5 !in defaultHourlyTableColumns)
+        assertTrue(HourlyTableColumn.PM10 !in defaultHourlyTableColumns)
+
+        renderSettings(
+            state = { state.value },
+            onHourlyTableColumnChange = { column, enabled ->
+                state.value = state.value.copy(
+                    hourlyTableColumns = if (enabled) {
+                        state.value.hourlyTableColumns + column
+                    } else {
+                        state.value.hourlyTableColumns - column
+                    }
+                )
+            }
+        )
+
+        scrollTo(5)
+        composeRule.onNodeWithTag("settings_hourly_column_european_aqi").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("settings_hourly_column_pm2_5").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("settings_hourly_column_pm10").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("European AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("European air quality index").assertIsDisplayed()
+        composeRule.onNodeWithText("PM2.5").assertIsDisplayed()
+        composeRule.onNodeWithText("Fine particulate matter concentration").assertIsDisplayed()
+        composeRule.onNodeWithText("PM10").assertIsDisplayed()
+        composeRule.onNodeWithText("Coarse particulate matter concentration").assertIsDisplayed()
+
+        assertTrue(HourlyTableColumn.EUROPEAN_AQI in state.value.hourlyTableColumns)
+        assertTrue(HourlyTableColumn.PM2_5 in state.value.hourlyTableColumns)
+        assertTrue(HourlyTableColumn.PM10 in state.value.hourlyTableColumns)
+    }
+
+    @Test
     fun wind_direction_controls_report_selected_display() {
         var selected: WindDirectionDisplay? = null
 

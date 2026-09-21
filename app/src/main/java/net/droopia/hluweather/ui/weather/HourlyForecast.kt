@@ -386,6 +386,7 @@ internal fun ForecastRow(
                         column = column
                     )
                     HourlyTableColumn.TIME -> Unit
+                    else -> Unit
                 }
             }
     }
@@ -424,6 +425,7 @@ private val HourlyTableColumn.header: String
         HourlyTableColumn.WIND_SPEED -> "Wind"
         HourlyTableColumn.WIND_DIRECTION -> "Dir."
         HourlyTableColumn.EVAPOTRANSPIRATION -> "ET"
+        else -> ""
     }
 
 private val HourlyTableColumn.weight: Float
@@ -438,4 +440,5 @@ private val HourlyTableColumn.weight: Float
         HourlyTableColumn.WIND_SPEED -> 0.95f
         HourlyTableColumn.WIND_DIRECTION -> 0.85f
         HourlyTableColumn.EVAPOTRANSPIRATION -> 0.9f
+        else -> 0f
     }

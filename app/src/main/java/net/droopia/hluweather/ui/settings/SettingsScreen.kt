@@ -676,6 +676,9 @@ private val HourlyTableColumn.settingsTitle: String
         HourlyTableColumn.WIND_SPEED -> "Wind speed"
         HourlyTableColumn.WIND_DIRECTION -> "Wind direction"
         HourlyTableColumn.EVAPOTRANSPIRATION -> "Evapotranspiration"
+        HourlyTableColumn.EUROPEAN_AQI -> "European AQI"
+        HourlyTableColumn.PM2_5 -> "PM2.5"
+        HourlyTableColumn.PM10 -> "PM10"
     }
 
 private val HourlyTableColumn.settingsSubtitle: String
@@ -690,6 +693,9 @@ private val HourlyTableColumn.settingsSubtitle: String
         HourlyTableColumn.WIND_SPEED -> "Wind speed"
         HourlyTableColumn.WIND_DIRECTION -> "Wind direction display mode"
         HourlyTableColumn.EVAPOTRANSPIRATION -> "Evapotranspiration amount"
+        HourlyTableColumn.EUROPEAN_AQI -> "European air quality index"
+        HourlyTableColumn.PM2_5 -> "Fine particulate matter concentration"
+        HourlyTableColumn.PM10 -> "Coarse particulate matter concentration"
     }
 
 @Composable

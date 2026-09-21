@@ -195,6 +195,34 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun air_quality_hourly_column_names_round_trip_and_old_sets_decode() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val key = stringPreferencesKey("settings.hourly_table_columns")
+        val repository = DataStoreSettingsRepository(dataStore)
+        val airQualityColumns = setOf(
+            HourlyTableColumn.EUROPEAN_AQI,
+            HourlyTableColumn.PM2_5,
+            HourlyTableColumn.PM10
+        )
+
+        repository.save(PersistedSettings(hourlyTableColumns = airQualityColumns))
+
+        assertEquals(airQualityColumns, repository.settings.first().hourlyTableColumns)
+        assertEquals("EUROPEAN_AQI,PM2_5,PM10", dataStore.data.first()[key])
+
+        dataStore.edit { it[key] = "WEATHER_ICON,TEMPERATURE" }
+
+        assertEquals(
+            setOf(HourlyTableColumn.WEATHER_ICON, HourlyTableColumn.TEMPERATURE),
+            repository.settings.first().hourlyTableColumns
+        )
+    }
+
+    @Test
     fun malformed_typed_preferences_default_only_the_affected_fields() = runTest {
         val file = temporaryFolder.newFile("settings.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(

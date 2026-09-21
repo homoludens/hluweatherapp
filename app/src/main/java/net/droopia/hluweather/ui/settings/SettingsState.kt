@@ -42,7 +42,10 @@ enum class HourlyTableColumn {
     PRECIPITATION,
     WIND_SPEED,
     WIND_DIRECTION,
-    EVAPOTRANSPIRATION
+    EVAPOTRANSPIRATION,
+    EUROPEAN_AQI,
+    PM2_5,
+    PM10
 }
 
 val defaultHourlyTableColumns = setOf(
