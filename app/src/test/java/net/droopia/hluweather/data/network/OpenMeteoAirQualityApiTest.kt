@@ -12,6 +12,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -43,6 +44,8 @@ class OpenMeteoAirQualityApiTest {
         assertEquals(HttpMethod.Get, request.method)
         assertEquals("air-quality-api.open-meteo.test", request.url.host)
         assertEquals("/v1/air-quality", request.url.encodedPath)
+        assertEquals("44.22", request.url.parameters["latitude"])
+        assertEquals("21.2", request.url.parameters["longitude"])
         assertEquals("auto", request.url.parameters["timezone"])
         assertEquals("7", request.url.parameters["forecast_days"])
         assertEquals("european_aqi,pm10,pm2_5", request.url.parameters["current"])
@@ -65,6 +68,25 @@ class OpenMeteoAirQualityApiTest {
         })
 
         assertEquals("Weather service returned HTTP 503", exception.message)
+        client.close()
+    }
+
+    @Test
+    fun forecast_propagates_invalid_json_as_a_decoding_exception() = runTest {
+        val client = mockClient {
+            respond(
+                content = "{not-valid-json",
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+
+        assertThrows(JsonConvertException::class.java, ThrowingRunnable {
+            runBlocking {
+                KtorOpenMeteoAirQualityApi(client, "https://air-quality-api.open-meteo.test")
+                    .forecast(WeatherLocation("svilajnac", "Svilajnac", 44.22, 21.20))
+            }
+        })
+
         client.close()
     }
 
