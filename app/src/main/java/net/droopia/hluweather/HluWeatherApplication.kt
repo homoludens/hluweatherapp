@@ -24,6 +24,7 @@ import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.network.KtorMetNoApi
 import net.droopia.hluweather.data.network.KtorNominatimApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
+import net.droopia.hluweather.data.network.KtorOpenMeteoAirQualityApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoGeocodingApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoRouteWeatherApi
 import net.droopia.hluweather.data.network.KtorOsrmApi
@@ -96,7 +97,10 @@ class HluWeatherApplication : Application(), Configuration.Provider {
 
     val weatherRepository: WeatherRepository by lazy {
         CachingWeatherRepository(
-            openMeteo = OpenMeteoWeatherRepository(KtorOpenMeteoApi(httpClient)),
+            openMeteo = OpenMeteoWeatherRepository(
+                api = KtorOpenMeteoApi(httpClient),
+                airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
+            ),
             metNo = MetNoWeatherRepository(KtorMetNoApi(httpClient)),
             cache = ForecastCache(applicationDataStore)
         )

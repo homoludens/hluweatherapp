@@ -11,8 +11,12 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.CurrentDto
 import net.droopia.hluweather.data.network.DailyDto
+import net.droopia.hluweather.data.network.AirQualityCurrentDto
+import net.droopia.hluweather.data.network.AirQualityHourlyDto
 import net.droopia.hluweather.data.network.HourlyDto
 import net.droopia.hluweather.data.network.OpenMeteoApi
+import net.droopia.hluweather.data.network.OpenMeteoAirQualityApi
+import net.droopia.hluweather.data.network.OpenMeteoAirQualityResponse
 import net.droopia.hluweather.data.network.OpenMeteoResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -248,7 +252,8 @@ class OpenMeteoWeatherRepositoryTest {
                 override suspend fun forecast(location: WeatherLocation): OpenMeteoResponse {
                     throw CancellationException("cancelled")
                 }
-            }
+            },
+            airQualityApi = FakeAirQualityApi(validAirQualityResponse)
         )
 
         val exception = assertThrows(CancellationException::class.java, ThrowingRunnable {
@@ -256,6 +261,95 @@ class OpenMeteoWeatherRepositoryTest {
         })
 
         assertEquals("cancelled", exception.message)
+    }
+
+    @Test
+    fun getForecast_merges_current_and_timestamp_matched_air_quality() = runTest {
+        val response = validResponse.copy(
+            hourly = HourlyDto(
+                time = listOf("2026-09-09T12:00", "2026-09-09T13:00"),
+                temperature = listOf(21.0, 22.0),
+                humidity = listOf(51, 52),
+                dewPoint = listOf(10.0, 11.0),
+                apparentTemperature = listOf(21.0, 22.0),
+                precipitation = listOf(0.0, 0.1),
+                precipitationProbability = listOf(0, 10),
+                windSpeed = listOf(12.5, 13.5),
+                windDirection = listOf(240.0, 241.0),
+                evapotranspiration = listOf(0.1, 0.2),
+                weatherCode = listOf(0, 1),
+                isDay = listOf(1, 1)
+            )
+        )
+        val airQuality = OpenMeteoAirQualityResponse(
+            timezone = "Europe/Belgrade",
+            current = AirQualityCurrentDto(
+                time = "2026-09-09T12:00",
+                europeanAqi = 42.0,
+                pm10 = 12.5,
+                pm2_5 = 8.2
+            ),
+            hourly = AirQualityHourlyDto(
+                time = listOf("2026-09-09T13:00", "2026-09-09T12:00"),
+                europeanAqi = listOf(43.0, 42.0),
+                pm10 = listOf(13.5, 12.5),
+                pm2_5 = listOf(9.2, 8.2)
+            )
+        )
+
+        val forecast = repository(response, airQualityResponse = airQuality).getForecast(location)
+
+        assertEquals(42.0, forecast.current.europeanAqi)
+        assertEquals(12.5, forecast.current.pm10)
+        assertEquals(8.2, forecast.current.pm2_5)
+        assertEquals(42.0, forecast.hourly[0].europeanAqi)
+        assertEquals(12.5, forecast.hourly[0].pm10)
+        assertEquals(8.2, forecast.hourly[0].pm2_5)
+        assertEquals(43.0, forecast.hourly[1].europeanAqi)
+        assertEquals(13.5, forecast.hourly[1].pm10)
+        assertEquals(9.2, forecast.hourly[1].pm2_5)
+    }
+
+    @Test
+    fun getForecast_keeps_weather_when_air_quality_request_fails() = runTest {
+        val forecast = repository(
+            airQualityApi = FakeAirQualityApi(failure = IllegalStateException("air quality unavailable"))
+        ).getForecast(location)
+
+        assertEquals(21.0, forecast.current.temperature, 0.0)
+        assertNull(forecast.current.europeanAqi)
+        assertNull(forecast.current.pm10)
+        assertNull(forecast.current.pm2_5)
+        assertNull(forecast.hourly.single().europeanAqi)
+        assertNull(forecast.hourly.single().pm10)
+        assertNull(forecast.hourly.single().pm2_5)
+    }
+
+    @Test
+    fun getForecast_rethrows_air_quality_cancellation() {
+        val repository = repository(
+            airQualityApi = FakeAirQualityApi(failure = CancellationException("air quality cancelled"))
+        )
+
+        val exception = assertThrows(CancellationException::class.java, ThrowingRunnable {
+            runBlocking { repository.getForecast(location) }
+        })
+
+        assertEquals("air quality cancelled", exception.message)
+    }
+
+    @Test
+    fun getForecast_leaves_air_quality_null_when_optional_blocks_are_missing() = runTest {
+        val forecast = repository(
+            airQualityResponse = OpenMeteoAirQualityResponse(timezone = "Europe/Belgrade")
+        ).getForecast(location)
+
+        assertNull(forecast.current.europeanAqi)
+        assertNull(forecast.current.pm10)
+        assertNull(forecast.current.pm2_5)
+        assertNull(forecast.hourly.single().europeanAqi)
+        assertNull(forecast.hourly.single().pm10)
+        assertNull(forecast.hourly.single().pm2_5)
     }
 
     private fun assertRepositoryFailure(response: OpenMeteoResponse) {
@@ -270,13 +364,26 @@ class OpenMeteoWeatherRepositoryTest {
 
     private fun repository(
         response: OpenMeteoResponse = validResponse,
+        airQualityResponse: OpenMeteoAirQualityResponse = validAirQualityResponse,
+        airQualityApi: OpenMeteoAirQualityApi = FakeAirQualityApi(airQualityResponse),
         clock: Clock = fixedClock(Instant.parse("2026-09-09T14:30:00Z"))
     ): OpenMeteoWeatherRepository = OpenMeteoWeatherRepository(
         api = object : OpenMeteoApi {
             override suspend fun forecast(location: WeatherLocation): OpenMeteoResponse = response
         },
+        airQualityApi = airQualityApi,
         clock = clock
     )
+
+    private class FakeAirQualityApi(
+        private val response: OpenMeteoAirQualityResponse? = null,
+        private val failure: Throwable? = null
+    ) : OpenMeteoAirQualityApi {
+        override suspend fun forecast(location: WeatherLocation): OpenMeteoAirQualityResponse {
+            failure?.let { throw it }
+            return requireNotNull(response)
+        }
+    }
 
     private fun fixedClock(instant: Instant): Clock = object : Clock {
         override fun now(): Instant = instant
@@ -320,6 +427,22 @@ class OpenMeteoWeatherRepositoryTest {
                 sunrise = listOf("2026-09-09T06:10"),
                 sunset = listOf("2026-09-09T19:00"),
                 moonPhase = listOf(0.5)
+            )
+        )
+
+        val validAirQualityResponse = OpenMeteoAirQualityResponse(
+            timezone = "Europe/Belgrade",
+            current = AirQualityCurrentDto(
+                time = "2026-09-09T12:00",
+                europeanAqi = 42.0,
+                pm10 = 12.5,
+                pm2_5 = 8.2
+            ),
+            hourly = AirQualityHourlyDto(
+                time = listOf("2026-09-09T12:00"),
+                europeanAqi = listOf(42.0),
+                pm10 = listOf(12.5),
+                pm2_5 = listOf(8.2)
             )
         )
     }

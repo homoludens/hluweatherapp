@@ -16,12 +16,16 @@ import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.OpenMeteoApi
+import net.droopia.hluweather.data.network.AirQualityHourlyDto
+import net.droopia.hluweather.data.network.OpenMeteoAirQualityApi
+import net.droopia.hluweather.data.network.OpenMeteoAirQualityResponse
 import net.droopia.hluweather.data.network.OpenMeteoResponse
 
 class WeatherRepositoryException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 class OpenMeteoWeatherRepository(
     private val api: OpenMeteoApi,
+    private val airQualityApi: OpenMeteoAirQualityApi,
     private val clock: Clock = Clock.System
 ) : WeatherSource {
 
@@ -38,7 +42,7 @@ class OpenMeteoWeatherRepository(
             throw WeatherRepositoryException("Unable to load weather data", error)
         }
 
-        return try {
+        val forecast = try {
             response.toWeatherForecast(location, clock.now())
         } catch (error: CancellationException) {
             throw error
@@ -47,6 +51,36 @@ class OpenMeteoWeatherRepository(
         } catch (error: Throwable) {
             throw WeatherRepositoryException("Unable to map weather data", error)
         }
+
+        return forecast.mergeAirQuality(location)
+    }
+
+    private suspend fun WeatherForecast.mergeAirQuality(location: WeatherLocation): WeatherForecast {
+        val airQuality = loadAirQuality(location) ?: return this
+
+        return copy(
+            current = current.copy(
+                europeanAqi = airQuality.current?.europeanAqi,
+                pm10 = airQuality.current?.pm10,
+                pm2_5 = airQuality.current?.pm2_5
+            ),
+            hourly = hourly.map { hour ->
+                val values = airQuality.hourly[hour.time]
+                hour.copy(
+                    europeanAqi = values?.europeanAqi,
+                    pm10 = values?.pm10,
+                    pm2_5 = values?.pm2_5
+                )
+            }
+        )
+    }
+
+    private suspend fun loadAirQuality(location: WeatherLocation): AirQualityData? = try {
+        airQualityApi.forecast(location).toAirQuality()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Throwable) {
+        null
     }
 
 }
@@ -155,6 +189,47 @@ private fun net.droopia.hluweather.data.network.DailyDto.toDailyForecasts(
             sunrise = sunrise?.get(index)?.let { parseTimestamp(it, timezone) },
             sunset = sunset?.get(index)?.let { parseTimestamp(it, timezone) }
         )
+    }
+}
+
+private data class AirQualityHour(
+    val europeanAqi: Double?,
+    val pm10: Double?,
+    val pm2_5: Double?
+)
+
+private data class AirQualityData(
+    val current: AirQualityHour?,
+    val hourly: Map<Instant, AirQualityHour>
+)
+
+private fun OpenMeteoAirQualityResponse.toAirQuality(): AirQualityData? {
+    if (current == null && hourly == null) return null
+
+    val parsedTimezone = TimeZone.of(timezone.required("air quality timezone"))
+    val parsedCurrent = current?.let { values ->
+        values.time?.let { parseTimestamp(it, parsedTimezone) }
+        AirQualityHour(values.europeanAqi, values.pm10, values.pm2_5)
+    }
+    val parsedHourly = hourly?.toAirQualityHours(parsedTimezone).orEmpty()
+    return AirQualityData(parsedCurrent, parsedHourly)
+}
+
+private fun AirQualityHourlyDto.toAirQualityHours(
+    timezone: TimeZone
+): Map<Instant, AirQualityHour> {
+    val times = time.required("air quality hourly.time")
+    validateOptionalLength("air quality hourly", times, "european_aqi", europeanAqi)
+    validateOptionalLength("air quality hourly", times, "pm10", pm10)
+    validateOptionalLength("air quality hourly", times, "pm2_5", pm2_5)
+
+    return times.indices.associate { index ->
+        parseTimestamp(times[index].required("air quality hourly.time[$index]"), timezone) to
+            AirQualityHour(
+                europeanAqi = europeanAqi?.get(index),
+                pm10 = pm10?.get(index),
+                pm2_5 = pm2_5?.get(index)
+            )
     }
 }
 

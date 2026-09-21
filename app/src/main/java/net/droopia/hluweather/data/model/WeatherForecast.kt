@@ -11,7 +11,10 @@ data class CurrentWeather(
     val dewPoint: Double?,
     val precipitation: Double?,
     val condition: WeatherCondition,
-    val isDay: Boolean?
+    val isDay: Boolean?,
+    val europeanAqi: Double? = null,
+    val pm10: Double? = null,
+    val pm2_5: Double? = null
 )
 
 data class HourForecast(
@@ -26,7 +29,10 @@ data class HourForecast(
     val isDay: Boolean?,
     val windSpeedKmh: Double? = null,
     val windDirectionDegrees: Double? = null,
-    val evapotranspiration: Double? = null
+    val evapotranspiration: Double? = null,
+    val europeanAqi: Double? = null,
+    val pm10: Double? = null,
+    val pm2_5: Double? = null
 )
 
 data class DayForecast(
