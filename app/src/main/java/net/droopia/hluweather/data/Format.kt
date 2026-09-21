@@ -45,7 +45,7 @@ fun Double?.airQualityIndexText(): String =
     this?.roundToInt()?.toString() ?: "—"
 
 fun Double?.particulateMatterText(): String =
-    this?.let { "${it.decimalText()} µg/m³" } ?: "—"
+    this?.decimalText() ?: "—"
 
 fun Double?.precipitationText(unit: PrecipitationUnit): String =
     this?.let {

@@ -287,8 +287,8 @@ class HourlyForecastTest {
         composeRule.onNodeWithText("PM2.5").assertIsDisplayed()
         composeRule.onNodeWithText("PM10").assertIsDisplayed()
         composeRule.onNodeWithText("42").assertIsDisplayed()
-        composeRule.onNodeWithText("12.5 µg/m³").assertIsDisplayed()
-        composeRule.onNodeWithText("18.75 µg/m³").assertIsDisplayed()
+        composeRule.onNodeWithText("12.5").assertIsDisplayed()
+        composeRule.onNodeWithText("18.75").assertIsDisplayed()
     }
 
     @Test

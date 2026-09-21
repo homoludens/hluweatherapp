@@ -76,7 +76,7 @@ fun CurrentWeatherCard(
     val current = forecast.current
     val selectedMetric = when {
         HourlyTableColumn.EUROPEAN_AQI in hourlyTableColumns -> AirQualityMetric(
-            "European AQI",
+            "AQI",
             current.europeanAqi.airQualityIndexText()
         )
         HourlyTableColumn.PM2_5 in hourlyTableColumns -> AirQualityMetric(

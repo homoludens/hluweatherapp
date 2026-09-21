@@ -113,7 +113,7 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("PM10").assertIsDisplayed()
-        composeRule.onNodeWithText("12.3 µg/m³").assertIsDisplayed()
+        composeRule.onNodeWithText("12.3").assertIsDisplayed()
     }
 
     @Test
@@ -145,7 +145,7 @@ class CurrentWeatherCardTest {
             }
         }
 
-        composeRule.onNodeWithText("European AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("AQI").assertIsDisplayed()
         composeRule.onNodeWithText("88").assertIsDisplayed()
     }
 
@@ -166,7 +166,7 @@ class CurrentWeatherCardTest {
             }
         }
 
-        composeRule.onNodeWithText("European AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("AQI").assertIsDisplayed()
         composeRule.onNodeWithText("—").assertIsDisplayed()
     }
 

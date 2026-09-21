@@ -39,7 +39,7 @@ class FormatTest {
     @Test
     fun air_quality_formats_index_and_particulate_matter() {
         assertEquals("42", 42.4.airQualityIndexText())
-        assertEquals("12.5 µg/m³", 12.5.particulateMatterText())
+        assertEquals("12.5", 12.5.particulateMatterText())
         assertEquals("—", null.particulateMatterText())
     }
 
