@@ -42,17 +42,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneId
+import net.droopia.hluweather.data.airQualityIndexText
 import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.label
+import net.droopia.hluweather.data.particulateMatterText
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.components.HluWeatherIcon
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.theme.LocalHluColors
+
+private data class AirQualityMetric(
+    val title: String,
+    val value: String
+)
 
 @Composable
 fun CurrentWeatherCard(
@@ -60,10 +69,29 @@ fun CurrentWeatherCard(
     forecast: WeatherForecast,
     temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     onLocationClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val current = forecast.current
+    val selectedMetric = when {
+        HourlyTableColumn.EUROPEAN_AQI in hourlyTableColumns -> AirQualityMetric(
+            "European AQI",
+            current.europeanAqi.airQualityIndexText()
+        )
+        HourlyTableColumn.PM2_5 in hourlyTableColumns -> AirQualityMetric(
+            "PM2.5",
+            current.pm2_5.particulateMatterText()
+        )
+        HourlyTableColumn.PM10 in hourlyTableColumns -> AirQualityMetric(
+            "PM10",
+            current.pm10.particulateMatterText()
+        )
+        else -> AirQualityMetric(
+            "Feels like",
+            current.apparentTemperature.temperatureValueText(temperatureUnit)
+        )
+    }
 
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
@@ -137,7 +165,8 @@ fun CurrentWeatherCard(
             WeatherMetrics(
                 humidity = current.humidity.percentText(),
                 dewPoint = current.dewPoint.temperatureValueText(temperatureUnit),
-                feelsLike = current.apparentTemperature.temperatureValueText(temperatureUnit),
+                thirdMetricTitle = selectedMetric.title,
+                thirdMetricValue = selectedMetric.value,
                 precipitation = current.precipitation.precipitationText(precipitationUnit)
             )
         }
@@ -198,7 +227,8 @@ private fun WeatherHeader(
 private fun WeatherMetrics(
     humidity: String,
     dewPoint: String,
-    feelsLike: String,
+    thirdMetricTitle: String,
+    thirdMetricValue: String,
     precipitation: String
 ) {
     val colors = MaterialTheme.colorScheme
@@ -239,8 +269,8 @@ private fun WeatherMetrics(
                     .weight(1f)
                     .testTag("current_metric_feels_like"),
                 icon = Icons.Default.DeviceThermostat,
-                title = "Feels like",
-                value = feelsLike,
+                title = thirdMetricTitle,
+                value = thirdMetricValue,
                 iconTint = colors.error
             )
             MetricDivider()

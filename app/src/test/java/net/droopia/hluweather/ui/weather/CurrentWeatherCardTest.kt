@@ -30,6 +30,7 @@ import kotlin.time.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
@@ -71,6 +72,102 @@ class CurrentWeatherCardTest {
         composeRule.onNodeWithText("Clear sky").assertIsDisplayed()
         composeRule.onNodeWithText("51%").assertIsDisplayed()
         composeRule.onNodeWithText("0 mm").assertIsDisplayed()
+    }
+
+    @Test
+    fun uses_feels_like_when_no_air_quality_column_is_selected() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = emptySet()
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Feels like").assertIsDisplayed()
+        composeRule.onAllNodesWithText("21°C").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun uses_pm10_when_pm10_is_selected() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        ).let { it.copy(current = it.current.copy(pm10 = 12.3)) }
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = setOf(HourlyTableColumn.PM10)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("PM10").assertIsDisplayed()
+        composeRule.onNodeWithText("12.3 µg/m³").assertIsDisplayed()
+    }
+
+    @Test
+    fun european_aqi_wins_over_other_selected_air_quality_columns() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        ).let {
+            it.copy(
+                current = it.current.copy(
+                    europeanAqi = 88.0,
+                    pm10 = 12.3,
+                    pm2_5 = 5.67
+                )
+            )
+        }
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = setOf(
+                        HourlyTableColumn.PM10,
+                        HourlyTableColumn.PM2_5,
+                        HourlyTableColumn.EUROPEAN_AQI
+                    )
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("European AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("88").assertIsDisplayed()
+    }
+
+    @Test
+    fun shows_unavailable_value_for_selected_missing_european_aqi() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = setOf(HourlyTableColumn.EUROPEAN_AQI)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("European AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("—").assertIsDisplayed()
     }
 
     @Test

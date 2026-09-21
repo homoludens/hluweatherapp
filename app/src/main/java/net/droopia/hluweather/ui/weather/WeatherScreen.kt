@@ -231,6 +231,7 @@ fun WeatherScreen(
                                 forecast = forecast,
                                 temperatureUnit = temperatureUnit,
                                 precipitationUnit = precipitationUnit,
+                                hourlyTableColumns = hourlyTableColumns,
                                 onLocationClick = { locationSwitcherVisible = true },
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp)
@@ -488,6 +489,7 @@ private fun HourlyWeatherContent(
                     forecast = forecast,
                     temperatureUnit = temperatureUnit,
                     precipitationUnit = precipitationUnit,
+                    hourlyTableColumns = hourlyTableColumns,
                     onLocationClick = onLocationClick,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
