@@ -3,8 +3,11 @@ package net.droopia.hluweather.ui.weather
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.hasProgressBarRangeInfo
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -45,6 +48,7 @@ import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -57,6 +61,8 @@ import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import androidx.compose.material3.LocalContentColor
 import org.junit.After
@@ -95,6 +101,36 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
+    }
+
+    @Test
+    fun passes_selected_columns_to_current_card_in_hourly_path() {
+        renderWeather(
+            baseTime = Instant.fromEpochSeconds(0L),
+            hourlyTableColumns = setOf(HourlyTableColumn.PM10)
+        )
+
+        assertCurrentCardMetric("PM10")
+    }
+
+    @Test
+    fun passes_selected_columns_to_current_card_in_non_daily_path() {
+        val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        viewModel.onForecastModeSelected(ForecastMode.MAP)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = viewModel,
+                    hourlyTableColumns = setOf(HourlyTableColumn.PM10),
+                    mapContent = { _, _, _, _, _ ->
+                        Text("Map", Modifier.testTag("weather_map"))
+                    }
+                )
+            }
+        }
+
+        assertCurrentCardMetric("PM10")
     }
 
     @Test
@@ -723,10 +759,21 @@ class WeatherScreenTest {
         )
     }
 
-    private fun renderWeather(baseTime: Instant): WeatherViewModel {
+    private fun assertCurrentCardMetric(title: String) {
+        composeRule.onNode(
+            hasTestTag("current_metric_feels_like") and
+                hasAnyDescendant(hasText(title, substring = false))
+        ).assertIsDisplayed()
+    }
+
+    private fun renderWeather(
+        baseTime: Instant,
+        hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns
+    ): WeatherViewModel {
         return renderWeather(
             WeatherViewModel(MockWeatherRepository(baseTime = baseTime), Svilajnac),
-            now = baseTime
+            now = baseTime,
+            hourlyTableColumns = hourlyTableColumns
         )
     }
 
@@ -737,13 +784,18 @@ class WeatherScreenTest {
         )
     }
 
-    private fun renderWeather(viewModel: WeatherViewModel, now: Instant?): WeatherViewModel {
+    private fun renderWeather(
+        viewModel: WeatherViewModel,
+        now: Instant?,
+        hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns
+    ): WeatherViewModel {
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
                     onSettingsClick = {},
+                    hourlyTableColumns = hourlyTableColumns,
                     now = now
                 )
             }
