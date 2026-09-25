@@ -358,6 +358,10 @@ internal fun ForecastRow(
                         text = weather.precipitation.precipitationText(precipitationUnit).tableValueText(),
                         column = column
                     )
+                    HourlyTableColumn.PRECIPITATION_PROBABILITY -> ForecastValue(
+                        text = weather.precipitationProbability.percentText().tableValueText(),
+                        column = column
+                    )
                     HourlyTableColumn.WIND_SPEED -> ForecastValue(
                         text = weather.windSpeedKmh.windSpeedText(windUnit).tableValueText(),
                         column = column
@@ -435,6 +439,7 @@ private val HourlyTableColumn.header: String
         HourlyTableColumn.DEW_POINT -> "Dew point"
         HourlyTableColumn.RELATIVE_HUMIDITY -> "Hum."
         HourlyTableColumn.PRECIPITATION -> "Precip."
+        HourlyTableColumn.PRECIPITATION_PROBABILITY -> "Precip. %"
         HourlyTableColumn.WIND_SPEED -> "Wind"
         HourlyTableColumn.WIND_DIRECTION -> "Dir."
         HourlyTableColumn.EVAPOTRANSPIRATION -> "ET"
@@ -452,6 +457,7 @@ private val HourlyTableColumn.weight: Float
         HourlyTableColumn.DEW_POINT -> 1f
         HourlyTableColumn.RELATIVE_HUMIDITY -> 0.8f
         HourlyTableColumn.PRECIPITATION -> 0.9f
+        HourlyTableColumn.PRECIPITATION_PROBABILITY -> 0.9f
         HourlyTableColumn.WIND_SPEED -> 0.95f
         HourlyTableColumn.WIND_DIRECTION -> 0.85f
         HourlyTableColumn.EVAPOTRANSPIRATION -> 0.9f

@@ -194,6 +194,30 @@ class HourlyForecastTest {
     }
 
     @Test
+    fun renders_precipitation_probability_as_a_percentage() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        )
+        val firstHour = forecast.hourly.first().copy(precipitationProbability = 65)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast.copy(hourly = listOf(firstHour)),
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    hourlyTableColumns = setOf(HourlyTableColumn.PRECIPITATION_PROBABILITY),
+                    now = firstHour.time
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Precip. %").assertIsDisplayed()
+        composeRule.onNodeWithText("65%").assertIsDisplayed()
+    }
+
+    @Test
     fun large_font_hourly_condition_wraps_inside_the_weather_column() {
         val hour = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).hourly.first()
             .copy(windDirectionDegrees = 0.0)

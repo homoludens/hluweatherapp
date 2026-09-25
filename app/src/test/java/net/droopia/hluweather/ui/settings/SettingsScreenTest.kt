@@ -147,6 +147,35 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun precipitation_probability_is_available_in_the_hourly_table_by_default() {
+        val state = mutableStateOf(testSettingsState)
+
+        assertTrue(HourlyTableColumn.PRECIPITATION_PROBABILITY in defaultHourlyTableColumns)
+
+        renderSettings(
+            state = { state.value },
+            onHourlyTableColumnChange = { column, enabled ->
+                state.value = state.value.copy(
+                    hourlyTableColumns = if (enabled) {
+                        state.value.hourlyTableColumns + column
+                    } else {
+                        state.value.hourlyTableColumns - column
+                    }
+                )
+            }
+        )
+
+        scrollTo(5)
+        composeRule.onNodeWithTag("settings_hourly_column_precipitation_probability")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Precipitation probability").assertIsDisplayed()
+        composeRule.onNodeWithText("Chance of precipitation").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_hourly_column_precipitation_probability").performClick()
+
+        assertTrue(HourlyTableColumn.PRECIPITATION_PROBABILITY !in state.value.hourlyTableColumns)
+    }
+
+    @Test
     fun wind_direction_controls_report_selected_display() {
         var selected: WindDirectionDisplay? = null
 

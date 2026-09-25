@@ -40,6 +40,7 @@ enum class HourlyTableColumn {
     DEW_POINT,
     RELATIVE_HUMIDITY,
     PRECIPITATION,
+    PRECIPITATION_PROBABILITY,
     WIND_SPEED,
     WIND_DIRECTION,
     EVAPOTRANSPIRATION,
@@ -53,7 +54,8 @@ val defaultHourlyTableColumns = setOf(
     HourlyTableColumn.TEMPERATURE,
     HourlyTableColumn.DEW_POINT,
     HourlyTableColumn.RELATIVE_HUMIDITY,
-    HourlyTableColumn.PRECIPITATION
+    HourlyTableColumn.PRECIPITATION,
+    HourlyTableColumn.PRECIPITATION_PROBABILITY
 )
 
 data class SettingsUiState(
