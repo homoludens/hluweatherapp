@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.*
 import net.droopia.hluweather.data.repository.*
+import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import org.junit.Assert.*
@@ -38,6 +39,24 @@ class WeatherWidgetWorkerTest {
     private val now = Instant.parse("2026-10-28T12:00:00Z")
     private val first = WeatherLocation("first", "First", 43.0, 20.0, 10)
     private val second = WeatherLocation("second", "Second", 44.0, 21.0, 20)
+
+    @Test fun application_worker_factory_routes_widget_workers_to_injected_dependencies() = runTest {
+        val fixture = Fixture()
+        val factory = AppWorkerFactory(
+            dependenciesProvider = { error("Widget worker creation must not resolve notification dependencies") },
+            widgetDependenciesProvider = { fixture }
+        )
+
+        val worker = TestListenableWorkerBuilder.from(
+            ApplicationProvider.getApplicationContext<Context>(),
+            WeatherWidgetWorker::class.java
+        ).setWorkerFactory(factory).build()
+
+        assertTrue(worker is WeatherWidgetWorker)
+        assertEquals(ListenableWorker.Result.success(), worker.doWork())
+        assertEquals(listOf("first"), fixture.calls)
+        assertTrue(fixture.deliveries.isNotEmpty())
+    }
 
     @Test fun manual_preserves_cache_during_loading_and_updates_every_instance_on_success() = runTest {
         val f = Fixture()

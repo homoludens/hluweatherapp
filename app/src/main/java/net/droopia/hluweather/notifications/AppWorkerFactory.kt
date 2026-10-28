@@ -13,6 +13,8 @@ import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.settings.SettingsRepository
+import net.droopia.hluweather.widget.WeatherWidgetWorker
+import net.droopia.hluweather.widget.WeatherWidgetWorkerDependencies
 import kotlin.time.Clock
 
 fun interface NotificationPermissionChecker {
@@ -38,13 +40,17 @@ data class NotificationWorkerDependencies(
     val clock: Clock = Clock.System
 )
 
-class AppWorkerFactory private constructor(
-    private val dependenciesProvider: () -> NotificationWorkerDependencies
+class AppWorkerFactory internal constructor(
+    private val dependenciesProvider: () -> NotificationWorkerDependencies,
+    private val widgetDependenciesProvider: (() -> WeatherWidgetWorkerDependencies)?
 ) : WorkerFactory() {
 
-    constructor(application: HluWeatherApplication) : this({ application.notificationWorkerDependencies() })
+    constructor(application: HluWeatherApplication) : this(
+        { application.notificationWorkerDependencies() },
+        { application.weatherWidgetWorkerDependencies }
+    )
 
-    constructor(dependencies: NotificationWorkerDependencies) : this({ dependencies })
+    constructor(dependencies: NotificationWorkerDependencies) : this({ dependencies }, null)
 
     override fun createWorker(
         appContext: Context,
@@ -61,6 +67,9 @@ class AppWorkerFactory private constructor(
             workerParameters,
             dependenciesProvider()
         )
+        WeatherWidgetWorker::class.java.name -> widgetDependenciesProvider?.invoke()?.let {
+            WeatherWidgetWorker(appContext, workerParameters, it)
+        }
         else -> null
     }
 }

@@ -60,9 +60,16 @@ import net.droopia.hluweather.ui.settings.SettingsRepository
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.settingsRepository
 import net.droopia.hluweather.widget.DataStoreWidgetRefreshMetadataStore
+import net.droopia.hluweather.widget.AndroidWeatherWidgetDispatcher
 import net.droopia.hluweather.widget.WeatherWidgetRepository
+import net.droopia.hluweather.widget.WeatherWidgetUpdater
+import net.droopia.hluweather.widget.WeatherWidgetUpdaterOwner
+import net.droopia.hluweather.widget.WeatherWidgetWorker
+import net.droopia.hluweather.widget.WeatherWidgetWorkerDependencies
+import net.droopia.hluweather.widget.WeatherWidgetRefreshCoordinator
+import net.droopia.hluweather.widget.startWidgetReconciliation
 
-class HluWeatherApplication : Application(), Configuration.Provider {
+class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidgetUpdaterOwner {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -82,6 +89,14 @@ class HluWeatherApplication : Application(), Configuration.Provider {
             settings = settingsRepository.settings,
             activeLocation = locationRepository.activeLocation,
             scheduler = notificationScheduler
+        )
+        weatherWidgetUpdater.refreshInventory()
+        startWidgetReconciliation(
+            scope = applicationScope,
+            installed = weatherWidgetDispatcher.installedWidgets,
+            widgets = weatherWidgetRepository,
+            enqueueSelectionRefresh = weatherWidgetUpdater::enqueueSelectionRefresh,
+            updateAllWidgets = { weatherWidgetDispatcher.updateAllWidgets() }
         )
     }
 
@@ -125,6 +140,42 @@ class HluWeatherApplication : Application(), Configuration.Provider {
             settingsRepository, locationRepository, weatherRepository,
             refreshMetadata = DataStoreWidgetRefreshMetadataStore(applicationDataStore)
         )
+    }
+
+    private val weatherWidgetDispatcher: AndroidWeatherWidgetDispatcher by lazy {
+        AndroidWeatherWidgetDispatcher(this)
+    }
+
+    override val weatherWidgetUpdater: WeatherWidgetUpdater by lazy {
+        WeatherWidgetUpdater(
+            workManager = WorkManager.getInstance(this),
+            workerClass = WeatherWidgetWorker::class.java,
+            hasInstalledWidgets = weatherWidgetDispatcher::hasInstalledWidgets,
+            refreshInstalledWidgetInventory = { weatherWidgetDispatcher.refreshInventory() }
+        )
+    }
+
+    internal val weatherWidgetRefreshCoordinator: WeatherWidgetRefreshCoordinator by lazy {
+        WeatherWidgetRefreshCoordinator(
+            widgets = weatherWidgetRepository,
+            weather = weatherRepository,
+            publish = { weatherWidgetDispatcher.updateAllWidgets() }
+        )
+    }
+
+    internal val weatherWidgetWorkerDependencies: WeatherWidgetWorkerDependencies by lazy {
+        object : WeatherWidgetWorkerDependencies {
+            override val coordinator: WeatherWidgetRefreshCoordinator
+                get() = weatherWidgetRefreshCoordinator
+
+            override suspend fun updateAllWidgets() {
+                weatherWidgetDispatcher.updateAllWidgets()
+            }
+
+            override suspend fun deferSelectionReconciliation() {
+                weatherWidgetUpdater.enqueueSelectionRefresh()
+            }
+        }
     }
 
     val deviceLocationSource: DeviceLocationSource by lazy {

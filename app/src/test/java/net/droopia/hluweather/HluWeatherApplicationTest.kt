@@ -2,6 +2,8 @@ package net.droopia.hluweather
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
+import androidx.work.testing.TestListenableWorkerBuilder
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -11,9 +13,13 @@ import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.notifications.NotificationScheduler
+import net.droopia.hluweather.widget.WeatherWidgetUpdaterOwner
+import net.droopia.hluweather.widget.WeatherWidgetUpdater
+import net.droopia.hluweather.widget.WeatherWidgetWorker
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,6 +38,41 @@ class HluWeatherApplicationTest {
         assertTrue(application.weatherRepository is CachingWeatherRepository)
         assertTrue(WorkManager.isInitialized())
         assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
+        assertTrue(application is WeatherWidgetUpdaterOwner)
+        assertSame(application.weatherWidgetUpdater, (application as WeatherWidgetUpdaterOwner).weatherWidgetUpdater)
+    }
+
+    @Test
+    fun application_factory_constructs_widget_workers_from_shared_dependencies() {
+        val application = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val factory = application.workManagerConfiguration.workerFactory
+
+        val worker = TestListenableWorkerBuilder.from(application, WeatherWidgetWorker::class.java)
+            .setWorkerFactory(factory)
+            .build()
+
+        assertTrue(worker is WeatherWidgetWorker)
+        assertSame(
+            application.weatherWidgetRefreshCoordinator,
+            application.weatherWidgetWorkerDependencies.coordinator
+        )
+    }
+
+    @Test
+    fun startup_without_installed_widgets_does_not_enqueue_widget_work() {
+        val application = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val workManager = WorkManager.getInstance(application)
+
+        listOf(
+            WeatherWidgetUpdater.PERIODIC_REFRESH_WORK_NAME,
+            WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME,
+            WeatherWidgetUpdater.SELECTION_REFRESH_WORK_NAME
+        ).forEach { workName ->
+            assertTrue(
+                workManager.getWorkInfosForUniqueWork(workName).get()
+                    .none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+            )
+        }
     }
 
     @Test

@@ -27,9 +27,16 @@ interface WeatherWidgetUpdaterOwner {
 class WeatherWidgetUpdater(
     private val workManager: WorkManager,
     private val workerClass: Class<out ListenableWorker>,
-    private val hasInstalledWidgets: () -> Boolean
+    private val hasInstalledWidgets: () -> Boolean,
+    private val refreshInstalledWidgetInventory: () -> Unit = {}
 ) {
     private val selectionLock = Mutex()
+
+    /** Refresh the Android inventory before reconciling schedule state after receiver callbacks. */
+    fun refreshInventory() {
+        refreshInstalledWidgetInventory()
+        reconcile()
+    }
 
     /** Reconcile after widget inventory changes; both widget sizes share one periodic request. */
     fun reconcile() {
