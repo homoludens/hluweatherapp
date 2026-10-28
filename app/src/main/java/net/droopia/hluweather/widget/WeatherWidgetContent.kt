@@ -64,6 +64,7 @@ data class WeatherWidgetPalette internal constructor(
 fun WeatherWidgetCard(
     snapshot: WeatherWidgetSnapshot,
     modifier: GlanceModifier = GlanceModifier,
+    locationDisplayName: String? = null,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
     val context = LocalContext.current
@@ -93,7 +94,12 @@ fun WeatherWidgetCard(
             .clickable(openMainWeatherAction(context))
             .padding(8.dp)
     ) {
-        WeatherWidgetHeader(locationName, isRefreshing, palette)
+        WeatherWidgetHeader(
+            locationName = locationName,
+            isRefreshing = isRefreshing,
+            palette = palette,
+            displayLocationName = locationDisplayName
+        )
         content(palette)
     }
 }
@@ -104,10 +110,11 @@ fun WeatherWidgetHeader(
     locationName: String?,
     isRefreshing: Boolean,
     palette: WeatherWidgetPalette,
-    modifier: GlanceModifier = GlanceModifier
+    modifier: GlanceModifier = GlanceModifier,
+    displayLocationName: String? = null
 ) {
     val context = LocalContext.current
-    val label = locationName ?: "Choose a location"
+    val label = displayLocationName ?: locationName ?: "Choose a location"
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -192,6 +199,8 @@ fun WeatherWidgetCurrentWeather(
     temperatureFontSizeSp: Float,
     showCondition: Boolean = true,
     showApparentTemperature: Boolean = true,
+    conditionFontSizeSp: Float = 12f,
+    apparentTemperatureFontSizeSp: Float = 11f,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(modifier = modifier) {
@@ -200,7 +209,8 @@ fun WeatherWidgetCurrentWeather(
                 condition = weather.condition,
                 isDay = weather.isDay,
                 palette = palette,
-                sizeDp = iconSizeDp
+                sizeDp = iconSizeDp,
+                modifier = GlanceModifier.padding(end = 4.dp)
             )
             Text(
                 text = weather.temperatureText,
@@ -218,7 +228,11 @@ fun WeatherWidgetCurrentWeather(
         if (showCondition) {
             Text(
                 text = weather.conditionLabel,
-                style = widgetTextStyle(palette.mainText, 12.sp, FontWeight.Medium),
+                style = widgetTextStyle(
+                    palette.mainText,
+                    conditionFontSizeSp.coerceAtLeast(1f).sp,
+                    FontWeight.Medium
+                ),
                 maxLines = 1
             )
         }
@@ -230,7 +244,10 @@ fun WeatherWidgetCurrentWeather(
                         ?.let { "Feels like $it" }
                         ?: "Feels like ${weather.apparentTemperatureText}"
                 },
-                style = widgetTextStyle(palette.secondaryText, 11.sp),
+                style = widgetTextStyle(
+                    palette.secondaryText,
+                    apparentTemperatureFontSizeSp.coerceAtLeast(1f).sp
+                ),
                 maxLines = 1
             )
         }
@@ -323,16 +340,21 @@ fun WeatherWidgetStatus(
     snapshot: WeatherWidgetSnapshot,
     palette: WeatherWidgetPalette,
     showUpdateTime: Boolean = false,
+    compact: Boolean = false,
     modifier: GlanceModifier = GlanceModifier
 ) {
     val status = when (snapshot) {
         is WeatherWidgetSnapshot.NoLocation -> null
         is WeatherWidgetSnapshot.NoWeather -> when {
-            snapshot.refresh.isRefreshing -> "Refreshing weather"
-            snapshot.refresh.lastAttemptFailed -> "Weather update failed"
+            snapshot.refresh.isRefreshing -> if (compact) "Refreshing" else "Refreshing weather"
+            snapshot.refresh.lastAttemptFailed -> if (compact) "Update failed" else "Weather update failed"
             else -> null
         }
         is WeatherWidgetSnapshot.Available -> when {
+            compact && snapshot.refresh.isRefreshing && snapshot.weather.isStale -> "Refreshing · stale"
+            compact && snapshot.refresh.isRefreshing -> "Refreshing"
+            compact && snapshot.weather.isStale -> "Stale weather"
+            compact && snapshot.refresh.lastAttemptFailed -> "Update failed"
             snapshot.refresh.isRefreshing && snapshot.weather.isStale ->
                 "Refreshing · cached weather is stale"
             snapshot.refresh.isRefreshing -> "Refreshing weather"

@@ -25,7 +25,8 @@ data class SmallWeatherWidgetSize(
     val conditionFontSizeSp: Float,
     val showCondition: Boolean,
     val apparentTemperatureFontSizeSp: Float,
-    val showApparentTemperature: Boolean
+    val showApparentTemperature: Boolean,
+    val showStatus: Boolean
 )
 
 /** Medium-widget presentation choices, including a fixed current block and three to five columns. */
@@ -80,11 +81,13 @@ object WeatherWidgetSizePolicy {
     private const val PRIMARY_ROW_GAP_DP = 4f
     private const val SECONDARY_ROW_GAP_DP = 2f
     private const val ICON_TO_TEMPERATURE_GAP_DP = 4f
+    private const val LOCATION_ICON_SIZE_DP = 18f
     private const val MEDIUM_DIVIDER_WIDTH_DP = 1f
     private const val MEDIUM_CELL_PADDING_DP = 4f
     private const val AVERAGE_TEMPERATURE_GLYPH_WIDTH = 0.62f
     private const val AVERAGE_LABEL_GLYPH_WIDTH = 0.55f
     private const val SMALL_TEXT_LINE_HEIGHT = 1.2f
+    private const val SMALL_STATUS_FONT_SP = 10f
     private const val MEDIUM_TEXT_LINE_HEIGHT = 1.15f
 
     /**
@@ -96,7 +99,8 @@ object WeatherWidgetSizePolicy {
         heightDp: Float,
         fontScale: Float,
         formattedTemperatureLength: Int,
-        apparentTemperatureLength: Int? = null
+        apparentTemperatureLength: Int? = null,
+        hasStatus: Boolean = false
     ): SmallWeatherWidgetSize {
         val width = widthDp.nonNegative()
         val height = heightDp.nonNegative()
@@ -104,7 +108,7 @@ object WeatherWidgetSizePolicy {
         val sizeClass = smallSizeClass(width, height)
         val innerWidth = (width - HORIZONTAL_PADDING_DP * 2f).coerceAtLeast(0f)
         val locationWidth = (
-            width - HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - ICON_TO_TEMPERATURE_GAP_DP * 2f
+            width - HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP
             ).coerceAtLeast(0f)
         val bodyHeight = (
             height - VERTICAL_PADDING_DP * 2f - HEADER_HEIGHT_DP - HEADER_TO_BODY_GAP_DP
@@ -156,6 +160,15 @@ object WeatherWidgetSizePolicy {
         val apparentHeight = lineHeight(apparentFontSize, scale, SMALL_TEXT_LINE_HEIGHT)
         val showApparentTemperature = showCondition && apparentFitsWidth &&
             secondaryHeight >= conditionHeight + SECONDARY_ROW_GAP_DP + apparentHeight
+        val shownSecondaryHeight = when {
+            showApparentTemperature -> conditionHeight + SECONDARY_ROW_GAP_DP + apparentHeight
+            showCondition -> conditionHeight
+            else -> 0f
+        }
+        val statusHeight = lineHeight(SMALL_STATUS_FONT_SP, scale, SMALL_TEXT_LINE_HEIGHT)
+        val statusGap = if (shownSecondaryHeight > 0f) SECONDARY_ROW_GAP_DP else 0f
+        val showStatus = hasStatus &&
+            secondaryHeight + PRIMARY_ROW_GAP_DP >= shownSecondaryHeight + statusGap + statusHeight
 
         return SmallWeatherWidgetSize(
             sizeClass = sizeClass,
@@ -171,7 +184,8 @@ object WeatherWidgetSizePolicy {
             conditionFontSizeSp = conditionFontSize,
             showCondition = showCondition,
             apparentTemperatureFontSizeSp = apparentFontSize,
-            showApparentTemperature = showApparentTemperature
+            showApparentTemperature = showApparentTemperature,
+            showStatus = showStatus
         )
     }
 
