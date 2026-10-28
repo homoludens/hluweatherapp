@@ -28,7 +28,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 
 ## 4. WorkManager updates and change reconciliation
 
-- [ ] 4.1 [low] Implement one unique connected-network 60-minute periodic schedule shared across both widget sizes, plus unique coalesced immediate work; verify WorkManager tests inspect interval, constraints, work names, repeated enqueue behavior, and no schedule when no widgets exist.
+- [x] 4.1 [low] Implement one unique connected-network 60-minute periodic schedule shared across both widget sizes, plus unique coalesced immediate work; verify WorkManager tests inspect interval, constraints, work names, repeated enqueue behavior, and no schedule when no widgets exist.
 - [ ] 4.2 [high] Implement the widget CoroutineWorker using application-owned repositories, preserving displayed data through loading, success, stale fallback, failure, and cancellation; verify worker tests cover each outcome, update-all delivery, bounded retries, and no corruption from obsolete request completion.
 - [ ] 4.3 [low] Implement the Glance refresh callback that enqueues work without opening an Activity or doing network work in the callback; verify callback/action tests confirm one coalesced request and that loading state clears on completion or failure.
 - [ ] 4.4 [high] Add installed-widget-guarded application reconciliation with separate request-change and presentation/cache-change paths; verify tests show provider/location changes reconcile promptly, units/theme/renames re-render from cache, foreground cache writes do not refetch, and unrelated/status/LRU writes cause no recursive work.
