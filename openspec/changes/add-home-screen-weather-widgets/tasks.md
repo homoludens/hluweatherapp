@@ -12,7 +12,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 
 ## 2. Shared visual resources and pure widget presentation
 
-- [ ] 2.1 [low] Add a stable compatible Glance app-widget dependency in `gradle/libs.versions.toml` and `app/build.gradle.kts`, reusing existing WorkManager/DataStore dependencies; verify dependency resolution and `:app:compileGoogleDebugKotlin` succeed without adding provider clients or a DI framework.
+- [x] 2.1 [low] Add a stable compatible Glance app-widget dependency in `gradle/libs.versions.toml` and `app/build.gradle.kts`, reusing existing WorkManager/DataStore dependencies; verify dependency resolution and `:app:compileGoogleDebugKotlin` succeed without adding provider clients or a DI framework.
 - [ ] 2.2 [low] Extract the existing weather-vector/tint selection and expose side-effect-free existing theme tokens for both app and widget use; verify focused tests cover every `WeatherCondition`, day/night selection, both themes, and unchanged main-app icon output.
 - [ ] 2.3 [low] Implement a generic bounded vector-to-bitmap adapter for shared weather and Material utility icons without an Activity or another condition mapping; verify deterministic rendering tests produce readable, correctly tinted icons at current/hourly sizes in both themes.
 - [ ] 2.4 [low] Implement presentation state and forecast mapping using shared labels and temperature formatting; verify widget adapter tests cover Celsius/Fahrenheit rounding, null apparent temperature, missing versus zero precipitation probability, spoken units, and stale timestamps.

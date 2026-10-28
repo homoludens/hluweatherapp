@@ -113,6 +113,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.maplibre.compose)
+    implementation(libs.glance.appwidget)
     runtimeOnly(libs.maplibre.compose.runtime.opengl)
 
     testImplementation(libs.junit)
