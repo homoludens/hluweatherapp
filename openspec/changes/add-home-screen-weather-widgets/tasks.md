@@ -1,6 +1,6 @@
 ## Model routing
 
-For this change, `[low]` tasks use Luna and `[high]` tasks use Terra, including each task's verification. Terra is the user's explicit override of the default high-complexity model in `AGENTS.md`.
+For this change, `[low]` tasks use Luna and `[high]` tasks use Terra, including each task's verification. For task 2.4, the user confirmed the exact low model/variant as `openai/gpt-6-luna-fast#max`. Terra is the user's explicit override of the default high-complexity model in `AGENTS.md`.
 
 High-complexity tasks are limited to interrupted-refresh recovery, concurrent request coordination, worker failure/cancellation transitions, reactive reconciliation without feedback loops, and shared lifecycle scheduling across receivers. The remaining tasks have defined implementation and verification approaches.
 
@@ -15,7 +15,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 - [x] 2.1 [low] Add a stable compatible Glance app-widget dependency in `gradle/libs.versions.toml` and `app/build.gradle.kts`, reusing existing WorkManager/DataStore dependencies; verify dependency resolution and `:app:compileGoogleDebugKotlin` succeed without adding provider clients or a DI framework.
 - [x] 2.2 [low] Extract the existing weather-vector/tint selection and expose side-effect-free existing theme tokens for both app and widget use; verify focused tests cover every `WeatherCondition`, day/night selection, both themes, and unchanged main-app icon output.
 - [x] 2.3 [low] Implement a generic bounded vector-to-bitmap adapter for shared weather and Material utility icons without an Activity or another condition mapping; verify deterministic rendering tests produce readable, correctly tinted icons at current/hourly sizes in both themes.
-- [ ] 2.4 [low] Implement presentation state and forecast mapping using shared labels and temperature formatting; verify widget adapter tests cover Celsius/Fahrenheit rounding, null apparent temperature, missing versus zero precipitation probability, spoken units, and stale timestamps.
+- [x] 2.4 [low] Implement presentation state and forecast mapping using shared labels and temperature formatting; verify widget adapter tests cover Celsius/Fahrenheit rounding, null apparent temperature, missing versus zero precipitation probability, spoken units, and stale timestamps.
 - [ ] 2.5 [low] Implement future-hour selection and location-zone date/time formatting with an injected clock; verify tests cover unsorted hours, midnight, differing device/location zones, daylight-saving transitions, invalid-zone fallback, fewer than five hours, and fully expired cache.
 - [ ] 2.6 [low] Implement a pure responsive size/font policy for small priorities and medium three/four/five-column branches; verify table-driven tests cover width and height minimums, larger font scaling, long signed temperatures, and three-digit Fahrenheit values.
 
