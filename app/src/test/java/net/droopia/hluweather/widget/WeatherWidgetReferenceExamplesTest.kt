@@ -106,6 +106,7 @@ class WeatherWidgetReferenceExamplesTest {
         val mediumState = medium.snapshot.weather
         assertEquals("Zaječar", mediumState.locationName)
         assertEquals("Clear sky", mediumState.conditionLabel)
+        assertEquals(true, mediumState.isDay)
         assertEquals(listOf("22:00", "23:00", "00:00", "01:00", "02:00"), mediumState.hours.map { it.timeText })
         assertEquals(listOf("20°C", "18°C", "17°C", "16°C", "15°C"), mediumState.hours.map { it.temperatureText })
         assertEquals(listOf(0, 0, 10, 20, 60), mediumState.hours.map { it.precipitationProbability })
@@ -348,7 +349,7 @@ class WeatherWidgetReferenceExamplesTest {
             temperature = 23.0,
             apparentTemperature = 24.0,
             condition = WeatherCondition.CLEAR,
-            isDay = false,
+            isDay = true,
             fetchedAt = Instant.parse("2026-10-28T20:17:00Z"),
             hourly = localInstants.indices.map { index ->
                 HourForecast(

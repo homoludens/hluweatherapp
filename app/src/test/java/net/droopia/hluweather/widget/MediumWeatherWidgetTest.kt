@@ -207,6 +207,44 @@ class MediumWeatherWidgetTest {
     }
 
     @Test
+    fun failed_refresh_keeps_cached_current_and_hourly_weather_with_its_original_update_time() {
+        val view = render(
+            availableSnapshot(
+                temperature = "73°F",
+                apparentTemperature = null,
+                hours = referenceHours(
+                    temperatures = listOf("68°F", "64°F", "63°F", "61°F", "59°F"),
+                    probabilities = listOf(null, 0, 10, 20, 60)
+                ),
+                settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT),
+                refresh = WidgetRefreshStatus(
+                    endedAt = Instant.parse("2026-10-28T12:00:00Z"),
+                    lastAttemptFailed = true
+                )
+            ),
+            widthDp = 400f,
+            heightDp = 160f
+        )
+
+        assertText(view, "73°F")
+        assertText(view, "Clear sky")
+        assertFalse("missing apparent temperature stays absent", findViews(view)
+            .filterIsInstance<TextView>().any { it.text.toString().startsWith("Feels like") })
+        assertEquals(
+            listOf("22:00", "23:00", "00:00", "01:00", "02:00"),
+            findViews(view).filterIsInstance<TextView>().map { it.text.toString() }
+                .filter { it in REFERENCE_HOURS }
+        )
+        listOf("68°F", "64°F", "63°F", "61°F", "59°F", "—", "0%").forEach { assertText(view, it) }
+        assertText(view, "Stale · Oct 28 11:17")
+        assertEquals(
+            "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17",
+            findDescription(view, "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17")
+        )
+        assertLayoutFits(view, 400f, 160f)
+    }
+
+    @Test
     fun signed_and_three_digit_fahrenheit_fit_at_the_supported_minimum_with_large_font_scale() {
         listOf(
             "−123°F" to ThemeMode.LIGHT,
@@ -332,6 +370,7 @@ class MediumWeatherWidgetTest {
                 )
                 assertTrue("precipitation probability retains readable text size", probability.textSize >= 7f * density)
             }
+        assertRenderedContentFitsWithoutOverlap(root)
     }
 
     private fun assertDividers(root: View, expectedCount: Int, expectedColor: Int) {

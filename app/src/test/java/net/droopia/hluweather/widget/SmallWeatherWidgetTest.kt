@@ -210,6 +210,33 @@ class SmallWeatherWidgetTest {
         assertEquals(0, weather.liveRequests)
     }
 
+    @Test
+    fun failed_refresh_keeps_cached_fahrenheit_weather_and_reports_failure_in_remote_views() {
+        val view = render(
+            availableSnapshot(
+                temperature = "73°F",
+                apparentTemperature = "74°F",
+                settings = PersistedSettings(
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    themeMode = ThemeMode.DARK
+                )
+            ).copy(
+                refresh = WidgetRefreshStatus(
+                    endedAt = Instant.parse("2026-10-28T12:00:00Z"),
+                    lastAttemptFailed = true
+                )
+            ),
+            widthDp = 200f,
+            heightDp = 160f
+        )
+
+        assertText(view, "73°F")
+        assertText(view, "Clear sky")
+        assertText(view, "Feels like 74°F")
+        assertText(view, "Update failed")
+        assertPrimaryContentFits(view, widthDp = 200f, heightDp = 160f)
+    }
+
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
     private fun render(
         snapshot: WeatherWidgetSnapshot,
@@ -273,6 +300,7 @@ class SmallWeatherWidgetTest {
             assertTrue("$text top edge remains in the card", bounds.top >= 0)
             assertTrue("$text bottom edge remains in the card", bounds.bottom <= heightPx)
         }
+        assertRenderedContentFitsWithoutOverlap(root)
     }
 
     private fun assertRefreshTarget(root: View, widthDp: Float) {

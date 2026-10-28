@@ -86,13 +86,25 @@ class RefreshWeatherActionTest {
         clickDescription(medium, "Refresh weather")
         shadowOf(android.os.Looper.getMainLooper()).idle()
 
-        val requests = workManager
-            .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
-            .get()
+        val requests = awaitManualRefreshWork()
 
         assertEquals(1, requests.size)
         assertFalse(requests.single().state.isFinished)
         assertNull(shadowOf(application).peekNextStartedActivity())
+    }
+
+    private fun awaitManualRefreshWork(): List<androidx.work.WorkInfo> {
+        repeat(200) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            val requests = workManager
+                .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
+                .get()
+            if (requests.isNotEmpty()) return requests
+            Thread.sleep(10)
+        }
+        return workManager
+            .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
+            .get()
     }
 
     @Test
