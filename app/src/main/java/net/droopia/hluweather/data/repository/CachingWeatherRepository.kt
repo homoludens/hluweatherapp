@@ -1,6 +1,5 @@
 package net.droopia.hluweather.data.repository
 
-import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -136,11 +135,8 @@ class CachingWeatherRepository(
 
 private fun ActiveLocation.cacheLocationKey(): String = when (this) {
     is ActiveLocation.Saved -> "saved:${location.id}"
-    is ActiveLocation.Current -> currentCacheLocationKey(point)
+    is ActiveLocation.Current -> point.currentLocationCacheKey()
 }
-
-private fun currentCacheLocationKey(point: GeoPoint): String =
-    String.format(Locale.US, "current:%.3f:%.3f", point.latitude, point.longitude)
 
 private fun ActiveLocation.toWeatherLocation(): WeatherLocation = when (this) {
     is ActiveLocation.Saved -> location
@@ -162,7 +158,7 @@ private fun ActiveLocation.matchesCachedLocation(
         cachedLocation.longitude == location.longitude &&
         cachedLocation.altitude == location.altitude
     is ActiveLocation.Current -> cachedLocation.id == "current" &&
-        currentCacheLocationKey(GeoPoint(cachedLocation.latitude, cachedLocation.longitude)) ==
+        GeoPoint(cachedLocation.latitude, cachedLocation.longitude).currentLocationCacheKey() ==
         key.locationKey &&
         cachedLocation.altitude == altitude
 }
