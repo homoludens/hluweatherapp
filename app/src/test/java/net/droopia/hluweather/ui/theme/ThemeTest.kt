@@ -68,6 +68,31 @@ class ThemeTest {
     }
 
     @Test
+    fun side_effect_free_palette_accessor_exposes_existing_light_and_dark_material_tokens() {
+        val light = hluMaterialColorScheme(darkTheme = false)
+        assertEquals(Color(0xFF5367E8), light.primary)
+        assertEquals(Color(0xFFFFFFFF), light.onPrimary)
+        assertEquals(Color(0xFFF7F8FC), light.background)
+        assertEquals(Color(0xFF13162A), light.onBackground)
+        assertEquals(Color(0xFFF7F8FC), light.surface)
+        assertEquals(Color(0xFF171A2C), light.onSurface)
+        assertEquals(Color(0xFFEDEFFC), light.surfaceVariant)
+        assertEquals(Color(0xFF5D6278), light.onSurfaceVariant)
+        assertEquals(Color(0xFFDDE0EB), light.outlineVariant)
+
+        val dark = hluMaterialColorScheme(darkTheme = true)
+        assertEquals(Color(0xFF9AA7FF), dark.primary)
+        assertEquals(Color(0xFF101532), dark.onPrimary)
+        assertEquals(Color(0xFF09111E), dark.background)
+        assertEquals(Color(0xFFE8EDFF), dark.onBackground)
+        assertEquals(Color(0xFF101A2B), dark.surface)
+        assertEquals(Color(0xFFF2F4FF), dark.onSurface)
+        assertEquals(Color(0xFF18243A), dark.surfaceVariant)
+        assertEquals(Color(0xFFB7C0D9), dark.onSurfaceVariant)
+        assertEquals(Color(0xFF26334B), dark.outlineVariant)
+    }
+
+    @Test
     @Suppress("DEPRECATION")
     fun dark_theme_uses_dark_navigation_bar() {
         composeRule.setContent {

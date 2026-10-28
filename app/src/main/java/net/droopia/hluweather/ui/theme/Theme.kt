@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.theme
 
 import android.app.Activity
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -39,6 +40,10 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF26334B)
 )
 
+/** Returns the app's existing Material palette without applying Activity/window effects. */
+fun hluMaterialColorScheme(darkTheme: Boolean): ColorScheme =
+    if (darkTheme) DarkColors else LightColors
+
 val LocalHluColors = staticCompositionLocalOf<HluColors> {
     error("HluColors not provided")
 }
@@ -49,7 +54,7 @@ fun HluWeatherTheme(
     darkTheme: Boolean,
     content: @Composable () -> Unit
 ) {
-    val materialColors = if (darkTheme) DarkColors else LightColors
+    val materialColors = hluMaterialColorScheme(darkTheme)
     val hluColors = if (darkTheme) DarkHluColors else LightHluColors
     val density = LocalDensity.current
     val cappedDensity = Density(
