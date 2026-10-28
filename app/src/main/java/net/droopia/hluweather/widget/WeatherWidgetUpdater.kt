@@ -1,6 +1,8 @@
 package net.droopia.hluweather.widget
 
 import androidx.work.Constraints
+import androidx.work.BackoffPolicy
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ListenableWorker
@@ -40,7 +42,10 @@ class WeatherWidgetUpdater(
         workManager.enqueueUniqueWork(
             MANUAL_REFRESH_WORK_NAME,
             ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequest.Builder(workerClass).build()
+            OneTimeWorkRequest.Builder(workerClass)
+                .setInputData(Data.Builder().putBoolean(WeatherWidgetWorker.INPUT_MANUAL, true).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
+                .build()
         )
     }
 
@@ -50,6 +55,7 @@ class WeatherWidgetUpdater(
         TimeUnit.MINUTES
     )
         .setConstraints(periodicConstraints)
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
         .build()
 
     private fun cancelWidgetWork() {
@@ -61,6 +67,7 @@ class WeatherWidgetUpdater(
         const val PERIODIC_REFRESH_WORK_NAME = "widget.weather.periodic_refresh"
         const val MANUAL_REFRESH_WORK_NAME = "widget.weather.manual_refresh"
         const val REFRESH_INTERVAL_MINUTES = 60L
+        const val BACKOFF_MINUTES = 10L
 
         private val periodicConstraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

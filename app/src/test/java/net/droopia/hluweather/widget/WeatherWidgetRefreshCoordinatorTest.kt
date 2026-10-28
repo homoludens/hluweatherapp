@@ -178,7 +178,7 @@ class WeatherWidgetRefreshCoordinatorTest {
         assertFalse(snapshot.refresh.isRefreshing)
         assertTrue(snapshot.refresh.lastAttemptFailed)
         assertEquals(old.fetchedAt, snapshot.weather.lastWeatherUpdate)
-        f.fetch = { _, _ -> error("offline") }
+        f.fetch = { _, _ -> throw java.io.IOException("offline") }
         assertEquals(WidgetRefreshResult.FAILED, f.coordinator.refresh(true))
         snapshot = f.widgets.loadCachedState() as WeatherWidgetSnapshot.Available
         assertFalse(snapshot.refresh.isRefreshing)
@@ -232,7 +232,7 @@ class WeatherWidgetRefreshCoordinatorTest {
         f.locationsValue.value = listOf(first, second)
         f.active.value = ActiveLocation.Saved(first)
         f.fetch = { _, _ -> ForecastLoad(f.forecast(second, WeatherProvider.MET_NO)) }
-        assertEquals(WidgetRefreshResult.FAILED, f.coordinator.refresh(true))
+        assertEquals(WidgetRefreshResult.PERMANENT_FAILURE, f.coordinator.refresh(true))
         val snapshot = f.widgets.loadCachedState() as WeatherWidgetSnapshot.NoWeather
         assertTrue(snapshot.refresh.lastAttemptFailed)
         assertFalse(snapshot.refresh.isRefreshing)

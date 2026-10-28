@@ -1,6 +1,7 @@
 package net.droopia.hluweather.widget
 
 import kotlin.coroutines.cancellation.CancellationException
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -8,7 +9,7 @@ import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.WeatherRepository
 
 /** Result of one bounded reconciliation, suitable for a worker's retry decision. */
-enum class WidgetRefreshResult { SUCCESS, FAILED, NO_LOCATION, SELECTION_CHANGED }
+enum class WidgetRefreshResult { SUCCESS, FAILED, PERMANENT_FAILURE, NO_LOCATION, SELECTION_CHANGED }
 
 /**
  * Share one instance between all widget workers. Concurrent callers join the same run rather
@@ -116,13 +117,17 @@ class WeatherWidgetRefreshCoordinator(
             if (widgets.resolveRequest()?.identity != request.identity) return WidgetRefreshResult.SELECTION_CHANGED
             synchronized(lock) { run.fetched = true }
             result = weather.getForecast(request.provider, request.location)
-            return if (!result.isStale && request.matchesIdentity(result.forecast)) {
-                WidgetRefreshResult.SUCCESS
-            } else WidgetRefreshResult.FAILED
+            return when {
+                !request.matchesIdentity(result.forecast) -> WidgetRefreshResult.PERMANENT_FAILURE
+                result.isStale -> WidgetRefreshResult.FAILED
+                else -> WidgetRefreshResult.SUCCESS
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (_: IOException) {
             return WidgetRefreshResult.FAILED
+        } catch (_: Exception) {
+            return WidgetRefreshResult.PERMANENT_FAILURE
         } finally {
             // Only metadata cleanup is non-cancellable; publication and networking remain cancellable.
             withContext(NonCancellable) { widgets.finishRefresh(request, attempt, result) }

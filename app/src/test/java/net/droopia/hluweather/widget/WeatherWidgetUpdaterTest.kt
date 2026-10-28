@@ -3,12 +3,14 @@ package net.droopia.hluweather.widget
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
+import androidx.work.BackoffPolicy
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import androidx.work.testing.WorkManagerTestInitHelper
+import androidx.work.impl.WorkManagerImpl
 import net.droopia.hluweather.notifications.NotificationScheduler
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -20,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Executors
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -95,6 +98,31 @@ class WeatherWidgetUpdaterTest {
         assertEquals(first.id, requests.single().id)
         assertEquals(NetworkType.NOT_REQUIRED, requests.single().constraints.requiredNetworkType)
         assertEquals(WorkInfo.State.ENQUEUED, requests.single().state)
+    }
+
+    @Test
+    fun scheduled_requests_distinguish_manual_input_and_use_bounded_backoff() {
+        smallWidgetIds = setOf(1)
+        updater.reconcile()
+        updater.enqueueManualRefresh()
+        val periodicId = periodicWork().single().id
+        val manualId = manualWork().single().id
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val (periodic, manual) = executor.submit<Pair<androidx.work.impl.model.WorkSpec, androidx.work.impl.model.WorkSpec>> {
+                val database = WorkManagerImpl::class.java.getMethod("getWorkDatabase").invoke(workManager)
+                val dao = database.javaClass.getMethod("workSpecDao").invoke(database) as androidx.work.impl.model.WorkSpecDao
+                dao.getWorkSpec(periodicId.toString())!! to dao.getWorkSpec(manualId.toString())!!
+            }.get()
+            assertFalse(periodic.input.getBoolean(WeatherWidgetWorker.INPUT_MANUAL, false))
+            assertTrue(manual.input.getBoolean(WeatherWidgetWorker.INPUT_MANUAL, false))
+            for (spec in listOf(periodic, manual)) {
+                assertEquals(BackoffPolicy.EXPONENTIAL, spec.backoffPolicy)
+                assertEquals(TimeUnit.MINUTES.toMillis(WeatherWidgetUpdater.BACKOFF_MINUTES), spec.backoffDelayDuration)
+            }
+        } finally {
+            executor.shutdown()
+        }
     }
 
     @Test
