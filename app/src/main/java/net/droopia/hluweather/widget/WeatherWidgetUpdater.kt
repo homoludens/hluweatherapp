@@ -12,6 +12,11 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
+/** Application-owned access used by Glance actions and widget lifecycle entry points. */
+interface WeatherWidgetUpdaterOwner {
+    val weatherWidgetUpdater: WeatherWidgetUpdater
+}
+
 /** Schedules the shared widget refresh independently from notification work. */
 class WeatherWidgetUpdater(
     private val workManager: WorkManager,
