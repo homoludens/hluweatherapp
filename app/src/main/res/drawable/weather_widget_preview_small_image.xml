@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="220dp" android:height="220dp" android:drawable="@drawable/weather_widget_card_surface" />
+    <item android:width="100dp" android:height="9dp" android:left="24dp" android:top="22dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF17233A" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <item android:width="26dp" android:height="26dp" android:gravity="top|right" android:right="20dp" android:top="14dp" android:drawable="@drawable/weather_widget_preview_refresh" />
+    <item android:width="58dp" android:height="58dp" android:left="30dp" android:top="75dp" android:drawable="@drawable/weather_widget_preview_sun" />
+    <item android:width="72dp" android:height="17dp" android:left="104dp" android:top="100dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF17233A" />
+            <corners android:radius="5dp" />
+        </shape>
+    </item>
+    <item android:width="104dp" android:height="7dp" android:left="24dp" android:top="169dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF33415A" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item android:width="78dp" android:height="5dp" android:left="24dp" android:top="186dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF98A2B3" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+</layer-list>

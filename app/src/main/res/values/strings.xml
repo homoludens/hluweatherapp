@@ -4,4 +4,26 @@
     <string name="notifications_blocked_title">Notifications are blocked</string>
     <string name="notifications_blocked_summary">Allow notifications in system settings to receive weather updates.</string>
     <string name="notifications_open_settings">Allow notifications</string>
+    <string name="small_weather_widget_name">HluWeather · Current weather</string>
+    <string name="small_weather_widget_description">Current conditions in a compact home-screen card.</string>
+    <string name="medium_weather_widget_name">HluWeather · Hourly forecast</string>
+    <string name="medium_weather_widget_description">Current conditions and upcoming hourly forecasts.</string>
+    <string name="weather_widget_loading">Loading weather…</string>
+    <string name="weather_widget_preview_location">Zaječar</string>
+    <string name="weather_widget_preview_temperature">23°</string>
+    <string name="weather_widget_preview_condition">Clear sky</string>
+    <string name="weather_widget_preview_feels_like">Feels like 24°</string>
+    <string name="weather_widget_preview_updated">Updated 11:17</string>
+    <string name="weather_widget_preview_refresh">Refresh</string>
+    <string name="weather_widget_preview_hour_22">22:00</string>
+    <string name="weather_widget_preview_hour_23">23:00</string>
+    <string name="weather_widget_preview_hour_00">00:00</string>
+    <string name="weather_widget_preview_hour_01">01:00</string>
+    <string name="weather_widget_preview_temperature_20">20°</string>
+    <string name="weather_widget_preview_temperature_18">18°</string>
+    <string name="weather_widget_preview_temperature_17">17°</string>
+    <string name="weather_widget_preview_temperature_16">16°</string>
+    <string name="weather_widget_preview_probability_0">0%</string>
+    <string name="weather_widget_preview_probability_10">10%</string>
+    <string name="weather_widget_preview_probability_20">20%</string>
 </resources>

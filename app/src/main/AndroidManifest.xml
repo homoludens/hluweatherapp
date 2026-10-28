@@ -20,6 +20,28 @@
             android:authorities="${applicationId}.androidx-startup"
             tools:node="remove" />
 
+        <receiver
+            android:name="net.droopia.hluweather.widget.SmallWeatherWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/small_weather_widget_provider" />
+        </receiver>
+
+        <receiver
+            android:name="net.droopia.hluweather.widget.MediumWeatherWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/medium_weather_widget_provider" />
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
