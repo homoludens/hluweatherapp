@@ -8,7 +8,9 @@ import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import org.junit.Assert.assertEquals
@@ -265,7 +267,8 @@ class WeatherWidgetRepositoryTest {
         locations: List<WeatherLocation> = emptyList()
     ): WeatherWidgetRequest? = WeatherWidgetRepository(
         settingsRepository = FakeSettingsRepository(settings),
-        locationRepository = FakeLocationRepository(locations, active, mode, passive)
+        locationRepository = FakeLocationRepository(locations, active, mode, passive),
+        weatherRepository = UnusedWeatherRepository
     ).resolveRequest()
 
     private fun savedLocation(
@@ -300,5 +303,14 @@ class WeatherWidgetRepositoryTest {
         override suspend fun delete(id: String) = Unit
         override suspend fun selectSaved(id: String) = Unit
         override suspend fun setTrackMe(enabled: Boolean) = Unit
+    }
+
+    private object UnusedWeatherRepository : WeatherRepository {
+        override suspend fun getForecast(
+            provider: WeatherProvider,
+            location: ActiveLocation
+        ): ForecastLoad = error("Request resolution must not fetch weather")
+
+        override suspend fun clearCache() = Unit
     }
 }

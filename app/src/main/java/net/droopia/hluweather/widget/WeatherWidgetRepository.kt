@@ -2,12 +2,15 @@ package net.droopia.hluweather.widget
 
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlin.time.Clock
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.LocationMode
+import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.currentLocationCacheKey
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
@@ -27,6 +30,26 @@ data class WeatherWidgetRequestIdentity(
     val location: WeatherWidgetLocationIdentity
 )
 
+/** A cache-backed render snapshot that also exposes the selection for later refresh work. */
+sealed interface WeatherWidgetSnapshot {
+    val settings: PersistedSettings
+
+    data class NoLocation(
+        override val settings: PersistedSettings
+    ) : WeatherWidgetSnapshot
+
+    data class NoWeather(
+        override val settings: PersistedSettings,
+        val request: WeatherWidgetRequest
+    ) : WeatherWidgetSnapshot
+
+    data class Available(
+        override val settings: PersistedSettings,
+        val request: WeatherWidgetRequest,
+        val weather: WeatherWidgetState
+    ) : WeatherWidgetSnapshot
+}
+
 sealed interface WeatherWidgetLocationIdentity {
     data class SavedLocation(
         val id: String,
@@ -45,10 +68,34 @@ sealed interface WeatherWidgetLocationIdentity {
 /** Resolves the app's current provider and location without acquiring or naming device locations. */
 class WeatherWidgetRepository(
     private val settingsRepository: SettingsRepository,
-    private val locationRepository: LocationRepository
+    private val locationRepository: LocationRepository,
+    private val weatherRepository: WeatherRepository,
+    private val clock: Clock = Clock.System
 ) {
-    suspend fun resolveRequest(): WeatherWidgetRequest? {
-        val snapshot = combine(
+    suspend fun resolveRequest(): WeatherWidgetRequest? = loadResolutionSnapshot().resolveRequest()
+
+    /** Reads the existing repository cache only; refreshes are owned by asynchronous work. */
+    suspend fun loadCachedState(): WeatherWidgetSnapshot {
+        val selection = loadResolutionSnapshot()
+        val request = selection.resolveRequest()
+            ?: return WeatherWidgetSnapshot.NoLocation(selection.settings)
+        val cached = weatherRepository.getLastCachedForecast(request.provider, request.location)
+            ?.takeIf { request.matchesIdentity(it.forecast) }
+            ?: return WeatherWidgetSnapshot.NoWeather(selection.settings, request)
+
+        return WeatherWidgetSnapshot.Available(
+            settings = selection.settings,
+            request = request,
+            weather = cached.toWeatherWidgetState(
+                settings = selection.settings,
+                locationName = request.locationName,
+                clock = clock
+            )
+        )
+    }
+
+    private suspend fun loadResolutionSnapshot(): ResolutionSnapshot {
+        return combine(
             settingsRepository.settings,
             locationRepository.locationMode,
             locationRepository.activeLocation,
@@ -57,11 +104,12 @@ class WeatherWidgetRepository(
         ) { settings, mode, active, passiveCurrent, savedLocations ->
             ResolutionSnapshot(settings, mode, active, passiveCurrent, savedLocations)
         }.first()
+    }
 
-        val location = when (snapshot.mode) {
-            LocationMode.SAVED_LOCATION -> snapshot.resolveSavedLocation()
-                ?.let(ActiveLocation::Saved)
-            LocationMode.TRACK_ME -> snapshot.resolveCurrentLocation()
+    private fun ResolutionSnapshot.resolveRequest(): WeatherWidgetRequest? {
+        val location = when (mode) {
+            LocationMode.SAVED_LOCATION -> resolveSavedLocation()?.let(ActiveLocation::Saved)
+            LocationMode.TRACK_ME -> resolveCurrentLocation()
         } ?: return null
 
         val name = when (location) {
@@ -69,7 +117,7 @@ class WeatherWidgetRepository(
             is ActiveLocation.Current -> CURRENT_LOCATION_NAME
         }
         return WeatherWidgetRequest(
-            provider = snapshot.settings.provider,
+            provider = settings.provider,
             location = location,
             locationName = name
         )
@@ -104,6 +152,27 @@ class WeatherWidgetRepository(
 
         private fun String.findValidSavedLocation(): WeatherLocation? =
             savedLocations.firstOrNull { it.id == this && it.hasValidCoordinates() }
+    }
+}
+
+private fun WeatherWidgetRequest.matchesIdentity(
+    forecast: WeatherForecast
+): Boolean {
+    if (forecast.provider != identity.provider) return false
+
+    val forecastLocation = forecast.location
+    return when (val requestedLocation = identity.location) {
+        is WeatherWidgetLocationIdentity.SavedLocation ->
+            forecastLocation.id == requestedLocation.id &&
+                forecastLocation.latitude == requestedLocation.latitude &&
+                forecastLocation.longitude == requestedLocation.longitude &&
+                forecastLocation.altitude == requestedLocation.altitude
+
+        is WeatherWidgetLocationIdentity.CurrentLocation ->
+            forecastLocation.id == "current" &&
+                GeoPoint(forecastLocation.latitude, forecastLocation.longitude)
+                    .currentLocationCacheKey() == requestedLocation.cacheLocationKey &&
+                forecastLocation.altitude == requestedLocation.altitude
     }
 }
 
