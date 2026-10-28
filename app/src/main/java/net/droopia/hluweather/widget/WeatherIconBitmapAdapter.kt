@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
 /** Draws shared Compose vectors into small, reusable Glance-compatible bitmaps. */
 object WeatherIconBitmapAdapter {
     internal const val MAX_CACHE_ENTRIES = 32
-    private const val MAX_ICON_DIMENSION_PX = 192
+    internal const val MAX_ICON_DIMENSION_PX = 192
 
     private data class CacheKey(
         val imageVector: ImageVector,

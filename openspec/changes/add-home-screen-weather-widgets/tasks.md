@@ -36,7 +36,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 
 ## 5. Glance layouts, interactions, and launcher registration
 
-- [ ] 5.1 [low] Implement shared rounded card, header, refresh target, weather-icon, current-weather, and status components using existing theme tokens and accessible descriptions; verify translated rendering tests for light/dark, empty, refreshing, and stale states show readable text without emoji or duplicate spoken icons.
+- [x] 5.1 [low] Implement shared rounded card, header, refresh target, weather-icon, current-weather, and status components using existing theme tokens and accessible descriptions; verify translated rendering tests for light/dark, empty, refreshing, and stale states show readable text without emoji or duplicate spoken icons.
 - [ ] 5.2 [low] Implement `SmallWeatherWidget` with responsive location/icon/temperature priorities and optional condition/feels-like rows, with no hourly strip; verify production-component renders at minimum, compact, and normal sizes preserve priorities and ellipsize a long location without hiding refresh.
 - [ ] 5.3 [low] Implement `MediumWeatherWidget` with the current block near one third width, conditional update timestamp, vertical rules, and three-to-five hourly columns with accented droplet/probability values; verify production-component renders cover all column branches, missing probabilities, no future hours, and no horizontal overflow.
 - [ ] 5.4 [low] Wire card/location `actionStartActivity` to widget-specific main-weather entry and refresh to its independent callback; verify interaction tests cover cold launch, an app already on Settings or another screen, refresh without Activity launch, and unchanged ordinary app launch behavior.
