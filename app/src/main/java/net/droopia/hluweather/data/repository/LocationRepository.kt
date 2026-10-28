@@ -4,14 +4,18 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.ActiveLocation
@@ -21,6 +25,8 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import java.io.IOException
 
 interface LocationRepository {
+    /** Passive snapshot only: never restores or requests an active device fix. */
+    val lastKnownCurrentLocation: Flow<ActiveLocation.Current?> get() = flowOf(null)
     val locations: Flow<List<WeatherLocation>>
     val activeLocation: Flow<ActiveLocation?>
     val locationMode: Flow<LocationMode>
@@ -42,6 +48,20 @@ class DataStoreLocationRepository(
 ) : LocationRepository {
 
     private val currentLocation = kotlinx.coroutines.flow.MutableStateFlow<ActiveLocation.Current?>(null)
+
+    override val lastKnownCurrentLocation: Flow<ActiveLocation.Current?> = dataStore.data
+        .catch { error -> if (error is IOException) emit(emptyPreferences()) else throw error }
+        .map { preferences ->
+            try {
+                val latitude = preferences[lastLatitudeKey]
+                val longitude = preferences[lastLongitudeKey]
+                if (latitude != null && longitude != null && validCoordinates(latitude, longitude)) {
+                    ActiveLocation.Current(GeoPoint(latitude, longitude), preferences[lastAltitudeKey])
+                } else null
+            } catch (_: ClassCastException) {
+                null
+            }
+        }.distinctUntilChanged()
 
     private val snapshot = dataStore.data
         .catch { exception ->
@@ -156,6 +176,19 @@ class DataStoreLocationRepository(
 
     override suspend fun setCurrentLocation(point: GeoPoint, altitude: Int?) {
         currentLocation.value = ActiveLocation.Current(point, altitude)
+        if (!validCoordinates(point.latitude, point.longitude)) return
+        try {
+            dataStore.edit { preferences ->
+                preferences[lastLatitudeKey] = point.latitude
+                preferences[lastLongitudeKey] = point.longitude
+                if (altitude == null) preferences.remove(lastAltitudeKey)
+                else preferences[lastAltitudeKey] = altitude
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: IOException) {
+            // A storage failure must not discard the foreground app's valid fix.
+        }
     }
 
     private fun Preferences.decodeLocations(): List<WeatherLocation> =
@@ -200,3 +233,9 @@ private val locationsKey = stringPreferencesKey("locations.saved")
 private val selectedLocationIdKey = stringPreferencesKey("settings.selected_location_id")
 private val locationModeKey = stringPreferencesKey("settings.location_mode")
 private val legacyTrackMeEnabledKey = booleanPreferencesKey("settings.track_me_enabled")
+private val lastLatitudeKey = doublePreferencesKey("location.last_current_latitude")
+private val lastLongitudeKey = doublePreferencesKey("location.last_current_longitude")
+private val lastAltitudeKey = intPreferencesKey("location.last_current_altitude")
+
+private fun validCoordinates(latitude: Double, longitude: Double): Boolean =
+    latitude.isFinite() && longitude.isFinite() && latitude in -90.0..90.0 && longitude in -180.0..180.0

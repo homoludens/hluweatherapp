@@ -8,7 +8,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 
 - [x] 1.1 [low] Add `WeatherRepository.getLastCachedForecast` and implement matching stale-cache access in `CachingWeatherRepository` without changing the existing fresh-cache API; verify `CachingWeatherRepositoryTest` covers the one-hour boundary, old cache, zero network calls on reads, provider/location/altitude mismatch, and cancellation.
 - [x] 1.2 [low] Expose distinct read-only cache-change observation through the shared cache/repository without a second forecast store or LRU write loop; verify focused cache tests cover put, clear, unrelated preference writes, and stable observation after a cache read.
-- [ ] 1.3 [low] Add passive durable last-known-current-location access, persisting valid fixes already supplied to `setCurrentLocation` without restoring the main app's active fix; verify focused location tests cover restart, absent/corrupt/invalid fixes, saved selection, and unchanged `activeLocation` behavior.
+- [x] 1.3 [low] Add passive durable last-known-current-location access, persisting valid fixes already supplied to `setCurrentLocation` without restoring the main app's active fix; verify focused location tests cover restart, absent/corrupt/invalid fixes, saved selection, and unchanged `activeLocation` behavior.
 
 ## 2. Shared visual resources and pure widget presentation
 

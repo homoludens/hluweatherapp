@@ -1,11 +1,17 @@
 package net.droopia.hluweather.data.repository
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.cancellation.CancellationException
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.LocationMode
@@ -14,6 +20,7 @@ import net.droopia.hluweather.ui.settings.DataStoreSettingsRepository
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -168,6 +175,105 @@ class LocationRepositoryTest {
         file: java.io.File = temporaryFolder.newFile("locations.preferences_pb")
     ): LocationRepository {
         return DataStoreLocationRepository(dataStore(scope, file))
+    }
+
+    @Test
+    fun passive_fix_survives_restart_without_restoring_active_fix_or_changing_selection() = runTest {
+        val store = dataStore(backgroundScope, temporaryFolder.newFile("passive.preferences_pb"))
+        val repository = DataStoreLocationRepository(store)
+        repository.add(belgrade)
+        repository.add(trieste)
+        repository.selectSaved(trieste.id)
+        repository.setTrackMe(true)
+        val fix = ActiveLocation.Current(GeoPoint(45.0, 20.0), 123)
+        repository.setCurrentLocation(fix.point, fix.altitude)
+        assertEquals(fix, repository.activeLocation.first())
+
+        val recreated = DataStoreLocationRepository(store)
+        assertNull(recreated.activeLocation.first())
+        assertEquals(fix, recreated.lastKnownCurrentLocation.first())
+        recreated.setTrackMe(false)
+        assertEquals(trieste, (recreated.activeLocation.first() as ActiveLocation.Saved).location)
+        repository.setCurrentLocation(fix.point, null)
+        assertNull(recreated.lastKnownCurrentLocation.first()?.altitude)
+    }
+
+    @Test
+    fun missing_partial_corrupt_and_invalid_passive_fixes_are_ignored() = runTest {
+        val store = dataStore(backgroundScope, temporaryFolder.newFile("invalid.preferences_pb"))
+        val repository = DataStoreLocationRepository(store)
+        assertNull(repository.lastKnownCurrentLocation.first())
+
+        store.edit {
+            it[doublePreferencesKey("location.last_current_latitude")] = 45.0
+        }
+        assertNull(repository.lastKnownCurrentLocation.first())
+
+        listOf(
+            GeoPoint(Double.NaN, 20.0),
+            GeoPoint(91.0, 20.0),
+            GeoPoint(0.0, 181.0)
+        ).forEach { point ->
+            store.edit {
+                it[doublePreferencesKey("location.last_current_latitude")] = point.latitude
+                it[doublePreferencesKey("location.last_current_longitude")] = point.longitude
+            }
+            assertNull(repository.lastKnownCurrentLocation.first())
+            repository.setCurrentLocation(point)
+            assertNull(repository.lastKnownCurrentLocation.first())
+        }
+
+        store.edit {
+            it[stringPreferencesKey("location.last_current_latitude")] = "corrupt"
+            it[doublePreferencesKey("location.last_current_longitude")] = 20.0
+        }
+        assertNull(repository.lastKnownCurrentLocation.first())
+    }
+
+    @Test
+    fun storage_failure_does_not_discard_in_memory_fix() = runTest {
+        val repository = repositoryWithFailingWrites(backgroundScope, IOException("write failed"))
+        val fix = ActiveLocation.Current(GeoPoint(45.0, 20.0), 123)
+
+        repository.setCurrentLocation(fix.point, fix.altitude)
+
+        assertEquals(fix, repository.activeLocation.first())
+        assertNull(repository.lastKnownCurrentLocation.first())
+    }
+
+    @Test
+    fun cancellation_does_not_discard_in_memory_fix_and_is_propagated() = runTest {
+        val cancellation = CancellationException("cancelled")
+        val repository = repositoryWithFailingWrites(backgroundScope, cancellation)
+        val fix = ActiveLocation.Current(GeoPoint(45.0, 20.0), 123)
+        var propagated = false
+
+        try {
+            repository.setCurrentLocation(fix.point, fix.altitude)
+        } catch (error: CancellationException) {
+            propagated = error === cancellation
+        }
+
+        assertTrue(propagated)
+        assertEquals(fix, repository.activeLocation.first())
+        assertNull(repository.lastKnownCurrentLocation.first())
+    }
+
+    private suspend fun repositoryWithFailingWrites(
+        scope: CoroutineScope,
+        failure: Throwable
+    ): DataStoreLocationRepository {
+        val store = dataStore(scope, temporaryFolder.newFile("failing.preferences_pb"))
+        DataStoreLocationRepository(store).setTrackMe(true)
+        return DataStoreLocationRepository(FailingUpdateDataStore(store.data, failure))
+    }
+
+    private class FailingUpdateDataStore(
+        override val data: Flow<Preferences>,
+        private val failure: Throwable
+    ) : DataStore<Preferences> {
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+            throw failure
     }
 
     private fun dataStore(scope: CoroutineScope, file: java.io.File) =
