@@ -1,5 +1,7 @@
 package net.droopia.hluweather.widget
 
+import java.util.TimeZone
+import kotlin.time.Clock
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast
@@ -23,12 +25,15 @@ class WeatherWidgetStateTest {
     @Test
     fun maps_celsius_and_fahrenheit_using_shared_rounding_and_spoken_units() {
         val load = ForecastLoad(forecast())
+        val clock = fixedClock(Instant.parse("2026-10-28T09:00:00Z"))
 
         val celsius = load.toWeatherWidgetState(
-            settings = PersistedSettings(temperatureUnit = TemperatureUnit.CELSIUS)
+            settings = PersistedSettings(temperatureUnit = TemperatureUnit.CELSIUS),
+            clock = clock
         )
         val fahrenheit = load.toWeatherWidgetState(
-            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT)
+            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT),
+            clock = clock
         )
 
         assertEquals("Zaječar", celsius.locationName)
@@ -49,7 +54,10 @@ class WeatherWidgetStateTest {
     @Test
     fun null_apparent_temperature_is_omitted() {
         val state = ForecastLoad(forecast(apparentTemperature = null))
-            .toWeatherWidgetState(PersistedSettings())
+            .toWeatherWidgetState(
+                settings = PersistedSettings(),
+                clock = fixedClock(Instant.parse("2026-10-28T09:00:00Z"))
+            )
 
         assertNull(state.apparentTemperatureText)
         assertNull(state.apparentTemperatureContentDescription)
@@ -60,7 +68,10 @@ class WeatherWidgetStateTest {
         val missing = hour(probability = null)
         val zero = hour(probability = 0, time = Instant.parse("2026-10-28T13:00:00Z"))
         val state = ForecastLoad(forecast(hours = listOf(missing, zero)))
-            .toWeatherWidgetState(PersistedSettings())
+            .toWeatherWidgetState(
+                settings = PersistedSettings(),
+                clock = fixedClock(Instant.parse("2026-10-28T11:00:00Z"))
+            )
 
         assertEquals("—", state.hours[0].precipitationProbabilityText)
         assertEquals("Rain probability unavailable", state.hours[0].precipitationProbabilityContentDescription)
@@ -79,7 +90,8 @@ class WeatherWidgetStateTest {
 
         val state = load.toWeatherWidgetState(
             settings = PersistedSettings(),
-            locationName = "Current location"
+            locationName = "Current location",
+            clock = fixedClock(Instant.parse("2026-10-28T09:00:00Z"))
         )
 
         assertEquals("Current location", state.locationName)
@@ -93,10 +105,150 @@ class WeatherWidgetStateTest {
         assertFalse(state.hours.single().isDay ?: true)
     }
 
+    @Test
+    fun selects_future_hours_by_instant_sorts_them_and_caps_at_five_across_midnight() {
+        val forecast = forecast(
+            fetchedAt = Instant.parse("2026-10-28T20:00:00Z"),
+            hours = listOf(
+                hour(time = Instant.parse("2026-10-29T02:00:00Z")),
+                hour(time = Instant.parse("2026-10-28T20:00:00Z")),
+                hour(time = Instant.parse("2026-10-29T01:00:00Z")),
+                hour(time = Instant.parse("2026-10-28T21:00:00Z")),
+                hour(time = Instant.parse("2026-10-28T20:30:00Z")),
+                hour(time = Instant.parse("2026-10-28T23:00:00Z")),
+                hour(time = Instant.parse("2026-10-28T22:00:00Z")),
+                hour(time = Instant.parse("2026-10-29T00:00:00Z"))
+            )
+        )
+
+        val state = ForecastLoad(forecast).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-10-28T20:30:00Z"))
+        )
+
+        assertEquals(
+            listOf(
+                Instant.parse("2026-10-28T21:00:00Z"),
+                Instant.parse("2026-10-28T22:00:00Z"),
+                Instant.parse("2026-10-28T23:00:00Z"),
+                Instant.parse("2026-10-29T00:00:00Z"),
+                Instant.parse("2026-10-29T01:00:00Z")
+            ),
+            state.hours.map { it.time }
+        )
+        assertEquals(listOf("22:00", "23:00", "00:00", "01:00", "02:00"), state.hours.map { it.timeText })
+    }
+
+    @Test
+    fun hourly_and_update_labels_use_forecast_zone_instead_of_device_zone() = withDeviceTimeZone("America/Los_Angeles") {
+        val fetchedAt = Instant.parse("2026-10-28T21:17:00Z")
+        val state = ForecastLoad(
+            forecast(
+                fetchedAt = fetchedAt,
+                hours = listOf(hour(time = Instant.parse("2026-10-28T22:00:00Z")))
+            )
+        ).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-10-28T20:30:00Z"))
+        )
+
+        assertEquals("23:00", state.hours.single().timeText)
+        assertEquals("Wed, Oct 28, 2026 • 22:17", state.lastWeatherUpdateText)
+        assertEquals(fetchedAt, state.lastWeatherUpdate)
+    }
+
+    @Test
+    fun daylight_saving_repeated_and_skipped_hours_follow_sorted_instants() {
+        val repeated = ForecastLoad(
+            forecast(
+                timezone = "Europe/Belgrade",
+                hours = listOf(
+                    hour(time = Instant.parse("2026-10-25T01:30:00Z")),
+                    hour(time = Instant.parse("2026-10-25T00:30:00Z")),
+                    hour(time = Instant.parse("2026-10-25T01:00:00Z"))
+                )
+            )
+        ).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-10-25T00:00:00Z"))
+        )
+        val skipped = ForecastLoad(
+            forecast(
+                timezone = "Europe/Belgrade",
+                hours = listOf(
+                    hour(time = Instant.parse("2026-03-29T01:30:00Z")),
+                    hour(time = Instant.parse("2026-03-29T00:30:00Z")),
+                    hour(time = Instant.parse("2026-03-29T01:00:00Z"))
+                )
+            )
+        ).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-03-29T00:00:00Z"))
+        )
+
+        assertEquals(
+            listOf(Instant.parse("2026-10-25T00:30:00Z"), Instant.parse("2026-10-25T01:00:00Z"), Instant.parse("2026-10-25T01:30:00Z")),
+            repeated.hours.map { it.time }
+        )
+        assertEquals(listOf("02:30", "02:00", "02:30"), repeated.hours.map { it.timeText })
+        assertEquals(
+            listOf(Instant.parse("2026-03-29T00:30:00Z"), Instant.parse("2026-03-29T01:00:00Z"), Instant.parse("2026-03-29T01:30:00Z")),
+            skipped.hours.map { it.time }
+        )
+        assertEquals(listOf("01:30", "03:00", "03:30"), skipped.hours.map { it.timeText })
+    }
+
+    @Test
+    fun invalid_forecast_zone_falls_back_to_system_zone_for_both_timestamps() = withDeviceTimeZone("Asia/Tokyo") {
+        val state = ForecastLoad(
+            forecast(
+                fetchedAt = Instant.parse("2026-10-28T20:15:00Z"),
+                timezone = "Invalid/Forecast-Zone",
+                hours = listOf(hour(time = Instant.parse("2026-10-28T21:00:00Z")))
+            )
+        ).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-10-28T20:00:00Z"))
+        )
+
+        assertEquals("06:00", state.hours.single().timeText)
+        assertEquals("Thu, Oct 29, 2026 • 05:15", state.lastWeatherUpdateText)
+    }
+
+    @Test
+    fun fewer_future_hours_are_not_repeated_and_expired_stale_cache_keeps_original_timestamp() {
+        val fetchedAt = Instant.parse("2026-10-28T10:17:00Z")
+        val hours = listOf(
+            hour(time = Instant.parse("2026-10-28T21:00:00Z")),
+            hour(time = Instant.parse("2026-10-28T23:00:00Z"))
+        )
+        val clock = fixedClock(Instant.parse("2026-10-28T20:00:00Z"))
+        val partial = ForecastLoad(forecast(fetchedAt = fetchedAt, hours = hours), isStale = true)
+            .toWeatherWidgetState(settings = PersistedSettings(), clock = clock)
+        val expired = ForecastLoad(
+            forecast(
+                fetchedAt = fetchedAt,
+                hours = hours.map { it.copy(time = Instant.parse("2026-10-28T19:00:00Z")) }
+            ),
+            isStale = true
+        ).toWeatherWidgetState(settings = PersistedSettings(), clock = clock)
+
+        assertEquals(2, partial.hours.size)
+        assertEquals(listOf("22:00", "00:00"), partial.hours.map { it.timeText })
+        assertEquals(fetchedAt, partial.lastWeatherUpdate)
+        assertEquals("Wed, Oct 28, 2026 • 11:17", partial.lastWeatherUpdateText)
+        assertTrue(partial.isStale)
+        assertTrue(expired.hours.isEmpty())
+        assertEquals("22°C", expired.temperatureText)
+        assertEquals(fetchedAt, expired.lastWeatherUpdate)
+        assertTrue(expired.isStale)
+    }
+
     private fun forecast(
         fetchedAt: Instant = Instant.parse("2026-10-28T10:00:00Z"),
         apparentTemperature: Double? = 20.2,
-        hours: List<HourForecast> = listOf(hour())
+        hours: List<HourForecast> = listOf(hour()),
+        timezone: String = "Europe/Belgrade"
     ) = WeatherForecast(
         location = WeatherLocation("zajecar", "Zaječar", 43.9, 20.3),
         provider = WeatherProvider.OPEN_METEO,
@@ -123,7 +275,7 @@ class WeatherWidgetStateTest {
             )
         ),
         moonPhase = 0.5,
-        timezone = "Europe/Belgrade"
+        timezone = timezone
     )
 
     private fun hour(
@@ -140,4 +292,18 @@ class WeatherWidgetStateTest {
         condition = WeatherCondition.PARTLY_CLOUDY,
         isDay = false
     )
+
+    private fun fixedClock(instant: Instant): Clock = object : Clock {
+        override fun now(): Instant = instant
+    }
+
+    private fun withDeviceTimeZone(zoneId: String, block: () -> Unit) {
+        val original = TimeZone.getDefault()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
+            block()
+        } finally {
+            TimeZone.setDefault(original)
+        }
+    }
 }
