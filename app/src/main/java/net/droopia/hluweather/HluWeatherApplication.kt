@@ -1,6 +1,7 @@
 package net.droopia.hluweather
 
 import android.app.Application
+import android.content.res.Configuration as AndroidConfiguration
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import io.ktor.client.HttpClient
@@ -67,11 +68,13 @@ import net.droopia.hluweather.widget.WeatherWidgetUpdaterOwner
 import net.droopia.hluweather.widget.WeatherWidgetWorker
 import net.droopia.hluweather.widget.WeatherWidgetWorkerDependencies
 import net.droopia.hluweather.widget.WeatherWidgetRefreshCoordinator
+import net.droopia.hluweather.widget.WidgetSystemThemeChangeHandler
 import net.droopia.hluweather.widget.startWidgetReconciliation
 
 class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidgetUpdaterOwner {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var widgetSystemThemeChangeHandler: WidgetSystemThemeChangeHandler? = null
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -80,6 +83,11 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
 
     override fun onCreate() {
         super.onCreate()
+        widgetSystemThemeChangeHandler = WidgetSystemThemeChangeHandler(
+            initialConfiguration = resources.configuration,
+            refreshWidgetInventory = weatherWidgetDispatcher::refreshInventory,
+            updateAllWidgets = weatherWidgetDispatcher::updateAllWidgets
+        )
         if (!WorkManager.isInitialized()) {
             WorkManager.initialize(this, workManagerConfiguration)
         }
@@ -98,6 +106,11 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
             enqueueSelectionRefresh = weatherWidgetUpdater::enqueueSelectionRefresh,
             updateAllWidgets = { weatherWidgetDispatcher.updateAllWidgets() }
         )
+    }
+
+    override fun onConfigurationChanged(newConfig: AndroidConfiguration) {
+        super.onConfigurationChanged(newConfig)
+        widgetSystemThemeChangeHandler?.onConfigurationChanged(newConfig)
     }
 
     private val httpClient: HttpClient by lazy {

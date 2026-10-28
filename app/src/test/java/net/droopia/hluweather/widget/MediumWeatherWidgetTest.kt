@@ -110,6 +110,20 @@ class MediumWeatherWidgetTest {
         }
     }
 
+    @Config(sdk = [28, 34])
+    @Test
+    fun system_configuration_change_rethemes_medium_widget_but_explicit_preferences_win() {
+        val system = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.SYSTEM))
+        assertRenderedTheme(render(system, 400f, 160f, systemDark = false), dark = false)
+        assertRenderedTheme(render(system, 400f, 160f, systemDark = true), dark = true)
+
+        val light = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.LIGHT))
+        assertRenderedTheme(render(light, 400f, 160f, systemDark = true), dark = false)
+
+        val dark = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.DARK))
+        assertRenderedTheme(render(dark, 400f, 160f, systemDark = false), dark = true)
+    }
+
     @Test
     fun long_location_ellipsizes_without_hiding_medium_refresh_or_update_metadata() {
         val longName = "A very long location name that must leave room for controls"
@@ -357,6 +371,15 @@ class MediumWeatherWidgetTest {
         val actual = findViews(root).filterIsInstance<TextView>()
             .first { it.text.toString() == "23°C" }.currentTextColor
         assertEquals(expected, actual)
+    }
+
+    private fun assertRenderedTheme(root: View, dark: Boolean) {
+        assertCurrentTemperatureColor(root, dark)
+        assertDividers(
+            root,
+            expectedCount = 5,
+            expectedColor = hluMaterialColorScheme(darkTheme = dark).outlineVariant.toArgb()
+        )
     }
 
     private fun hasSmallTintedBitmap(root: View, expectedColor: Int): Boolean {

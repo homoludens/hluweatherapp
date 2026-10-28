@@ -1,5 +1,6 @@
 package net.droopia.hluweather
 
+import android.content.res.Configuration
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
 import androidx.work.WorkInfo
@@ -70,6 +71,28 @@ class HluWeatherApplicationTest {
         ).forEach { workName ->
             assertTrue(
                 workManager.getWorkInfosForUniqueWork(workName).get()
+                    .none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+            )
+        }
+    }
+
+    @Test
+    fun system_theme_configuration_change_without_widgets_does_not_enqueue_weather_work() {
+        val application = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val configuration = Configuration(application.resources.configuration).apply {
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                Configuration.UI_MODE_NIGHT_YES
+        }
+
+        application.onConfigurationChanged(configuration)
+
+        listOf(
+            WeatherWidgetUpdater.PERIODIC_REFRESH_WORK_NAME,
+            WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME,
+            WeatherWidgetUpdater.SELECTION_REFRESH_WORK_NAME
+        ).forEach { workName ->
+            assertTrue(
+                WorkManager.getInstance(application).getWorkInfosForUniqueWork(workName).get()
                     .none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
             )
         }

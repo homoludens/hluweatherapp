@@ -16,6 +16,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.composeForPreview
 import androidx.glance.appwidget.provideContent
+import androidx.compose.ui.graphics.toArgb
 import kotlin.math.roundToInt
 import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
@@ -46,6 +47,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import net.droopia.hluweather.ui.theme.DarkHluColors
+import net.droopia.hluweather.ui.theme.LightHluColors
+import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -91,6 +95,20 @@ class SmallWeatherWidgetTest {
             assertFalse("small widget never shows hourly content", hasText(view, "22:00"))
             assertFalse("small widget never shows precipitation columns", hasText(view, "60%"))
         }
+    }
+
+    @Config(sdk = [28, 34])
+    @Test
+    fun system_configuration_change_rethemes_small_widget_but_explicit_preferences_win() {
+        val system = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.SYSTEM))
+        assertRenderedTheme(render(system, 200f, 160f, systemDark = false), dark = false)
+        assertRenderedTheme(render(system, 200f, 160f, systemDark = true), dark = true)
+
+        val light = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.LIGHT))
+        assertRenderedTheme(render(light, 200f, 160f, systemDark = true), dark = false)
+
+        val dark = availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.DARK))
+        assertRenderedTheme(render(dark, 200f, 160f, systemDark = false), dark = true)
     }
 
     @Test
@@ -273,6 +291,34 @@ class SmallWeatherWidgetTest {
     private fun hasWeatherBitmap(root: View): Boolean = findViews(root)
         .filterIsInstance<ImageView>()
         .any { it.drawable is BitmapDrawable }
+
+    private fun assertRenderedTheme(root: View, dark: Boolean) {
+        val temperature = findViews(root).filterIsInstance<TextView>()
+            .first { it.text.toString().contains("°") }
+        assertEquals(hluMaterialColorScheme(dark).onSurface.toArgb(), temperature.currentTextColor)
+
+        val colors = if (dark) DarkHluColors else LightHluColors
+        val expectedIconTint = net.droopia.hluweather.ui.components
+            .weatherIconSpec(WeatherCondition.CLEAR, true, colors).tint.toArgb()
+        assertTrue(
+            "small widget icon should use the ${if (dark) "dark" else "light"} theme tint",
+            findViews(root).filterIsInstance<ImageView>().mapNotNull {
+                (it.drawable as? BitmapDrawable)?.bitmap
+            }.any { bitmap -> bitmap.hasPixelColor(expectedIconTint) }
+        )
+    }
+
+    private fun android.graphics.Bitmap.hasPixelColor(expectedColor: Int): Boolean {
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val color = getPixel(x, y)
+                if (color ushr 24 > 32 && (color and 0x00FFFFFF) == (expectedColor and 0x00FFFFFF)) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
     private fun assertText(root: View, expected: String) {
         assertTrue("expected translated TextView '$expected'", hasText(root, expected))
