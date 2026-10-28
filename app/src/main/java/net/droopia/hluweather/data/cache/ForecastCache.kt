@@ -87,9 +87,13 @@ class ForecastCache(
         dataStore.edit { it.remove(entriesKey) }
     }
 
-    private fun Preferences.decodeEntries(): List<CacheEntry> = this[entriesKey]
-        ?.let { serialized -> runCatching { json.decodeFromString<List<CacheEntry>>(serialized) }.getOrDefault(emptyList()) }
-        ?: emptyList()
+    private fun Preferences.decodeEntries(): List<CacheEntry> = try {
+        this[entriesKey]
+            ?.let { serialized -> runCatching { json.decodeFromString<List<CacheEntry>>(serialized) }.getOrDefault(emptyList()) }
+            ?: emptyList()
+    } catch (_: ClassCastException) {
+        emptyList()
+    }
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true }

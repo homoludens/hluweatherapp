@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.BackoffPolicy
 import androidx.work.NetworkType
+import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.Worker
@@ -23,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.Executors
+import kotlinx.coroutines.runBlocking
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -126,20 +128,50 @@ class WeatherWidgetUpdaterTest {
     }
 
     @Test
-    fun no_installed_widgets_means_no_periodic_or_manual_work() {
+    fun no_installed_widgets_means_no_periodic_or_manual_work() = runBlocking {
         updater.reconcile()
         updater.enqueueManualRefresh()
+        updater.enqueueSelectionRefresh()
 
         assertTrue(periodicWork().isEmpty())
         assertTrue(manualWork().isEmpty())
+        assertTrue(selectionWork().isEmpty())
     }
 
     @Test
-    fun last_widget_removal_across_sizes_cancels_both_widget_work_names() {
+    fun selection_refresh_is_coalesced_and_does_not_force_manual_fetch() = runBlocking {
+        smallWidgetIds = setOf(1)
+        updater.enqueueSelectionRefresh()
+        val first = selectionWork().single()
+        updater.enqueueSelectionRefresh()
+        assertEquals(first.id, selectionWork().single().id)
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val spec = executor.submit<androidx.work.impl.model.WorkSpec> {
+                val database = WorkManagerImpl::class.java.getMethod("getWorkDatabase").invoke(workManager)
+                val dao = database.javaClass.getMethod("workSpecDao").invoke(database) as androidx.work.impl.model.WorkSpecDao
+                dao.getWorkSpec(first.id.toString())!!
+            }.get()
+            assertFalse(spec.input.getBoolean(WeatherWidgetWorker.INPUT_MANUAL, false))
+        } finally { executor.shutdown() }
+    }
+
+    @Test
+    fun running_selection_gets_only_one_followup_to_cover_late_identity_changes() {
+        assertEquals(ExistingWorkPolicy.KEEP, selectionWorkPolicy(emptyList()))
+        assertEquals(ExistingWorkPolicy.APPEND_OR_REPLACE, selectionWorkPolicy(listOf(WorkInfo.State.RUNNING)))
+        assertEquals(null, selectionWorkPolicy(listOf(WorkInfo.State.RUNNING, WorkInfo.State.BLOCKED)))
+        assertEquals(null, selectionWorkPolicy(listOf(WorkInfo.State.ENQUEUED)))
+        assertEquals(ExistingWorkPolicy.KEEP, selectionWorkPolicy(listOf(WorkInfo.State.CANCELLED)))
+    }
+
+    @Test
+    fun last_widget_removal_across_sizes_cancels_both_widget_work_names() = runBlocking {
         smallWidgetIds = setOf(10)
         mediumWidgetIds = setOf(20)
         updater.reconcile()
         updater.enqueueManualRefresh()
+        updater.enqueueSelectionRefresh()
 
         smallWidgetIds = emptySet()
         updater.reconcile()
@@ -151,6 +183,7 @@ class WeatherWidgetUpdaterTest {
 
         assertEquals(WorkInfo.State.CANCELLED, periodicWork().single().state)
         assertEquals(WorkInfo.State.CANCELLED, manualWork().single().state)
+        assertEquals(WorkInfo.State.CANCELLED, selectionWork().single().state)
     }
 
     private fun periodicWork() = workManager
@@ -159,6 +192,10 @@ class WeatherWidgetUpdaterTest {
 
     private fun manualWork() = workManager
         .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
+        .get()
+
+    private fun selectionWork() = workManager
+        .getWorkInfosForUniqueWork(WeatherWidgetUpdater.SELECTION_REFRESH_WORK_NAME)
         .get()
 
     private val notificationWorkNames = setOf(

@@ -1,7 +1,9 @@
 package net.droopia.hluweather.widget
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
@@ -81,6 +83,13 @@ class WeatherWidgetRepository(
 ) {
     suspend fun resolveRequest(): WeatherWidgetRequest? = loadResolutionSnapshot().resolveRequest()
 
+    internal fun observeSelection(): Flow<Pair<PersistedSettings, WeatherWidgetRequest?>> =
+        observeResolution().map { it.settings to it.resolveRequest() }
+
+    internal fun observeCachedForecast(request: WeatherWidgetRequest) =
+        weatherRepository.observeCachedForecast(request.provider, request.location)
+            .map { it?.takeIf(request::matchesIdentity) }
+
     /** Called by refresh work; the caller owns networking and cancellation cleanup. */
     suspend fun beginRefresh(request: WeatherWidgetRequest): WidgetRefreshAttempt =
         refreshMetadata.start(request.identity, clock.now())
@@ -108,8 +117,12 @@ class WeatherWidgetRepository(
 
         // Selection may change while storage is being read. Never label an obsolete result as current.
         val latest = loadResolutionSnapshot()
-        if (latest != selection) {
-            val current = latest.resolveRequest() ?: return WeatherWidgetSnapshot.NoLocation(latest.settings)
+        val current = latest.resolveRequest()
+        if (current?.identity != request.identity || current.locationName != request.locationName ||
+            latest.settings.temperatureUnit != selection.settings.temperatureUnit ||
+            latest.settings.themeMode != selection.settings.themeMode
+        ) {
+            current ?: return WeatherWidgetSnapshot.NoLocation(latest.settings)
             return WeatherWidgetSnapshot.NoWeather(latest.settings, current)
         }
         if (cached == null) return WeatherWidgetSnapshot.NoWeather(selection.settings, request, refresh)
@@ -128,8 +141,10 @@ class WeatherWidgetRepository(
         )
     }
 
-    private suspend fun loadResolutionSnapshot(): ResolutionSnapshot {
-        return combine(
+    private suspend fun loadResolutionSnapshot(): ResolutionSnapshot = observeResolution().first()
+
+    private fun observeResolution(): Flow<ResolutionSnapshot> =
+        combine(
             settingsRepository.settings,
             locationRepository.locationMode,
             locationRepository.activeLocation,
@@ -137,8 +152,7 @@ class WeatherWidgetRepository(
             locationRepository.locations
         ) { settings, mode, active, passiveCurrent, savedLocations ->
             ResolutionSnapshot(settings, mode, active, passiveCurrent, savedLocations)
-        }.first()
-    }
+        }
 
     private fun ResolutionSnapshot.resolveRequest(): WeatherWidgetRequest? {
         val location = when (mode) {

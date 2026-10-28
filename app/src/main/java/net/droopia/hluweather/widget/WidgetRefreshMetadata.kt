@@ -107,7 +107,7 @@ private fun WeatherWidgetRequestIdentity.fingerprint(): String {
     return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }
 
-private val REFRESH_LOADING_TTL = 15.minutes
+internal val REFRESH_LOADING_TTL = 15.minutes
 private val identityKey = stringPreferencesKey("widget.refresh.identity")
 private val tokenKey = stringPreferencesKey("widget.refresh.token")
 private val startKey = longPreferencesKey("widget.refresh.start")
