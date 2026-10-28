@@ -23,7 +23,7 @@ High-complexity tasks are limited to interrupted-refresh recovery, concurrent re
 
 - [x] 3.1 [low] Implement `WeatherWidgetRepository` resolution using canonical location mode, saved selection, live/passive Track Me fixes, and saved-location fallback; verify fake-repository tests cover all fallbacks, renamed/deleted locations, no locations, and no calls to device location or geocoding.
 - [x] 3.2 [low] Implement cache-first state loading and honest no-location/no-weather states with provider/location identity validation; verify tests can render persisted old weather after repository/process recreation while the fake network is blocked or failing.
-- [ ] 3.3 [high] Implement small identity-keyed refresh metadata with bounded loading lifetime and optional immediate live-result handoff, not duplicated durable forecasts; verify tests cover preserved timestamps, stale repository results, persistence failure, and recovery from interrupted refresh metadata.
+- [x] 3.3 [high] Implement small identity-keyed refresh metadata with bounded loading lifetime and optional immediate live-result handoff, not duplicated durable forecasts; verify tests cover preserved timestamps, stale repository results, persistence failure, and recovery from interrupted refresh metadata.
 - [ ] 3.4 [high] Implement a coordinator that serializes widget refreshes, coalesces repeated same-request taps, and rechecks the latest identity before publishing; verify coroutine tests cover simultaneous periodic/manual requests, provider/location changes during a suspended request, and follow-up refresh for the latest uncached selection.
 
 ## 4. WorkManager updates and change reconciliation

@@ -59,6 +59,8 @@ import net.droopia.hluweather.notifications.notificationDataStore
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.settingsRepository
+import net.droopia.hluweather.widget.DataStoreWidgetRefreshMetadataStore
+import net.droopia.hluweather.widget.WeatherWidgetRepository
 
 class HluWeatherApplication : Application(), Configuration.Provider {
 
@@ -116,6 +118,13 @@ class HluWeatherApplication : Application(), Configuration.Provider {
 
     val locationRepository: LocationRepository by lazy {
         locationRepository(this)
+    }
+
+    val weatherWidgetRepository: WeatherWidgetRepository by lazy {
+        WeatherWidgetRepository(
+            settingsRepository, locationRepository, weatherRepository,
+            refreshMetadata = DataStoreWidgetRefreshMetadataStore(applicationDataStore)
+        )
     }
 
     val deviceLocationSource: DeviceLocationSource by lazy {

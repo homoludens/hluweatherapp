@@ -10,6 +10,7 @@ import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.currentLocationCacheKey
 import net.droopia.hluweather.ui.settings.PersistedSettings
@@ -40,13 +41,15 @@ sealed interface WeatherWidgetSnapshot {
 
     data class NoWeather(
         override val settings: PersistedSettings,
-        val request: WeatherWidgetRequest
+        val request: WeatherWidgetRequest,
+        val refresh: WidgetRefreshStatus = WidgetRefreshStatus()
     ) : WeatherWidgetSnapshot
 
     data class Available(
         override val settings: PersistedSettings,
         val request: WeatherWidgetRequest,
-        val weather: WeatherWidgetState
+        val weather: WeatherWidgetState,
+        val refresh: WidgetRefreshStatus = WidgetRefreshStatus()
     ) : WeatherWidgetSnapshot
 }
 
@@ -65,32 +68,63 @@ sealed interface WeatherWidgetLocationIdentity {
     ) : WeatherWidgetLocationIdentity
 }
 
-/** Resolves the app's current provider and location without acquiring or naming device locations. */
+/**
+ * Resolves the app's current provider and location without acquiring or naming device locations.
+ * Production callers use the application-owned instance, which supplies durable refresh metadata.
+ */
 class WeatherWidgetRepository(
     private val settingsRepository: SettingsRepository,
     private val locationRepository: LocationRepository,
     private val weatherRepository: WeatherRepository,
-    private val clock: Clock = Clock.System
+    private val clock: Clock = Clock.System,
+    private val refreshMetadata: WidgetRefreshMetadataStore = NoWidgetRefreshMetadataStore
 ) {
     suspend fun resolveRequest(): WeatherWidgetRequest? = loadResolutionSnapshot().resolveRequest()
+
+    /** Called by refresh work; the caller owns networking and cancellation cleanup. */
+    suspend fun beginRefresh(request: WeatherWidgetRequest): WidgetRefreshAttempt =
+        refreshMetadata.start(request.identity, clock.now())
+
+    /** Null, stale, or mismatched results are failures, never fresh successes.
+     * On cancellation, the caller should finish with null in a non-cancellable cleanup block;
+     * an interrupted process is recovered by the metadata loading timeout instead.
+     */
+    suspend fun finishRefresh(request: WeatherWidgetRequest, attempt: WidgetRefreshAttempt, result: ForecastLoad?) {
+        val failed = result == null || result.isStale || !request.matchesIdentity(result.forecast)
+        refreshMetadata.finish(request.identity, attempt, clock.now(), failed)
+    }
+
+    fun observeRefreshStatus(request: WeatherWidgetRequest) =
+        refreshMetadata.observe(request.identity, clock::now)
 
     /** Reads the existing repository cache only; refreshes are owned by asynchronous work. */
     suspend fun loadCachedState(): WeatherWidgetSnapshot {
         val selection = loadResolutionSnapshot()
         val request = selection.resolveRequest()
             ?: return WeatherWidgetSnapshot.NoLocation(selection.settings)
+        val refresh = refreshMetadata.read(request.identity, clock::now)
         val cached = weatherRepository.getLastCachedForecast(request.provider, request.location)
             ?.takeIf { request.matchesIdentity(it.forecast) }
-            ?: return WeatherWidgetSnapshot.NoWeather(selection.settings, request)
+
+        // Selection may change while storage is being read. Never label an obsolete result as current.
+        val latest = loadResolutionSnapshot()
+        if (latest != selection) {
+            val current = latest.resolveRequest() ?: return WeatherWidgetSnapshot.NoLocation(latest.settings)
+            return WeatherWidgetSnapshot.NoWeather(latest.settings, current)
+        }
+        if (cached == null) return WeatherWidgetSnapshot.NoWeather(selection.settings, request, refresh)
 
         return WeatherWidgetSnapshot.Available(
             settings = selection.settings,
             request = request,
-            weather = cached.toWeatherWidgetState(
+            weather = cached.copy(isStale = cached.isStale ||
+                (refresh.lastAttemptFailed && refresh.endedAt?.let { cached.forecast.fetchedAt <= it } == true)
+            ).toWeatherWidgetState(
                 settings = selection.settings,
                 locationName = request.locationName,
                 clock = clock
-            )
+            ),
+            refresh = refresh
         )
     }
 
