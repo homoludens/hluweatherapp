@@ -38,6 +38,11 @@ class CachingWeatherRepository(
     override suspend fun getCachedForecast(
         provider: WeatherProvider,
         location: ActiveLocation
+    ): ForecastLoad? = getLastCachedForecast(provider, location)?.takeUnless { it.isStale }
+
+    override suspend fun getLastCachedForecast(
+        provider: WeatherProvider,
+        location: ActiveLocation
     ): ForecastLoad? {
         val key = ForecastCacheKey(provider, location.cacheLocationKey())
         val cached = try {
@@ -49,12 +54,11 @@ class CachingWeatherRepository(
         } ?: return null
 
         if (cached.provider != key.provider ||
-            !location.matchesCachedLocation(key, cached.location) ||
-            now() - cached.fetchedAt > 1.hours
+            !location.matchesCachedLocation(key, cached.location)
         ) {
             return null
         }
-        return ForecastLoad(cached, isStale = false)
+        return ForecastLoad(cached, isStale = now() - cached.fetchedAt > 1.hours)
     }
 
     override suspend fun getForecast(

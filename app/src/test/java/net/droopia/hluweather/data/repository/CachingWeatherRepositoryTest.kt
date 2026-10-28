@@ -601,6 +601,65 @@ class CachingWeatherRepositoryTest {
         cache = cache
     )
 
+    @Test
+    fun last_cached_read_accepts_old_matching_data_without_network_and_checks_identity() = runTest {
+        val now = Instant.parse("2026-09-10T12:00:00Z")
+        val cached = forecast(WeatherProvider.OPEN_METEO, (now - 2.hours).toString())
+        val source = FakeSource(WeatherProvider.OPEN_METEO, cached)
+        val cache = InMemoryCache()
+        cache.put(ForecastCacheKey(source.provider, "saved:${Svilajnac.id}"), cached)
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache, { now })
+        val selected = ActiveLocation.Saved(Svilajnac)
+        assertEquals(ForecastLoad(cached, true), repository.getLastCachedForecast(source.provider, selected))
+        assertEquals(null, repository.getCachedForecast(source.provider, selected))
+        listOf(
+            Svilajnac.copy(latitude = 50.0),
+            Svilajnac.copy(altitude = null),
+            Svilajnac.copy(id = "other")
+        ).forEach { location ->
+            assertEquals(null, repository.getLastCachedForecast(source.provider, ActiveLocation.Saved(location)))
+        }
+        assertEquals(null, repository.getLastCachedForecast(WeatherProvider.MET_NO, selected))
+        assertEquals(0, source.calls)
+    }
+
+    @Test
+    fun last_cached_read_marks_data_stale_only_after_one_hour() = runTest {
+        val now = Instant.parse("2026-09-10T12:00:00Z")
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache, { now })
+        val key = ForecastCacheKey(source.provider, "saved:${Svilajnac.id}")
+
+        listOf(
+            (now - 1.hours) to false,
+            (now - 1.hours - 1.seconds) to true
+        ).forEach { (fetchedAt, isStale) ->
+            val cached = forecast(source.provider, fetchedAt.toString())
+            cache.put(key, cached)
+
+            assertEquals(
+                ForecastLoad(cached, isStale),
+                repository.getLastCachedForecast(source.provider, ActiveLocation.Saved(Svilajnac))
+            )
+        }
+        assertEquals(0, source.calls)
+    }
+
+    @Test
+    fun last_cached_read_propagates_cancellation() = runTest {
+        val cancellation = kotlinx.coroutines.CancellationException("cancelled")
+        val repository = repository(
+            FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO)),
+            ReadFailingCache(cancellation)
+        )
+        var thrown: Throwable? = null
+        try {
+            repository.getLastCachedForecast(WeatherProvider.OPEN_METEO, ActiveLocation.Saved(Svilajnac))
+        } catch (error: Throwable) { thrown = error }
+        assertSame(cancellation, thrown)
+    }
+
     private fun cache(scope: CoroutineScope) = ForecastCache(
         PreferenceDataStoreFactory.create(
             scope = scope,

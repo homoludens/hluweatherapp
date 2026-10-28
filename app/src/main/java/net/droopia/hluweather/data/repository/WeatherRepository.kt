@@ -21,5 +21,8 @@ interface WeatherRepository {
         provider: WeatherProvider,
         location: ActiveLocation
     ): ForecastLoad? = null
+    /** Unlike the normal startup cache read, also permits old, matching forecasts. */
+    suspend fun getLastCachedForecast(provider: WeatherProvider, location: ActiveLocation): ForecastLoad? =
+        getCachedForecast(provider, location)
     suspend fun clearCache()
 }
