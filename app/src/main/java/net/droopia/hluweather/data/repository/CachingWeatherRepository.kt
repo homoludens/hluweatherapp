@@ -1,6 +1,9 @@
 package net.droopia.hluweather.data.repository
 
 import java.util.Locale
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -39,6 +42,16 @@ class CachingWeatherRepository(
         provider: WeatherProvider,
         location: ActiveLocation
     ): ForecastLoad? = getLastCachedForecast(provider, location)?.takeUnless { it.isStale }
+
+    override fun observeCachedForecast(
+        provider: WeatherProvider,
+        location: ActiveLocation
+    ): Flow<WeatherForecast?> {
+        val key = ForecastCacheKey(provider, location.cacheLocationKey())
+        return cache.observe(key).map { forecast ->
+            forecast?.takeIf { it.provider == provider && location.matchesCachedLocation(key, it.location) }
+        }.distinctUntilChanged()
+    }
 
     override suspend fun getLastCachedForecast(
         provider: WeatherProvider,

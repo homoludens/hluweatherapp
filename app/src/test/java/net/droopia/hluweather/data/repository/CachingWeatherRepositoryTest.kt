@@ -2,6 +2,9 @@ package net.droopia.hluweather.data.repository
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.test.runTest
@@ -660,6 +663,63 @@ class CachingWeatherRepositoryTest {
         assertSame(cancellation, thrown)
     }
 
+    @Test
+    fun cache_observation_validates_provider_and_location_without_network() = runTest {
+        val cache = cache(backgroundScope)
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        val key = ForecastCacheKey(source.provider, "saved:${Svilajnac.id}")
+        val location = ActiveLocation.Saved(Svilajnac)
+
+        listOf(
+            forecast(WeatherProvider.MET_NO),
+            forecast(WeatherProvider.OPEN_METEO).copy(
+                location = Svilajnac.copy(latitude = Svilajnac.latitude + 1.0)
+            ),
+            forecast(WeatherProvider.OPEN_METEO).copy(
+                location = Svilajnac.copy(altitude = Svilajnac.altitude!! + 1)
+            )
+        ).forEach { mismatchedForecast ->
+            cache.put(key, mismatchedForecast)
+            assertEquals(null, repository.observeCachedForecast(source.provider, location).first())
+        }
+
+        val matchingForecast = forecast(WeatherProvider.OPEN_METEO)
+        cache.put(key, matchingForecast)
+        assertEquals(matchingForecast, repository.observeCachedForecast(source.provider, location).first())
+        assertEquals(0, source.calls)
+    }
+
+    @Test
+    fun cache_observation_propagates_errors_and_cancellation() = runTest {
+        listOf(
+            IllegalStateException("cache unavailable"),
+            kotlinx.coroutines.CancellationException("observation cancelled")
+        ).forEach { failure ->
+            val repository = CachingWeatherRepository(
+                sources = mapOf(
+                    WeatherProvider.OPEN_METEO to FakeSource(
+                        WeatherProvider.OPEN_METEO,
+                        forecast(WeatherProvider.OPEN_METEO)
+                    )
+                ),
+                cache = ObservationFailingCache(failure)
+            )
+            var thrown: Throwable? = null
+
+            try {
+                repository.observeCachedForecast(
+                    WeatherProvider.OPEN_METEO,
+                    ActiveLocation.Saved(Svilajnac)
+                ).first()
+            } catch (error: Throwable) {
+                thrown = error
+            }
+
+            assertSame(failure, thrown)
+        }
+    }
+
     private fun cache(scope: CoroutineScope) = ForecastCache(
         PreferenceDataStoreFactory.create(
             scope = scope,
@@ -713,6 +773,22 @@ class CachingWeatherRepositoryTest {
         private val failure: Throwable
     ) : ForecastCacheStore {
         override suspend fun get(key: ForecastCacheKey): WeatherForecast? = throw failure
+
+        override suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) = Unit
+
+        override suspend fun entries() = emptyList<ForecastCacheKey>()
+
+        override suspend fun clear() = Unit
+    }
+
+    private class ObservationFailingCache(
+        private val failure: Throwable
+    ) : ForecastCacheStore {
+        override fun observe(key: ForecastCacheKey): Flow<WeatherForecast?> = flow {
+            throw failure
+        }
+
+        override suspend fun get(key: ForecastCacheKey): WeatherForecast? = null
 
         override suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast) = Unit
 

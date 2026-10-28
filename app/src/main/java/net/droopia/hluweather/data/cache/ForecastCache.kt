@@ -4,7 +4,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.CurrentWeather
@@ -23,6 +27,8 @@ data class ForecastCacheKey(
 )
 
 interface ForecastCacheStore {
+    /** Observes cached content without changing its LRU order. */
+    fun observe(key: ForecastCacheKey): Flow<WeatherForecast?> = flowOf(null)
     suspend fun get(key: ForecastCacheKey): WeatherForecast?
     suspend fun put(key: ForecastCacheKey, forecast: WeatherForecast)
     suspend fun entries(): List<ForecastCacheKey>
@@ -36,6 +42,12 @@ class ForecastCache(
     init {
         require(maxEntries > 0) { "maxEntries must be positive" }
     }
+
+    override fun observe(key: ForecastCacheKey): Flow<WeatherForecast?> = dataStore.data
+        .map { preferences ->
+            preferences.decodeEntries().firstOrNull { it.key == key }?.forecast?.toWeatherForecastOrNull()
+        }
+        .distinctUntilChanged()
 
     override suspend fun get(key: ForecastCacheKey): WeatherForecast? {
         var result: WeatherForecast? = null

@@ -4,10 +4,13 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
@@ -133,6 +136,35 @@ class ForecastCacheTest {
     }
 
     private fun cache(scope: CoroutineScope): ForecastCache = ForecastCache(dataStore(scope))
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun observation_is_read_only_distinct_and_tracks_put_and_clear() = runTest {
+        val store = dataStore(backgroundScope)
+        val cache = ForecastCache(store)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val emissions = Channel<net.droopia.hluweather.data.model.WeatherForecast?>(Channel.UNLIMITED)
+        backgroundScope.launch { cache.observe(key).collect { emissions.send(it) } }
+        assertNull(emissions.receive())
+        cache.put(key, fixedForecast())
+        assertEquals(fixedForecast(), emissions.receive())
+        val otherKey = key.copy(locationKey = "saved:other")
+        cache.put(otherKey, fixedForecast())
+        runCurrent()
+        assertEquals(listOf(key, otherKey), cache.entries())
+
+        cache.get(key) // LRU reordering is not a weather change.
+        assertEquals(listOf(otherKey, key), cache.entries())
+        runCurrent()
+        assertTrue(emissions.tryReceive().isFailure)
+
+        store.edit { it[stringPreferencesKey("unrelated")] = "changed" }
+        store.data.first()
+        runCurrent()
+        assertTrue(emissions.tryReceive().isFailure)
+        cache.clear()
+        assertNull(emissions.receive())
+    }
 
     private fun dataStore(scope: CoroutineScope) = PreferenceDataStoreFactory.create(
         scope = scope,
