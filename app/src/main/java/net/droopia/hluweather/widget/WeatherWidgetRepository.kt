@@ -189,7 +189,7 @@ class WeatherWidgetRepository(
     }
 }
 
-private fun WeatherWidgetRequest.matchesIdentity(
+internal fun WeatherWidgetRequest.matchesIdentity(
     forecast: WeatherForecast
 ): Boolean {
     if (forecast.provider != identity.provider) return false
