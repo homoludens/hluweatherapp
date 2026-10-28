@@ -65,6 +65,8 @@ fun WeatherWidgetCard(
     snapshot: WeatherWidgetSnapshot,
     modifier: GlanceModifier = GlanceModifier,
     locationDisplayName: String? = null,
+    headerUpdateText: String? = null,
+    headerUpdateContentDescription: String? = null,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
     val context = LocalContext.current
@@ -98,7 +100,9 @@ fun WeatherWidgetCard(
             locationName = locationName,
             isRefreshing = isRefreshing,
             palette = palette,
-            displayLocationName = locationDisplayName
+            displayLocationName = locationDisplayName,
+            updateText = headerUpdateText,
+            updateContentDescription = headerUpdateContentDescription
         )
         content(palette)
     }
@@ -111,7 +115,9 @@ fun WeatherWidgetHeader(
     isRefreshing: Boolean,
     palette: WeatherWidgetPalette,
     modifier: GlanceModifier = GlanceModifier,
-    displayLocationName: String? = null
+    displayLocationName: String? = null,
+    updateText: String? = null,
+    updateContentDescription: String? = null
 ) {
     val context = LocalContext.current
     val label = displayLocationName ?: locationName ?: "Choose a location"
@@ -140,6 +146,18 @@ fun WeatherWidgetHeader(
                             ?: "Open HluWeather to choose a location"
                     },
                 style = widgetTextStyle(palette.mainText, 14.sp, FontWeight.Medium),
+                maxLines = 1
+            )
+        }
+        if (updateText != null) {
+            Text(
+                text = updateText,
+                modifier = GlanceModifier
+                    .padding(horizontal = 4.dp)
+                    .semantics {
+                        contentDescription = updateContentDescription ?: updateText
+                    },
+                style = widgetTextStyle(palette.secondaryText, 9.sp),
                 maxLines = 1
             )
         }
@@ -201,6 +219,8 @@ fun WeatherWidgetCurrentWeather(
     showApparentTemperature: Boolean = true,
     conditionFontSizeSp: Float = 12f,
     apparentTemperatureFontSizeSp: Float = 11f,
+    conditionDisplayText: String = weather.conditionLabel,
+    secondaryItemGapDp: Float = 0f,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(modifier = modifier) {
@@ -227,10 +247,13 @@ fun WeatherWidgetCurrentWeather(
         }
         if (showCondition) {
             Text(
-                text = weather.conditionLabel,
+                text = conditionDisplayText,
+                modifier = GlanceModifier
+                    .padding(top = secondaryItemGapDp.dp)
+                    .semantics { contentDescription = weather.conditionLabel },
                 style = widgetTextStyle(
                     palette.mainText,
-                    conditionFontSizeSp.coerceAtLeast(1f).sp,
+                    conditionFontSizeSp.coerceAtLeast(0.1f).sp,
                     FontWeight.Medium
                 ),
                 maxLines = 1
@@ -239,11 +262,13 @@ fun WeatherWidgetCurrentWeather(
         if (showApparentTemperature && weather.apparentTemperatureText != null) {
             Text(
                 text = "Feels like ${weather.apparentTemperatureText}",
-                modifier = GlanceModifier.semantics {
-                    contentDescription = weather.apparentTemperatureContentDescription
-                        ?.let { "Feels like $it" }
-                        ?: "Feels like ${weather.apparentTemperatureText}"
-                },
+                modifier = GlanceModifier
+                    .padding(top = secondaryItemGapDp.dp)
+                    .semantics {
+                        contentDescription = weather.apparentTemperatureContentDescription
+                            ?.let { "Feels like $it" }
+                            ?: "Feels like ${weather.apparentTemperatureText}"
+                    },
                 style = widgetTextStyle(
                     palette.secondaryText,
                     apparentTemperatureFontSizeSp.coerceAtLeast(1f).sp
@@ -262,7 +287,8 @@ fun WeatherWidgetHourlyCell(
     iconSizeDp: Float,
     timeFontSizeSp: Float,
     temperatureFontSizeSp: Float,
-    showProbability: Boolean = true,
+    probabilityFontSizeSp: Float,
+    probabilityDropletSizeDp: Float,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(
@@ -279,11 +305,12 @@ fun WeatherWidgetHourlyCell(
             isDay = hour.isDay,
             palette = palette,
             sizeDp = iconSizeDp,
+            modifier = GlanceModifier.padding(top = 2.dp),
             contentDescription = "${hour.timeText}, ${hour.conditionLabel}"
         )
         Text(
             text = hour.temperatureText,
-            modifier = GlanceModifier.semantics {
+            modifier = GlanceModifier.padding(top = 2.dp).semantics {
                 contentDescription = hour.temperatureContentDescription
             },
             style = widgetTextStyle(
@@ -293,23 +320,28 @@ fun WeatherWidgetHourlyCell(
             ),
             maxLines = 1
         )
-        if (showProbability) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WeatherWidgetMaterialIcon(
-                    imageVector = Icons.Filled.WaterDrop,
-                    tint = palette.primary,
-                    sizeDp = 12f,
-                    contentDescription = null
-                )
-                Text(
-                    text = hour.precipitationProbabilityText,
-                    modifier = GlanceModifier.semantics {
-                        contentDescription = hour.precipitationProbabilityContentDescription
-                    },
-                    style = widgetTextStyle(palette.primary, 10.sp, FontWeight.Medium),
-                    maxLines = 1
-                )
-            }
+        Row(
+            modifier = GlanceModifier.padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            WeatherWidgetMaterialIcon(
+                imageVector = Icons.Filled.WaterDrop,
+                tint = palette.primary,
+                sizeDp = probabilityDropletSizeDp,
+                contentDescription = null
+            )
+            Text(
+                text = hour.precipitationProbabilityText,
+                modifier = GlanceModifier.semantics {
+                    contentDescription = hour.precipitationProbabilityContentDescription
+                },
+                style = widgetTextStyle(
+                    palette.primary,
+                    probabilityFontSizeSp.coerceAtLeast(0.1f).sp,
+                    FontWeight.Medium
+                ),
+                maxLines = 1
+            )
         }
     }
 }

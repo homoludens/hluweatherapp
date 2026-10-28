@@ -1,0 +1,513 @@
+package net.droopia.hluweather.widget
+
+import android.appwidget.AppWidgetProviderInfo
+import android.content.Context
+import android.content.res.Configuration
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
+import androidx.glance.GlanceId
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.composeForPreview
+import androidx.glance.appwidget.provideContent
+import androidx.test.core.app.ApplicationProvider
+import kotlin.math.roundToInt
+import kotlin.time.Instant
+import kotlinx.coroutines.runBlocking
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.WeatherCondition
+import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.ui.settings.PersistedSettings
+import net.droopia.hluweather.ui.settings.TemperatureUnit
+import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class MediumWeatherWidgetTest {
+
+    @Test
+    fun production_widget_uses_finite_responsive_sizes_and_advertises_probability_safe_minimum() {
+        val widget = MediumWeatherWidget()
+
+        assertTrue(widget.sizeMode is SizeMode.Responsive)
+        assertEquals(
+            MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES,
+            (widget.sizeMode as SizeMode.Responsive).sizes
+        )
+        assertTrue(
+            MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES.all {
+                it.height.value >= WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
+            }
+        )
+        assertEquals(
+            listOf(260f, 320f, 400f),
+            MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES.map { it.width.value }.sorted()
+        )
+    }
+
+    @Test
+    fun translated_production_layout_renders_three_four_and_five_hour_columns_without_overflow() {
+        val cases = listOf(
+            MediumCase(260f, 144f, columns = 3, theme = ThemeMode.LIGHT),
+            MediumCase(320f, 144f, columns = 4, theme = ThemeMode.SYSTEM),
+            MediumCase(400f, 160f, columns = 5, theme = ThemeMode.DARK)
+        )
+
+        cases.forEach { case ->
+            val view = render(
+                availableSnapshot(settings = PersistedSettings(themeMode = case.theme)),
+                case.widthDp,
+                case.heightDp,
+                fontScale = 1f,
+                systemDark = case.theme == ThemeMode.SYSTEM
+            )
+            val visibleHours = findViews(view).filterIsInstance<TextView>()
+                .map { it.text.toString() }
+                .filter { it in REFERENCE_HOURS }
+
+            assertEquals(
+                "hour branch for $case; visible=$visibleHours, allText=" +
+                    findViews(view).filterIsInstance<TextView>().joinToString { it.text.toString() },
+                REFERENCE_HOURS.take(case.columns),
+                visibleHours
+            )
+            assertText(view, "23°C")
+            assertText(view, "Clear sky")
+            assertText(view, "Feels like 24°C")
+            assertText(view, "Zaječar")
+            assertText(view, "Updated Oct 28 11:17")
+            assertEquals("Last weather update Wed, Oct 28, 2026 • 11:17", findDescription(view, "Last weather update Wed, Oct 28, 2026 • 11:17"))
+            assertCurrentTemperatureColor(view, dark = case.theme == ThemeMode.DARK || case.theme == ThemeMode.SYSTEM)
+            assertHeaderMetadataDoesNotOverlap(view)
+            assertRefreshTarget(view)
+            assertDividers(
+                view,
+                expectedCount = case.columns,
+                expectedColor = hluMaterialColorScheme(
+                    darkTheme = case.theme == ThemeMode.DARK || case.theme == ThemeMode.SYSTEM
+                ).outlineVariant.toArgb()
+            )
+            assertLayoutFits(view, case.widthDp, case.heightDp)
+        }
+    }
+
+    @Test
+    fun long_location_ellipsizes_without_hiding_medium_refresh_or_update_metadata() {
+        val longName = "A very long location name that must leave room for controls"
+        val view = render(
+            availableSnapshot(locationName = longName),
+            widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
+        )
+        val location = findViews(view).filterIsInstance<TextView>()
+            .first { it.contentDescription == "Weather for $longName" }
+
+        assertTrue("long location ends with an ellipsis", location.text.endsWith("…"))
+        assertTrue("update time remains visible when policy reserves its space", hasText(view, "Updated Oct 28 11:17"))
+        assertHeaderMetadataDoesNotOverlap(view, location)
+        assertRefreshTarget(view)
+        assertLayoutFits(view, WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP)
+    }
+
+    @Test
+    fun every_hour_shows_accessible_probability_and_distinguishes_missing_from_zero_in_both_themes() {
+        listOf(
+            ThemeMode.LIGHT to false,
+            ThemeMode.DARK to true
+        ).forEach { (theme, dark) ->
+            val view = render(
+                availableSnapshot(
+                    hours = referenceHours(probabilities = listOf(null, 0, 10, 20, 60)),
+                    settings = PersistedSettings(themeMode = theme)
+                ),
+                widthDp = 260f,
+                heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+                systemDark = !dark
+            )
+
+            assertText(view, "—")
+            assertText(view, "0%")
+            assertEquals("Rain probability unavailable", findDescription(view, "Rain probability unavailable"))
+            assertEquals("Rain probability 0 percent", findDescription(view, "Rain probability 0 percent"))
+            assertTrue("droplet uses the theme's blue primary accent", hasSmallTintedBitmap(
+                view,
+                hluMaterialColorScheme(darkTheme = dark).primary.toArgb()
+            ))
+            assertLayoutFits(view, 260f, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP)
+        }
+    }
+
+    @Test
+    fun partial_and_empty_future_hours_are_not_repeated_or_fabricated_and_keep_current_weather() {
+        val partial = render(
+            availableSnapshot(hours = referenceHours(probabilities = listOf(0, 20)).take(2)),
+            widthDp = 400f,
+            heightDp = 160f
+        )
+        val expired = render(
+            availableSnapshot(
+                hours = emptyList(),
+                stale = true,
+                refresh = WidgetRefreshStatus(
+                    endedAt = Instant.parse("2026-10-29T12:42:00Z"),
+                    lastAttemptFailed = true
+                )
+            ),
+            widthDp = 260f,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
+        )
+
+        assertEquals(
+            listOf("22:00", "23:00"),
+            findViews(partial).filterIsInstance<TextView>().map { it.text.toString() }
+                .filter { it in REFERENCE_HOURS }
+        )
+        assertText(partial, "20°C")
+        assertText(partial, "18°C")
+        assertText(expired, "23°C")
+        assertText(expired, "Clear sky")
+        assertText(expired, "Stale · Oct 28 11:17")
+        assertFalse("expired forecast contributes no hourly label", REFERENCE_HOURS.any { hasText(expired, it) })
+        assertFalse("no future hours does not invent a probability", hasText(expired, "60%"))
+        assertLayoutFits(partial, 400f, 160f)
+        assertLayoutFits(expired, 260f, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP)
+    }
+
+    @Test
+    fun signed_and_three_digit_fahrenheit_fit_at_the_supported_minimum_with_large_font_scale() {
+        listOf(
+            "−123°F" to ThemeMode.LIGHT,
+            "123°F" to ThemeMode.DARK
+        ).forEach { (temperature, theme) ->
+            val view = render(
+                availableSnapshot(
+                    temperature = temperature,
+                    apparentTemperature = "124°F",
+                    hours = referenceHours(
+                        temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
+                        probabilities = listOf(100, 0, 10, 20, 60)
+                    ),
+                    settings = PersistedSettings(
+                        temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                        themeMode = theme
+                    )
+                ),
+                widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+                heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+                fontScale = 2f,
+                systemDark = theme == ThemeMode.LIGHT
+            )
+
+            assertText(view, temperature)
+            assertText(view, "100%")
+            assertFalse(
+                "long update metadata yields at larger font scales",
+                findViews(view).any { it.contentDescription?.toString()?.startsWith("Last weather update") == true }
+            )
+            assertLayoutFits(
+                view,
+                WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+                WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
+            )
+        }
+    }
+
+    @OptIn(ExperimentalGlanceRemoteViewsApi::class)
+    private fun render(
+        snapshot: WeatherWidgetSnapshot,
+        widthDp: Float,
+        heightDp: Float,
+        fontScale: Float = 1f,
+        systemDark: Boolean = false
+    ): View {
+        val baseContext = ApplicationProvider.getApplicationContext<Context>()
+        val configuration = Configuration(baseContext.resources.configuration).apply {
+            this.fontScale = fontScale
+            val nightMode = if (systemDark) {
+                Configuration.UI_MODE_NIGHT_YES
+            } else {
+                Configuration.UI_MODE_NIGHT_NO
+            }
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+        }
+        val context = baseContext.createConfigurationContext(configuration)
+        val density = context.resources.displayMetrics.density
+        val providerInfo = AppWidgetProviderInfo().apply {
+            minWidth = (widthDp * density).roundToInt()
+            minHeight = (heightDp * density).roundToInt()
+        }
+        val remoteViews = runBlocking {
+            PreviewMediumWeatherWidget(snapshot).composeForPreview(
+                context,
+                AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+                providerInfo
+            )
+        }
+        val view = remoteViews.apply(context, FrameLayout(context))
+        val widthPx = (widthDp * density).roundToInt()
+        val heightPx = (heightDp * density).roundToInt()
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, widthPx, heightPx)
+        return view
+    }
+
+    private fun assertLayoutFits(root: View, widthDp: Float, heightDp: Float) {
+        val density = root.resources.displayMetrics.density
+        val widthPx = (widthDp * density).roundToInt()
+        val heightPx = (heightDp * density).roundToInt()
+        val views = findViews(root)
+
+        assertEquals(widthPx, root.width)
+        assertEquals(heightPx, root.height)
+        assertFalse("medium layout must never use horizontal scrolling", views.any { it is HorizontalScrollView })
+        views.filterIsInstance<TextView>().forEach { text ->
+            val bounds = absoluteBounds(text, root)
+            assertTrue("text left edge remains inside the card: ${text.text}", bounds.left >= 0)
+            assertTrue("text right edge remains inside the card: ${text.text}", bounds.right <= widthPx)
+            assertTrue("text top edge remains inside the card: ${text.text}", bounds.top >= 0)
+            assertTrue("text bottom edge remains inside the card: ${text.text}", bounds.bottom <= heightPx)
+            assertEquals("widget text stays on one line: ${text.text}", 1, text.lineCount)
+        }
+        views.filterIsInstance<TextView>().filter { it.text.toString().contains("°") }.forEach { temperature ->
+            val textWidth = temperature.width - temperature.compoundPaddingLeft - temperature.compoundPaddingRight
+            assertTrue(
+                "temperature '${temperature.text}' has a usable width " +
+                    "(width=${temperature.width}, padding=${temperature.compoundPaddingLeft}/" +
+                    "${temperature.compoundPaddingRight}, bounds=${absoluteBounds(temperature, root)}, " +
+                    "views=${views.filterIsInstance<TextView>().joinToString { "${it.text}:${it.width}@${absoluteBounds(it, root).left}" }})",
+                textWidth > 0
+            )
+            assertTrue(
+                "temperature '${temperature.text}' fits its translated TextView: " +
+                    "${temperature.paint.measureText(temperature.text.toString())} > $textWidth",
+                temperature.paint.measureText(temperature.text.toString()) <= textWidth + 1f
+            )
+        }
+        views.filterIsInstance<TextView>()
+            .filter { it.contentDescription?.toString()?.startsWith("Rain probability") == true }
+            .forEach { probability ->
+                val width = probability.width - probability.compoundPaddingLeft - probability.compoundPaddingRight
+                assertTrue("precipitation probability remains readable", width > 0)
+                assertTrue(
+                    "probability '${probability.text}' fits its translated cell " +
+                        "(width=$width, measured=${probability.paint.measureText(probability.text.toString())}, " +
+                        "size=${probability.textSize}, bounds=${absoluteBounds(probability, root)})",
+                    probability.paint.measureText(probability.text.toString()) <= width + 1f
+                )
+                assertTrue("precipitation probability retains readable text size", probability.textSize >= 7f * density)
+            }
+    }
+
+    private fun assertDividers(root: View, expectedCount: Int, expectedColor: Int) {
+        val density = root.resources.displayMetrics.density
+        val dividers = findViews(root).filter { view ->
+            val backgroundColor = (view.background as? ColorDrawable)?.color
+            view.width <= 2f * density && view.height >= 30f * density &&
+                backgroundColor == expectedColor
+        }
+        assertEquals("one subtle vertical divider per visible hour", expectedCount, dividers.size)
+    }
+
+    private fun assertHeaderMetadataDoesNotOverlap(
+        root: View,
+        location: TextView = findViews(root).filterIsInstance<TextView>()
+            .first { it.contentDescription == "Weather for Zaječar" }
+    ) {
+        val update = findViews(root).filterIsInstance<TextView>()
+            .first { it.contentDescription?.toString()?.startsWith("Last weather update") == true }
+        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
+
+        assertTrue("location and update time do not overlap", absoluteBounds(location, root).right <= absoluteBounds(update, root).left)
+        assertTrue("update time does not overlap the refresh control", absoluteBounds(update, root).right <= absoluteBounds(refresh, root).left)
+    }
+
+    private fun assertRefreshTarget(root: View) {
+        val density = root.resources.displayMetrics.density
+        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
+        val bounds = absoluteBounds(refresh, root)
+        assertTrue("medium refresh target is at least 48 dp", refresh.width >= 48f * density - 1f)
+        assertTrue("medium refresh stays inside the right card edge", bounds.right <= root.width)
+        assertTrue("medium refresh remains in the header", bounds.top < 60f * density)
+    }
+
+    private fun assertCurrentTemperatureColor(root: View, dark: Boolean) {
+        val expected = hluMaterialColorScheme(darkTheme = dark).onSurface.toArgb()
+        val actual = findViews(root).filterIsInstance<TextView>()
+            .first { it.text.toString() == "23°C" }.currentTextColor
+        assertEquals(expected, actual)
+    }
+
+    private fun hasSmallTintedBitmap(root: View, expectedColor: Int): Boolean {
+        val density = root.resources.displayMetrics.density
+        return findViews(root).filterIsInstance<ImageView>().any { image ->
+            val bitmap = (image.drawable as? BitmapDrawable)?.bitmap ?: return@any false
+            image.width <= 10f * density + 1f && bitmap.hasPixelColor(expectedColor)
+        }
+    }
+
+    private fun android.graphics.Bitmap.hasPixelColor(expectedColor: Int): Boolean {
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val color = getPixel(x, y)
+                if (color ushr 24 > 32 && (color and 0x00FFFFFF) == (expectedColor and 0x00FFFFFF)) return true
+            }
+        }
+        return false
+    }
+
+    private fun assertText(root: View, expected: String) {
+        assertTrue("expected translated TextView '$expected'", hasText(root, expected))
+    }
+
+    private fun hasText(root: View, expected: String): Boolean = findViews(root)
+        .filterIsInstance<TextView>()
+        .any { it.text.toString() == expected }
+
+    private fun findDescription(root: View, description: String): String? = findViews(root)
+        .firstOrNull { it.contentDescription == description }
+        ?.contentDescription
+        ?.toString()
+
+    private fun absoluteBounds(view: View, root: View): Bounds {
+        var left = view.left
+        var top = view.top
+        var parent = view.parent
+        while (parent is View && parent !== root) {
+            left += parent.left
+            top += parent.top
+            parent = parent.parent
+        }
+        return Bounds(left, top, left + view.width, top + view.height)
+    }
+
+    private fun findViews(root: View): List<View> = buildList {
+        add(root)
+        if (root is ViewGroup) {
+            for (index in 0 until root.childCount) addAll(findViews(root.getChildAt(index)))
+        }
+    }
+
+    private fun availableSnapshot(
+        locationName: String = "Zaječar",
+        temperature: String = "23°C",
+        apparentTemperature: String? = "24°C",
+        hours: List<WidgetHour> = referenceHours(),
+        settings: PersistedSettings = PersistedSettings(),
+        stale: Boolean = false,
+        refresh: WidgetRefreshStatus = WidgetRefreshStatus()
+    ) = WeatherWidgetSnapshot.Available(
+        settings = settings,
+        request = widgetRequest(locationName),
+        weather = WeatherWidgetState(
+            locationName = locationName,
+            temperatureText = temperature,
+            temperatureContentDescription = temperature.toSpokenTemperature(),
+            apparentTemperatureText = apparentTemperature,
+            apparentTemperatureContentDescription = apparentTemperature?.toSpokenTemperature(),
+            condition = WeatherCondition.CLEAR,
+            conditionLabel = "Clear sky",
+            isDay = true,
+            hours = hours,
+            lastWeatherUpdate = Instant.parse("2026-10-28T10:17:00Z"),
+            lastWeatherUpdateText = "Wed, Oct 28, 2026 • 11:17",
+            lastWeatherUpdateCompactText = "Oct 28 11:17",
+            isStale = stale
+        ),
+        refresh = refresh
+    )
+
+    private fun referenceHours(
+        temperatures: List<String> = listOf("20°C", "18°C", "17°C", "16°C", "15°C"),
+        probabilities: List<Int?> = listOf(0, 0, 10, 20, 60)
+    ): List<WidgetHour> = REFERENCE_HOURS.mapIndexed { index, time ->
+        val probability = probabilities.getOrNull(index)
+        val temperature = temperatures.getOrElse(index) { "${20 - index}°C" }
+        WidgetHour(
+            time = Instant.parse(REFERENCE_INSTANTS[index]),
+            timeText = time,
+            temperatureText = temperature,
+            temperatureContentDescription = temperature.toSpokenTemperature(),
+            condition = WeatherCondition.PARTLY_CLOUDY,
+            conditionLabel = "Partly cloudy",
+            isDay = index < 2,
+            precipitationProbability = probability,
+            precipitationProbabilityText = probability?.let { "$it%" } ?: "—",
+            precipitationProbabilityContentDescription = probability
+                ?.let { "Rain probability $it percent" }
+                ?: "Rain probability unavailable"
+        )
+    }
+
+    private fun String.toSpokenTemperature(): String = replace("−", "minus ")
+        .replace("°F", " degrees F")
+        .replace("°C", " degrees C")
+
+    private fun widgetRequest(locationName: String) = WeatherWidgetRequest(
+        provider = WeatherProvider.OPEN_METEO,
+        location = ActiveLocation.Saved(
+            WeatherLocation(
+                id = locationName.lowercase(),
+                name = locationName,
+                latitude = 43.9,
+                longitude = 20.3
+            )
+        ),
+        locationName = locationName
+    )
+
+    private data class MediumCase(
+        val widthDp: Float,
+        val heightDp: Float,
+        val columns: Int,
+        val theme: ThemeMode
+    )
+
+    private data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+    private class PreviewMediumWeatherWidget(
+        private val snapshot: WeatherWidgetSnapshot
+    ) : GlanceAppWidget() {
+        override val sizeMode: SizeMode = SizeMode.Responsive(MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES)
+
+        override suspend fun provideGlance(context: Context, id: GlanceId) = provideSnapshot()
+
+        override suspend fun providePreview(context: Context, widgetCategory: Int) = provideSnapshot()
+
+        private suspend fun provideSnapshot() {
+            provideContent { MediumWeatherWidgetContent(snapshot) }
+        }
+    }
+
+    private companion object {
+        val REFERENCE_HOURS = listOf("22:00", "23:00", "00:00", "01:00", "02:00")
+        val REFERENCE_INSTANTS = listOf(
+            "2026-10-28T20:00:00Z",
+            "2026-10-28T21:00:00Z",
+            "2026-10-28T22:00:00Z",
+            "2026-10-28T23:00:00Z",
+            "2026-10-29T00:00:00Z"
+        )
+    }
+}

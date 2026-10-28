@@ -37,6 +37,8 @@ data class MediumWeatherWidgetSize(
     val currentWeatherWidthDp: Float,
     val hourlyColumnWidthDp: Float,
     val refreshTouchTargetDp: Int,
+    val showHeaderTimestamp: Boolean,
+    val headerLocationTextWidthDp: Float,
     val bodyHeightDp: Float,
     val currentIconSizeDp: Float,
     val currentTemperatureFontSizeSp: Float,
@@ -44,7 +46,9 @@ data class MediumWeatherWidgetSize(
     val currentTemperatureAvailableWidthDp: Float,
     val currentPrimaryContentWidthDp: Float,
     val currentPrimaryContentHeightDp: Float,
+    val currentConditionFontSizeSp: Float,
     val showCurrentCondition: Boolean,
+    val currentApparentTemperatureFontSizeSp: Float,
     val showCurrentApparentTemperature: Boolean,
     val hourlyIconSizeDp: Float,
     val hourlyTimeFontSizeSp: Float,
@@ -52,7 +56,9 @@ data class MediumWeatherWidgetSize(
     val hourlyTemperatureTextWidthDp: Float,
     val hourlyTextAvailableWidthDp: Float,
     val hourlyPrimaryContentHeightDp: Float,
-    val showHourlyProbability: Boolean
+    val hourlyProbabilityFontSizeSp: Float,
+    val hourlyProbabilityTextAvailableWidthDp: Float,
+    val hourlyProbabilityDropletSizeDp: Float
 )
 
 /**
@@ -70,7 +76,9 @@ object WeatherWidgetSizePolicy {
 
     /** Minimum width supports the three-column medium layout at its smallest supported size. */
     const val MEDIUM_MIN_WIDTH_DP = 260f
-    const val MEDIUM_MIN_HEIGHT_DP = 110f
+    // The hourly strip always includes time, icon, temperature, and probability. This height
+    // leaves enough translated RemoteViews space for those four rows even at larger font scales.
+    const val MEDIUM_MIN_HEIGHT_DP = 144f
 
     const val REFRESH_TOUCH_TARGET_DP = 48
 
@@ -84,8 +92,14 @@ object WeatherWidgetSizePolicy {
     private const val LOCATION_ICON_SIZE_DP = 18f
     private const val MEDIUM_DIVIDER_WIDTH_DP = 1f
     private const val MEDIUM_CELL_PADDING_DP = 4f
+    private const val MEDIUM_HEADER_GAP_DP = 4f
+    private const val MEDIUM_HEADER_TIMESTAMP_FONT_SP = 9f
+    private const val MEDIUM_MIN_LOCATION_TEXT_WIDTH_DP = 40f
+    private const val HOURLY_DROPLET_SIZE_DP = 8f
+    private const val HOURLY_DROPLET_GAP_DP = 2f
     private const val AVERAGE_TEMPERATURE_GLYPH_WIDTH = 0.62f
     private const val AVERAGE_LABEL_GLYPH_WIDTH = 0.55f
+    private const val AVERAGE_HEADER_GLYPH_WIDTH = 0.62f
     private const val SMALL_TEXT_LINE_HEIGHT = 1.2f
     private const val SMALL_STATUS_FONT_SP = 10f
     private const val MEDIUM_TEXT_LINE_HEIGHT = 1.15f
@@ -194,7 +208,10 @@ object WeatherWidgetSizePolicy {
         widthDp: Float,
         heightDp: Float,
         fontScale: Float,
-        formattedTemperatureLength: Int
+        formattedTemperatureLength: Int,
+        currentConditionLabelLength: Int = 13,
+        apparentTemperatureLength: Int? = null,
+        headerTimestampTextLength: Int = 0
     ): MediumWeatherWidgetSize {
         val width = widthDp.nonNegative()
         val height = heightDp.nonNegative()
@@ -219,6 +236,20 @@ object WeatherWidgetSizePolicy {
             ).coerceAtLeast(0f)
         val hourlyColumnWidth = hourlyWidth / columnCount
         val hourlyTextWidth = (hourlyColumnWidth - MEDIUM_CELL_PADDING_DP * 2f).coerceAtLeast(0f)
+        val headerTimestampWidth = headerTimestampTextLength.coerceAtLeast(0) *
+            AVERAGE_HEADER_GLYPH_WIDTH * MEDIUM_HEADER_TIMESTAMP_FONT_SP * scale
+        val headerLocationWidthWithTimestamp = (
+            width - HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP -
+                MEDIUM_HEADER_GAP_DP * 2f - headerTimestampWidth
+            ).coerceAtLeast(0f)
+        val showHeaderTimestamp = headerTimestampTextLength > 0 &&
+            headerLocationWidthWithTimestamp >= MEDIUM_MIN_LOCATION_TEXT_WIDTH_DP
+        val headerLocationWidth = if (showHeaderTimestamp) {
+            headerLocationWidthWithTimestamp
+        } else {
+            (width - HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP)
+                .coerceAtLeast(0f)
+        }
         val bodyHeight = (
             height - VERTICAL_PADDING_DP * 2f - HEADER_HEIGHT_DP - HEADER_TO_BODY_GAP_DP
             ).coerceAtLeast(0f)
@@ -258,14 +289,23 @@ object WeatherWidgetSizePolicy {
         val currentSecondaryHeight = (
             bodyHeight - currentPrimaryHeight - PRIMARY_ROW_GAP_DP
             ).coerceAtLeast(0f)
-        val currentConditionFont = 12f
-        val currentConditionHeight = lineHeight(currentConditionFont, scale, SMALL_TEXT_LINE_HEIGHT)
-        val showCurrentCondition = currentSecondaryHeight >= currentConditionHeight
-        val currentApparentFont = min(
-            11f,
+        val currentConditionFont = minOf(
+            12f,
             currentContentWidth /
-                ((temperatureLength + FEELS_LIKE_LABEL_CHARACTERS) * AVERAGE_LABEL_GLYPH_WIDTH * scale)
-        )
+                (currentConditionLabelLength.coerceAtLeast(1) * AVERAGE_LABEL_GLYPH_WIDTH * scale),
+            currentSecondaryHeight / (SMALL_TEXT_LINE_HEIGHT * scale)
+        ).coerceAtLeast(0f)
+        val currentConditionHeight = lineHeight(currentConditionFont, scale, SMALL_TEXT_LINE_HEIGHT)
+        val showCurrentCondition = currentConditionFont > 0f &&
+            currentSecondaryHeight >= currentConditionHeight
+        val currentApparentFont = apparentTemperatureLength?.let { apparentLength ->
+            min(
+                11f,
+                currentContentWidth /
+                    ((apparentLength.coerceAtLeast(1) + FEELS_LIKE_LABEL_CHARACTERS) *
+                        AVERAGE_LABEL_GLYPH_WIDTH * scale)
+            )
+        } ?: 0f
         val showCurrentApparentTemperature = showCurrentCondition &&
             currentApparentFont >= MIN_SECONDARY_FONT_SP &&
             currentSecondaryHeight >= currentConditionHeight + SECONDARY_ROW_GAP_DP +
@@ -295,14 +335,16 @@ object WeatherWidgetSizePolicy {
         )
         val hourlyPrimaryHeight = hourlyTimeHeight + hourlyIconSize + hourlyTemperatureHeight +
             SECONDARY_ROW_GAP_DP * 2f
-        val probabilityWidthLimit = hourlyTextWidth /
-            (PRECIPITATION_LABEL_CHARACTERS * AVERAGE_LABEL_GLYPH_WIDTH * scale)
+        val probabilityTextWidth = (
+            hourlyTextWidth - HOURLY_DROPLET_SIZE_DP - HOURLY_DROPLET_GAP_DP
+            ).coerceAtLeast(0f)
+        val probabilityWidthLimit = probabilityTextWidth /
+            (PRECIPITATION_LABEL_CHARACTERS * AVERAGE_PERCENT_GLYPH_WIDTH * scale)
         val probabilityHeightLimit = (
             bodyHeight - hourlyPrimaryHeight - SECONDARY_ROW_GAP_DP
             ).coerceAtLeast(0f) / (MEDIUM_TEXT_LINE_HEIGHT * scale)
         val probabilityFont = minOf(10f, probabilityWidthLimit, probabilityHeightLimit)
             .coerceAtLeast(0f)
-        val showHourlyProbability = probabilityFont >= MIN_SECONDARY_FONT_SP
 
         return MediumWeatherWidgetSize(
             sizeClass = sizeClass,
@@ -311,6 +353,8 @@ object WeatherWidgetSizePolicy {
             currentWeatherWidthDp = currentWidth,
             hourlyColumnWidthDp = hourlyColumnWidth,
             refreshTouchTargetDp = REFRESH_TOUCH_TARGET_DP,
+            showHeaderTimestamp = showHeaderTimestamp,
+            headerLocationTextWidthDp = headerLocationWidth,
             bodyHeightDp = bodyHeight,
             currentIconSizeDp = currentIconSize,
             currentTemperatureFontSizeSp = currentTemperatureFont,
@@ -319,7 +363,9 @@ object WeatherWidgetSizePolicy {
             currentPrimaryContentWidthDp = currentIconSize + ICON_TO_TEMPERATURE_GAP_DP +
                 temperatureLength * AVERAGE_TEMPERATURE_GLYPH_WIDTH * currentTemperatureFont * scale,
             currentPrimaryContentHeightDp = currentPrimaryHeight,
+            currentConditionFontSizeSp = currentConditionFont,
             showCurrentCondition = showCurrentCondition,
+            currentApparentTemperatureFontSizeSp = currentApparentFont,
             showCurrentApparentTemperature = showCurrentApparentTemperature,
             hourlyIconSizeDp = hourlyIconSize,
             hourlyTimeFontSizeSp = hourlyTimeFont,
@@ -328,7 +374,9 @@ object WeatherWidgetSizePolicy {
                 hourlyTemperatureFont * scale,
             hourlyTextAvailableWidthDp = hourlyTextWidth,
             hourlyPrimaryContentHeightDp = hourlyPrimaryHeight,
-            showHourlyProbability = showHourlyProbability
+            hourlyProbabilityFontSizeSp = probabilityFont,
+            hourlyProbabilityTextAvailableWidthDp = probabilityTextWidth,
+            hourlyProbabilityDropletSizeDp = HOURLY_DROPLET_SIZE_DP
         )
     }
 
@@ -351,6 +399,7 @@ object WeatherWidgetSizePolicy {
     private const val FEELS_LIKE_LABEL_CHARACTERS = 11
     private const val HOUR_LABEL_CHARACTERS = 5
     private const val PRECIPITATION_LABEL_CHARACTERS = 4
+    private const val AVERAGE_PERCENT_GLYPH_WIDTH = 0.62f
     private const val MIN_SECONDARY_FONT_SP = 7f
     private const val CURRENT_WEATHER_FRACTION = 0.33f
     private const val FOUR_COLUMN_WIDTH_DP = 320f

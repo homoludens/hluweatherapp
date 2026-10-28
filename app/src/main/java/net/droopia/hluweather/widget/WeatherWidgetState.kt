@@ -29,6 +29,8 @@ data class WeatherWidgetState(
     val lastWeatherUpdate: Instant,
     /** The fetch time formatted in the forecast's location time zone. */
     val lastWeatherUpdateText: String,
+    /** A compact date and time for the medium header, also in the forecast's location time zone. */
+    val lastWeatherUpdateCompactText: String,
     val isStale: Boolean
 )
 
@@ -89,6 +91,9 @@ fun ForecastLoad.toWeatherWidgetState(
             .toList(),
         lastWeatherUpdate = forecast.fetchedAt,
         lastWeatherUpdateText = forecast.fetchedAt.dateTimeText(zone),
+        lastWeatherUpdateCompactText = forecast.fetchedAt.toJavaInstant()
+            .atZone(zone)
+            .format(widgetCompactDateTimeFormatter),
         isStale = isStale
     )
 }
@@ -96,11 +101,15 @@ fun ForecastLoad.toWeatherWidgetState(
 private const val MAX_WIDGET_HOURS = 5
 
 private val widgetHourFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
+private val widgetCompactDateTimeFormatter = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.US)
 
 private fun String.toSafeZoneId(): ZoneId =
     runCatching { ZoneId.of(this) }.getOrElse { ZoneId.systemDefault() }
 
 private fun Instant.toWidgetTimeText(zone: ZoneId): String =
-    java.time.Instant.ofEpochMilli(toEpochMilliseconds())
+    toJavaInstant()
         .atZone(zone)
         .format(widgetHourFormatter)
+
+private fun Instant.toJavaInstant(): java.time.Instant =
+    java.time.Instant.ofEpochMilli(toEpochMilliseconds())

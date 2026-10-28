@@ -169,7 +169,44 @@ class WeatherWidgetSizePolicyTest {
             assertTrue("current height for $case", policy.currentPrimaryContentHeightDp <= policy.bodyHeightDp + EPSILON)
             assertTrue("hourly width for $case", policy.hourlyTemperatureTextWidthDp <= policy.hourlyTextAvailableWidthDp + EPSILON)
             assertTrue("hourly height for $case", policy.hourlyPrimaryContentHeightDp <= policy.bodyHeightDp + EPSILON)
+            val probabilityHeight = policy.hourlyProbabilityFontSizeSp * case.fontScale * MEDIUM_LINE_HEIGHT
+            assertTrue("probability remains visible for $case", policy.hourlyProbabilityFontSizeSp > 0f)
+            assertTrue("probability text stays readable for $case", policy.hourlyProbabilityFontSizeSp * case.fontScale >= MIN_READABLE_TEXT_DP)
+            assertTrue(
+                "probability row fits after hourly primary content for $case",
+                policy.hourlyPrimaryContentHeightDp + SECONDARY_GAP_DP + probabilityHeight <=
+                    policy.bodyHeightDp + EPSILON
+            )
+            assertTrue(
+                "droplet and probability fit in the hourly column for $case",
+                policy.hourlyProbabilityDropletSizeDp + DROPLET_GAP_DP +
+                    policy.hourlyProbabilityTextAvailableWidthDp <= policy.hourlyTextAvailableWidthDp + EPSILON
+            )
+            assertTrue("current condition remains present at minimum for $case", policy.showCurrentCondition)
         }
+    }
+
+    @Test
+    fun medium_policy_shows_compact_update_time_only_when_header_and_location_still_fit() {
+        val minimum = WeatherWidgetSizePolicy.medium(
+            widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+            fontScale = 1f,
+            formattedTemperatureLength = 4,
+            headerTimestampTextLength = 20
+        )
+        val largeFontMinimum = WeatherWidgetSizePolicy.medium(
+            widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+            fontScale = 2f,
+            formattedTemperatureLength = 4,
+            headerTimestampTextLength = 20
+        )
+
+        assertTrue(minimum.showHeaderTimestamp)
+        assertTrue(minimum.headerLocationTextWidthDp >= 40f)
+        assertFalse(largeFontMinimum.showHeaderTimestamp)
+        assertTrue(largeFontMinimum.headerLocationTextWidthDp >= 40f)
     }
 
     private data class SmallCase(
@@ -188,5 +225,9 @@ class WeatherWidgetSizePolicyTest {
 
     private companion object {
         const val EPSILON = 0.01f
+        const val MEDIUM_LINE_HEIGHT = 1.15f
+        const val SECONDARY_GAP_DP = 2f
+        const val DROPLET_GAP_DP = 2f
+        const val MIN_READABLE_TEXT_DP = 7f
     }
 }

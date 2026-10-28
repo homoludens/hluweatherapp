@@ -154,6 +154,7 @@ class WeatherWidgetStateTest {
 
         assertEquals("23:00", state.hours.single().timeText)
         assertEquals("Wed, Oct 28, 2026 • 22:17", state.lastWeatherUpdateText)
+        assertEquals("Oct 28 22:17", state.lastWeatherUpdateCompactText)
         assertEquals(fetchedAt, state.lastWeatherUpdate)
     }
 
@@ -237,6 +238,7 @@ class WeatherWidgetStateTest {
         assertEquals(listOf("22:00", "00:00"), partial.hours.map { it.timeText })
         assertEquals(fetchedAt, partial.lastWeatherUpdate)
         assertEquals("Wed, Oct 28, 2026 • 11:17", partial.lastWeatherUpdateText)
+        assertEquals("Oct 28 11:17", partial.lastWeatherUpdateCompactText)
         assertTrue(partial.isStale)
         assertTrue(expired.hours.isEmpty())
         assertEquals("22°C", expired.temperatureText)

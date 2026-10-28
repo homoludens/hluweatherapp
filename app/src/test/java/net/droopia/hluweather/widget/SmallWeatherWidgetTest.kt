@@ -337,6 +337,7 @@ class SmallWeatherWidgetTest {
             ),
             lastWeatherUpdate = Instant.parse("2026-10-28T10:17:00Z"),
             lastWeatherUpdateText = "Wed, Oct 28, 2026 • 11:17",
+            lastWeatherUpdateCompactText = "Oct 28 11:17",
             isStale = false
         )
     )
