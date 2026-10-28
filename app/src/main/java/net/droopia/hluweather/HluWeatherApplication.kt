@@ -151,7 +151,8 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
             workManager = WorkManager.getInstance(this),
             workerClass = WeatherWidgetWorker::class.java,
             hasInstalledWidgets = weatherWidgetDispatcher::hasInstalledWidgets,
-            refreshInstalledWidgetInventory = { weatherWidgetDispatcher.refreshInventory() }
+            refreshInstalledWidgetInventory = { weatherWidgetDispatcher.refreshInventory() },
+            recordDeletedWidgetIds = weatherWidgetDispatcher::recordDeletedIds
         )
     }
 

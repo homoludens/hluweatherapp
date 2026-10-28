@@ -61,4 +61,24 @@ class AndroidWeatherWidgetDispatcherTest {
         assertFalse(dispatcher.refreshInventory())
         assertFalse(dispatcher.installedWidgets.value)
     }
+
+    @Test
+    fun deleted_ids_are_ignored_while_stale_and_new_ids_of_the_same_size_remain_visible() {
+        val ids = mutableMapOf<String, IntArray>()
+        val updates = mutableListOf<Intent>()
+        val dispatcher = AndroidWeatherWidgetDispatcher(context, { ids[it.className] ?: intArrayOf() }, { updates += it })
+        val small = SmallWeatherWidgetReceiver::class.java.name
+        ids[small] = intArrayOf(1, 2)
+        dispatcher.recordDeletedIds(small, intArrayOf(1))
+        assertTrue(dispatcher.refreshInventory())
+        dispatcher.updateAllWidgets()
+        assertArrayEquals(intArrayOf(2), updates.single().getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS))
+
+        dispatcher.recordDeletedIds(small, intArrayOf(2))
+        assertFalse(dispatcher.refreshInventory())
+        ids[small] = intArrayOf()
+        assertFalse(dispatcher.refreshInventory()) // retire tombstones when the manager catches up
+        ids[small] = intArrayOf(1)
+        assertTrue(dispatcher.refreshInventory())
+    }
 }

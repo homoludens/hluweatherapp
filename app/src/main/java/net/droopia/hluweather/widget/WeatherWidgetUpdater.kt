@@ -28,68 +28,83 @@ class WeatherWidgetUpdater(
     private val workManager: WorkManager,
     private val workerClass: Class<out ListenableWorker>,
     private val hasInstalledWidgets: () -> Boolean,
-    private val refreshInstalledWidgetInventory: () -> Unit = {}
+    private val refreshInstalledWidgetInventory: () -> Unit = {},
+    private val recordDeletedWidgetIds: (String, IntArray) -> Unit = { _, _ -> }
 ) {
     private val selectionLock = Mutex()
+    private val inventoryLock = Any()
 
     /** Refresh the Android inventory before reconciling schedule state after receiver callbacks. */
     fun refreshInventory() {
-        refreshInstalledWidgetInventory()
-        reconcile()
+        synchronized(inventoryLock) {
+            refreshInstalledWidgetInventory()
+            reconcile()
+        }
+    }
+
+    fun widgetsDeleted(receiverClassName: String, ids: IntArray) {
+        synchronized(inventoryLock) {
+            recordDeletedWidgetIds(receiverClassName, ids)
+            refreshInventory()
+        }
     }
 
     /** Reconcile after widget inventory changes; both widget sizes share one periodic request. */
     fun reconcile() {
-        if (hasInstalledWidgets()) {
-            workManager.enqueueUniquePeriodicWork(
-                PERIODIC_REFRESH_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                periodicRequest()
-            )
-        } else {
-            cancelWidgetWork()
+        synchronized(inventoryLock) {
+            if (hasInstalledWidgets()) {
+                workManager.enqueueUniquePeriodicWork(
+                    PERIODIC_REFRESH_WORK_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    periodicRequest()
+                )
+            } else {
+                cancelWidgetWork()
+            }
         }
     }
 
     /** Manual refresh is intentionally unconstrained so it can run while offline. */
     fun enqueueManualRefresh() {
-        if (!hasInstalledWidgets()) {
-            cancelWidgetWork()
-            return
-        }
+        synchronized(inventoryLock) {
+            if (!hasInstalledWidgets()) {
+                cancelWidgetWork()
+                return@synchronized
+            }
 
-        workManager.enqueueUniqueWork(
-            MANUAL_REFRESH_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequest.Builder(workerClass)
-                .setInputData(Data.Builder().putBoolean(WeatherWidgetWorker.INPUT_MANUAL, true).build())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
-                .build()
-        )
+            workManager.enqueueUniqueWork(
+                MANUAL_REFRESH_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequest.Builder(workerClass)
+                    .setInputData(Data.Builder().putBoolean(WeatherWidgetWorker.INPUT_MANUAL, true).build())
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
+                    .build()
+            )
+        }
     }
 
     /** Cache-due selection reconciliation; unlike a tap this never forces a fresh cache. */
     suspend fun enqueueSelectionRefresh() = withContext(NonCancellable + Dispatchers.IO) {
         selectionLock.withLock {
-            if (!hasInstalledWidgets()) {
-                cancelWidgetWork()
-                return@withLock
-            }
             val work = workManager.getWorkInfosForUniqueWork(SELECTION_REFRESH_WORK_NAME).get()
             // One pending request is enough: it resolves the latest identity when it runs.
-            val policy = selectionWorkPolicy(work.map { it.state }) ?: return@withLock
+            val policy = selectionWorkPolicy(work.map { it.state })
             // KEEP alone loses a change arriving after a running worker's final identity check.
-            if (!hasInstalledWidgets()) {
-                cancelWidgetWork()
-                return@withLock
+            val operation = synchronized(inventoryLock) {
+                if (!hasInstalledWidgets()) {
+                    cancelWidgetWork()
+                    null
+                } else if (policy != null) {
+                    workManager.enqueueUniqueWork(
+                        SELECTION_REFRESH_WORK_NAME,
+                        policy,
+                        OneTimeWorkRequest.Builder(workerClass)
+                            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
+                            .build()
+                    )
+                } else null
             }
-            workManager.enqueueUniqueWork(
-                SELECTION_REFRESH_WORK_NAME,
-                policy,
-                OneTimeWorkRequest.Builder(workerClass)
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
-                    .build()
-            ).result.get()
+            operation?.result?.get()
         }
     }
 
