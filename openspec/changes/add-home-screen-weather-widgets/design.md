@@ -143,6 +143,16 @@ Add unit tests for adapters, units, nullable fields, time-zone/hour selection, l
 
 Run the narrowest relevant Google-debug tests while iterating. Because the completed feature crosses presentation, application startup, persistence, and background work, use the Google-debug suite and `:app:assembleGoogleDebug` as final verification. Never build or sign a release for this change.
 
+### 9. Let bounded native text views fit when the launcher reapplies cached RemoteViews
+
+The API 35 `CACHED_EMPTY` reproduction recorded at `b8d1126` shows a case that cannot be fixed reliably by the active Glance composition's render-configuration flow: after all sessions end, Android can defer waking the widget-only app process while the launcher reapplies the existing `RemoteViews` using its new font resources. More observers, explicit invalidations, or refresh work cannot guarantee a callback in this state, and polling is not an acceptable substitute. The user approved a rendering adaptation under task 5.3.
+
+Use Glance 1.2.0's public `AndroidRemoteViews` composable to embed bounded native `TextView` slots for widget text that must survive host-only configuration reapplication. Their small set of XML role styles uses Android's native uniform text auto-sizing, with a readable minimum physical size and role-appropriate maximum `sp` sizes. The launcher can then fit glyphs to the already-assigned text bounds when it reapplies the same `RemoteViews`; no app callback, new composition, translation, network access, or worker is required. Use only public Android/Glance APIs, add no dependency or permission, and do not cap font scale globally or convert all widget text to fixed pixels.
+
+Keep `WeatherWidgetSizePolicy` authoritative for the initial layout: it continues to choose supported dimensions, column count, content priorities, box sizes, and preferred role sizes. Native auto-sizing is only the host-owned overflow guard within those bounded boxes, preserving the large current-temperature hierarchy, accent colors, accessible descriptions/actions, and the distinction between missing and zero precipitation. The same render must continue to fit at normal and resized two-row sizes and at the compact 260×110 dp minimum.
+
+Add a regression that translates production content once at 1.0 font scale, then changes only the host resource configuration to 1.3 and back to 1.0 and applies/reapplies that exact `RemoteViews`; do not invoke a Glance callback, recompose, or run an app worker between host changes. Check text ink/baselines and row/card bounds for current and hourly text, including signed Fahrenheit, long labels, missing probability, and both themes. Use native Robolectric graphics on SDK 34 to avoid the known SDK 35 native-font ZIP collision. Existing active-composition configuration and widget UI coverage remain required and unchanged.
+
 ## Risks / Trade-offs
 
 - [Launcher cells do not imply fixed dp size] → Base layout on actual size, test three-to-five-hour branches, and verify real launcher resize behavior and font scaling.

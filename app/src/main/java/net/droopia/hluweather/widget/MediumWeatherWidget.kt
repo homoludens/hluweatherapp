@@ -110,6 +110,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         snapshot = snapshot,
         locationDisplayName = displayLocationName,
         headerUpdateText = headerText.takeIf { policy.showHeaderTimestamp },
+        headerUpdateTextWidthDp = policy.headerTimestampTextWidthDp.takeIf { policy.showHeaderTimestamp },
         verticalPaddingDp = policy.cardVerticalPaddingDp,
         headerUpdateContentDescription = available?.let { current ->
             val currentWeather = current.weather
@@ -145,6 +146,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                             policy = policy,
                             context = context,
                             fontScale = fontScale,
+                            textLineHeightMultiplier = textLineHeightMultiplier,
                             widthDp = if (hours.isEmpty()) {
                                 (size.width.value - MEDIUM_HORIZONTAL_INSETS_DP).coerceAtLeast(0f)
                             } else {
@@ -174,6 +176,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                                         temperatureFontSizeSp = policy.hourlyTemperatureFontSizeSp,
                                         probabilityFontSizeSp = policy.hourlyProbabilityFontSizeSp,
                                         probabilityDropletSizeDp = policy.hourlyProbabilityDropletSizeDp,
+                                        textLineHeightMultiplier = textLineHeightMultiplier,
                                         modifier = GlanceModifier.width(hourlyColumnWidth.dp)
                                             .padding(horizontal = MEDIUM_CELL_PADDING_DP.dp)
                                     )
@@ -200,6 +203,7 @@ private fun MediumCurrentWeather(
     policy: MediumWeatherWidgetSize,
     context: Context,
     fontScale: Float,
+    textLineHeightMultiplier: Float,
     widthDp: Float,
     modifier: GlanceModifier
 ) {
@@ -222,6 +226,7 @@ private fun MediumCurrentWeather(
         apparentTemperatureFontSizeSp = policy.currentApparentTemperatureFontSizeSp,
         conditionDisplayText = conditionText,
         secondaryItemGapDp = MEDIUM_SECONDARY_GAP_DP,
+        textLineHeightMultiplier = textLineHeightMultiplier,
         modifier = modifier
     )
 }

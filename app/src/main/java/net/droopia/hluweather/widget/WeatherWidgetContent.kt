@@ -3,6 +3,8 @@ package net.droopia.hluweather.widget
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.util.TypedValue
+import android.widget.RemoteViews
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -19,6 +22,8 @@ import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.AndroidRemoteViews
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.background
@@ -29,8 +34,10 @@ import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.FontFamily
@@ -67,6 +74,7 @@ fun WeatherWidgetCard(
     locationDisplayName: String? = null,
     headerUpdateText: String? = null,
     headerUpdateContentDescription: String? = null,
+    headerUpdateTextWidthDp: Float? = null,
     verticalPaddingDp: Float = 8f,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
@@ -103,7 +111,8 @@ fun WeatherWidgetCard(
             palette = palette,
             displayLocationName = locationDisplayName,
             updateText = headerUpdateText,
-            updateContentDescription = headerUpdateContentDescription
+            updateContentDescription = headerUpdateContentDescription,
+            updateTextWidthDp = headerUpdateTextWidthDp
         )
         content(palette)
     }
@@ -118,7 +127,8 @@ fun WeatherWidgetHeader(
     modifier: GlanceModifier = GlanceModifier,
     displayLocationName: String? = null,
     updateText: String? = null,
-    updateContentDescription: String? = null
+    updateContentDescription: String? = null,
+    updateTextWidthDp: Float? = null
 ) {
     val context = LocalContext.current
     val label = displayLocationName ?: locationName ?: "Choose a location"
@@ -138,28 +148,31 @@ fun WeatherWidgetHeader(
                 sizeDp = 18f,
                 contentDescription = null
             )
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = label,
+                role = WeatherWidgetAdaptiveTextRole.MEDIUM,
+                color = palette.mainText,
+                fontSizeSp = LOCATION_FONT_SIZE_SP,
                 modifier = GlanceModifier
                     .defaultWeight()
-                    .semantics {
-                        contentDescription = locationName?.let { "Weather for $it" }
-                            ?: "Open HluWeather to choose a location"
-                    },
-                style = widgetTextStyle(palette.mainText, 14.sp, FontWeight.Medium),
-                maxLines = 1
+                    .fillMaxWidth(),
+                contentDescription = locationName?.let { "Weather for $it" }
+                    ?: "Open HluWeather to choose a location"
             )
         }
         if (updateText != null) {
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = updateText,
+                role = WeatherWidgetAdaptiveTextRole.TINY_REGULAR,
+                color = palette.secondaryText,
+                fontSizeSp = HEADER_UPDATE_FONT_SIZE_SP,
                 modifier = GlanceModifier
-                    .padding(horizontal = 4.dp)
-                    .semantics {
-                        contentDescription = updateContentDescription ?: updateText
-                    },
-                style = widgetTextStyle(palette.secondaryText, 9.sp),
-                maxLines = 1
+                    .then(
+                        updateTextWidthDp?.let { GlanceModifier.width(it.dp) }
+                            ?: GlanceModifier
+                    )
+                    .padding(horizontal = 4.dp),
+                contentDescription = updateContentDescription ?: updateText
             )
         }
         WeatherWidgetRefreshAction(palette, isRefreshing)
@@ -222,6 +235,7 @@ fun WeatherWidgetCurrentWeather(
     apparentTemperatureFontSizeSp: Float = 11f,
     conditionDisplayText: String = weather.conditionLabel,
     secondaryItemGapDp: Float = 0f,
+    textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(modifier = modifier) {
@@ -233,48 +247,38 @@ fun WeatherWidgetCurrentWeather(
                 sizeDp = iconSizeDp,
                 modifier = GlanceModifier.padding(end = 4.dp)
             )
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = weather.temperatureText,
-                modifier = GlanceModifier
-                    .defaultWeight()
-                    .semantics { contentDescription = weather.temperatureContentDescription },
-                style = widgetTextStyle(
-                    palette.mainText,
-                    temperatureFontSizeSp.coerceAtLeast(1f).sp,
-                    FontWeight.Bold
-                ),
-                maxLines = 1
+                role = WeatherWidgetAdaptiveTextRole.PRIMARY,
+                color = palette.mainText,
+                fontSizeSp = temperatureFontSizeSp.coerceAtLeast(1f),
+                lineHeightMultiplier = textLineHeightMultiplier,
+                modifier = GlanceModifier.defaultWeight(),
+                contentDescription = weather.temperatureContentDescription
             )
         }
         if (showCondition) {
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = conditionDisplayText,
-                modifier = GlanceModifier
-                    .padding(top = secondaryItemGapDp.dp)
-                    .semantics { contentDescription = weather.conditionLabel },
-                style = widgetTextStyle(
-                    palette.mainText,
-                    conditionFontSizeSp.coerceAtLeast(0.1f).sp,
-                    FontWeight.Medium
-                ),
-                maxLines = 1
+                role = WeatherWidgetAdaptiveTextRole.MEDIUM,
+                color = palette.mainText,
+                fontSizeSp = conditionFontSizeSp.coerceAtLeast(0.1f),
+                lineHeightMultiplier = textLineHeightMultiplier,
+                modifier = GlanceModifier.fillMaxWidth().padding(top = secondaryItemGapDp.dp),
+                contentDescription = weather.conditionLabel
             )
         }
         if (showApparentTemperature && weather.apparentTemperatureText != null) {
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = "Feels like ${weather.apparentTemperatureText}",
-                modifier = GlanceModifier
-                    .padding(top = secondaryItemGapDp.dp)
-                    .semantics {
-                        contentDescription = weather.apparentTemperatureContentDescription
-                            ?.let { "Feels like $it" }
-                            ?: "Feels like ${weather.apparentTemperatureText}"
-                    },
-                style = widgetTextStyle(
-                    palette.secondaryText,
-                    apparentTemperatureFontSizeSp.coerceAtLeast(1f).sp
-                ),
-                maxLines = 1
+                role = WeatherWidgetAdaptiveTextRole.REGULAR,
+                color = palette.secondaryText,
+                fontSizeSp = apparentTemperatureFontSizeSp.coerceAtLeast(1f),
+                lineHeightMultiplier = textLineHeightMultiplier,
+                modifier = GlanceModifier.fillMaxWidth().padding(top = secondaryItemGapDp.dp),
+                contentDescription = weather.apparentTemperatureContentDescription
+                    ?.let { "Feels like $it" }
+                    ?: "Feels like ${weather.apparentTemperatureText}"
             )
         }
     }
@@ -290,16 +294,21 @@ fun WeatherWidgetHourlyCell(
     temperatureFontSizeSp: Float,
     probabilityFontSizeSp: Float,
     probabilityDropletSizeDp: Float,
+    textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
+        WeatherWidgetAdaptiveText(
             text = hour.timeText,
-            style = widgetTextStyle(palette.secondaryText, timeFontSizeSp.coerceAtLeast(1f).sp),
-            maxLines = 1
+            role = WeatherWidgetAdaptiveTextRole.COMPACT_REGULAR,
+            color = palette.secondaryText,
+            fontSizeSp = timeFontSizeSp.coerceAtLeast(1f),
+            lineHeightMultiplier = textLineHeightMultiplier,
+            modifier = GlanceModifier.fillMaxWidth(),
+            contentDescription = hour.timeText
         )
         WeatherWidgetWeatherIcon(
             condition = hour.condition,
@@ -309,17 +318,14 @@ fun WeatherWidgetHourlyCell(
             modifier = GlanceModifier.padding(top = 2.dp),
             contentDescription = "${hour.timeText}, ${hour.conditionLabel}"
         )
-        Text(
+        WeatherWidgetAdaptiveText(
             text = hour.temperatureText,
-            modifier = GlanceModifier.padding(top = 2.dp).semantics {
-                contentDescription = hour.temperatureContentDescription
-            },
-            style = widgetTextStyle(
-                palette.mainText,
-                temperatureFontSizeSp.coerceAtLeast(1f).sp,
-                FontWeight.Medium
-            ),
-            maxLines = 1
+            role = WeatherWidgetAdaptiveTextRole.MEDIUM_CENTER,
+            color = palette.mainText,
+            fontSizeSp = temperatureFontSizeSp.coerceAtLeast(1f),
+            lineHeightMultiplier = textLineHeightMultiplier,
+            modifier = GlanceModifier.fillMaxWidth().padding(top = 2.dp),
+            contentDescription = hour.temperatureContentDescription
         )
         Row(
             modifier = GlanceModifier.padding(top = 2.dp),
@@ -331,17 +337,14 @@ fun WeatherWidgetHourlyCell(
                 sizeDp = probabilityDropletSizeDp,
                 contentDescription = null
             )
-            Text(
+            WeatherWidgetAdaptiveText(
                 text = hour.precipitationProbabilityText,
-                modifier = GlanceModifier.semantics {
-                    contentDescription = hour.precipitationProbabilityContentDescription
-                },
-                style = widgetTextStyle(
-                    palette.primary,
-                    probabilityFontSizeSp.coerceAtLeast(0.1f).sp,
-                    FontWeight.Medium
-                ),
-                maxLines = 1
+                role = WeatherWidgetAdaptiveTextRole.COMPACT_MEDIUM_CENTER,
+                color = palette.primary,
+                fontSizeSp = probabilityFontSizeSp.coerceAtLeast(0.1f),
+                lineHeightMultiplier = textLineHeightMultiplier,
+                modifier = GlanceModifier.defaultWeight(),
+                contentDescription = hour.precipitationProbabilityContentDescription
             )
         }
     }
@@ -362,7 +365,7 @@ fun WeatherWidgetEmptyContent(
     Text(
         text = text,
         modifier = modifier.semantics { contentDescription = text },
-        style = widgetTextStyle(palette.secondaryText, 13.sp),
+        style = widgetTextStyle(palette.secondaryText, EMPTY_STATE_FONT_SIZE_SP.sp),
         maxLines = 2
     )
 }
@@ -398,11 +401,13 @@ fun WeatherWidgetStatus(
         }
     } ?: return
 
-    Text(
+    WeatherWidgetAdaptiveText(
         text = status,
-        modifier = modifier.semantics { contentDescription = status },
-        style = widgetTextStyle(palette.secondaryText, 10.sp),
-        maxLines = 1
+        role = WeatherWidgetAdaptiveTextRole.COMPACT_REGULAR,
+        color = palette.secondaryText,
+        fontSizeSp = STATUS_FONT_SIZE_SP,
+        modifier = modifier.fillMaxWidth(),
+        contentDescription = status
     )
 }
 
@@ -448,6 +453,47 @@ private fun WeatherWidgetVectorIcon(
     )
 }
 
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
+@Composable
+private fun WeatherWidgetAdaptiveText(
+    text: String,
+    role: WeatherWidgetAdaptiveTextRole,
+    color: Color,
+    fontSizeSp: Float,
+    modifier: GlanceModifier = GlanceModifier,
+    contentDescription: String? = text,
+    lineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
+) {
+    val context = LocalContext.current
+    val fontScale = context.resources.configuration.fontScale
+        .takeIf { it.isFinite() && it > 0f } ?: 1f
+    val lineBoxHeightDp = (fontSizeSp.coerceAtLeast(0.1f) * fontScale *
+        lineHeightMultiplier.coerceAtLeast(MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER))
+        .coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
+    val remoteViews = RemoteViews(context.packageName, role.layoutId).apply {
+        setTextViewText(R.id.weather_widget_adaptive_text, text)
+        setTextViewTextSize(
+            R.id.weather_widget_adaptive_text,
+            TypedValue.COMPLEX_UNIT_SP,
+            fontSizeSp.coerceAtLeast(0.1f)
+        )
+        setTextColor(R.id.weather_widget_adaptive_text, color.toArgb())
+        setContentDescription(R.id.weather_widget_adaptive_text, contentDescription)
+    }
+    AndroidRemoteViews(remoteViews, modifier = modifier.height(lineBoxHeightDp.dp))
+}
+
+private enum class WeatherWidgetAdaptiveTextRole(val layoutId: Int) {
+    PRIMARY(R.layout.weather_widget_adaptive_text_primary),
+    MEDIUM(R.layout.weather_widget_adaptive_text_medium),
+    MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_medium_center),
+    REGULAR(R.layout.weather_widget_adaptive_text_regular),
+    COMPACT_MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_compact_medium_center),
+    COMPACT_REGULAR(R.layout.weather_widget_adaptive_text_compact_regular),
+    COMPACT_REGULAR_CENTER(R.layout.weather_widget_adaptive_text_compact_regular_center),
+    TINY_REGULAR(R.layout.weather_widget_adaptive_text_tiny_regular)
+}
+
 private fun widgetTextStyle(
     color: Color,
     fontSize: androidx.compose.ui.unit.TextUnit,
@@ -482,6 +528,14 @@ internal fun weatherWidgetPalette(
 
 private fun Configuration.isNightMode(): Boolean =
     uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+
+private const val LOCATION_FONT_SIZE_SP = 14f
+private const val HEADER_UPDATE_FONT_SIZE_SP = 9f
+private const val EMPTY_STATE_FONT_SIZE_SP = 13f
+private const val STATUS_FONT_SIZE_SP = 10f
+private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+private const val MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 9f
 
 private fun openMainWeatherAction(context: Context): Action = actionStartActivity(
     Intent(context, MainActivity::class.java).addFlags(

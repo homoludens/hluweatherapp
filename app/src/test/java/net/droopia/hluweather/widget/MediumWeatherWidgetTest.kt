@@ -223,6 +223,126 @@ class MediumWeatherWidgetTest {
         }
     }
 
+    @Config(sdk = [34])
+    @OptIn(ExperimentalGlanceRemoteViewsApi::class)
+    @Test
+    fun cached_production_remote_views_fit_when_host_reapplies_them_at_changed_font_scale() {
+        val snapshot = availableSnapshot(
+            locationName = "A very long saved location name for adaptive header text",
+            temperature = "−123°F",
+            apparentTemperature = "124°F",
+            hours = referenceHours(
+                temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
+                probabilities = listOf(null, 0, 5, 100, 60)
+            ),
+            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT)
+        )
+        val sizes = listOf(
+            260f to 110f,
+            293f to 184f,
+            320f to 144f,
+            400f to 160f
+        )
+
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            val themedSnapshot = snapshot.copy(settings = snapshot.settings.copy(themeMode = theme))
+            sizes.forEach { (widthDp, heightDp) ->
+                val baseContext = ApplicationProvider.getApplicationContext<Context>()
+                val initialConfiguration = Configuration(baseContext.resources.configuration).apply {
+                    fontScale = 1f
+                    val nightMode = if (theme == ThemeMode.DARK) {
+                        Configuration.UI_MODE_NIGHT_YES
+                    } else {
+                        Configuration.UI_MODE_NIGHT_NO
+                    }
+                    uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+                }
+                val hostContext = baseContext.createConfigurationContext(initialConfiguration)
+                val density = hostContext.resources.displayMetrics.density
+                val providerInfo = AppWidgetProviderInfo().apply {
+                    minWidth = (widthDp * density).roundToInt()
+                    minHeight = (heightDp * density).roundToInt()
+                }
+                val productionRemoteViews = runBlocking {
+                    PreviewMediumWeatherWidget(themedSnapshot).composeForPreview(
+                        hostContext,
+                        AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+                        providerInfo
+                    )
+                }
+                val widthPx = (widthDp * density).roundToInt()
+                val heightPx = (heightDp * density).roundToInt()
+                val expectedColumns = WeatherWidgetSizePolicy.medium(
+                    widthDp = widthDp,
+                    heightDp = heightDp,
+                    fontScale = 1f,
+                    formattedTemperatureLength = "−123°F".length,
+                    apparentTemperatureLength = "124°F".length
+                ).hourlyColumnCount
+                val expectedProbabilities = listOf("—", "0%", "5%", "100%", "60%")
+                    .take(expectedColumns)
+                val hostView = productionRemoteViews.apply(hostContext, FrameLayout(hostContext))
+                hostView.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+                )
+                hostView.layout(0, 0, widthPx, heightPx)
+                assertText(hostView, "−123°F")
+                assertEquals(expectedProbabilities, visibleProbabilities(hostView))
+                assertNativeAutoSizing(hostView)
+                assertLayoutFits(hostView, widthDp, heightDp)
+                assertTextInkFits(hostView, "$widthDp×$heightDp dp at host font scale 1.0")
+                val probabilityBeforeScale = findText(hostView, "5%")
+                val initialMinTextSize = probabilityBeforeScale.autoSizeMinTextSize
+
+                // Simulate the launcher updating its resources and reapplying its cached RemoteViews.
+                // No Glance composition, app callback, or weather worker runs between these applies.
+                val scaledConfiguration = Configuration(initialConfiguration).apply { fontScale = 1.3f }
+                hostContext.resources.updateConfiguration(
+                    scaledConfiguration,
+                    hostContext.resources.displayMetrics
+                )
+                hostView.dispatchConfigurationChanged(scaledConfiguration)
+                productionRemoteViews.reapply(hostContext, hostView)
+                hostView.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+                )
+                hostView.layout(0, 0, widthPx, heightPx)
+                assertEquals(1.3f, hostView.resources.configuration.fontScale, 0f)
+                assertText(hostView, "−123°F")
+                assertEquals(expectedProbabilities, visibleProbabilities(hostView))
+                assertNativeAutoSizing(hostView)
+                val probabilityAfterScale = findText(hostView, "5%")
+                assertEquals(initialMinTextSize, probabilityAfterScale.autoSizeMinTextSize)
+                assertTrue(
+                    "host font fitting respects the readable physical minimum",
+                    probabilityAfterScale.textSize >= probabilityAfterScale.autoSizeMinTextSize - 1f
+                )
+                assertLayoutFits(hostView, widthDp, heightDp)
+                assertTextInkFits(hostView, "$widthDp×$heightDp dp at host font scale 1.3")
+
+                val restoredConfiguration = Configuration(scaledConfiguration).apply { fontScale = 1f }
+                hostContext.resources.updateConfiguration(
+                    restoredConfiguration,
+                    hostContext.resources.displayMetrics
+                )
+                hostView.dispatchConfigurationChanged(restoredConfiguration)
+                productionRemoteViews.reapply(hostContext, hostView)
+                hostView.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+                )
+                hostView.layout(0, 0, widthPx, heightPx)
+                assertEquals(1f, hostView.resources.configuration.fontScale, 0f)
+                assertNativeAutoSizing(hostView)
+                assertEquals(initialMinTextSize, findText(hostView, "5%").autoSizeMinTextSize)
+                assertLayoutFits(hostView, widthDp, heightDp)
+                assertTextInkFits(hostView, "$widthDp×$heightDp dp after host font scale restore")
+            }
+        }
+    }
+
     @Config(sdk = [28, 34])
     @Test
     fun system_configuration_change_rethemes_medium_widget_but_explicit_preferences_win() {
@@ -614,9 +734,31 @@ class MediumWeatherWidgetTest {
         assertTrue("expected translated TextView '$expected'", hasText(root, expected))
     }
 
+    private fun assertNativeAutoSizing(root: View) {
+        val density = root.resources.displayMetrics.density
+        findViews(root).filterIsInstance<TextView>().filter { it.text.isNotBlank() }.forEach { text ->
+            assertEquals(
+                "${text.text} uses platform uniform auto-sizing",
+                TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM,
+                text.autoSizeTextType
+            )
+            assertTrue("${text.text} has a physical minimum size", text.autoSizeMinTextSize >= 7f * density - 1f)
+            assertTrue("${text.text} has a role maximum above its minimum", text.autoSizeMaxTextSize > text.autoSizeMinTextSize)
+        }
+    }
+
+    private fun findText(root: View, expected: String): TextView = findViews(root)
+        .filterIsInstance<TextView>()
+        .first { it.text.toString() == expected }
+
     private fun hasText(root: View, expected: String): Boolean = findViews(root)
         .filterIsInstance<TextView>()
         .any { it.text.toString() == expected }
+
+    private fun visibleProbabilities(root: View): List<String> = findViews(root)
+        .filterIsInstance<TextView>()
+        .map { it.text.toString() }
+        .filter { it in listOf("—", "0%", "5%", "10%", "20%", "60%", "100%") }
 
     private fun findDescription(root: View, description: String): String? = findViews(root)
         .firstOrNull { it.contentDescription == description }
