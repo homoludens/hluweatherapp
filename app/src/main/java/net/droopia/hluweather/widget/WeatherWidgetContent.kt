@@ -535,7 +535,7 @@ private const val EMPTY_STATE_FONT_SIZE_SP = 13f
 private const val STATUS_FONT_SIZE_SP = 10f
 private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
 private const val MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
-private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 9f
+private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
 
 private fun openMainWeatherAction(context: Context): Action = actionStartActivity(
     Intent(context, MainActivity::class.java).addFlags(

@@ -390,7 +390,13 @@ class WeatherWidgetSessionTest {
                 val contentTop = text.compoundPaddingTop
                 val contentBottom = text.height - text.compoundPaddingBottom
                 val lineBottom = contentTop + text.layout.getLineBottom(0)
-                assertTrue("${text.text} line box fits its translated TextView", lineBottom <= contentBottom)
+                assertTrue(
+                    "${text.text} line box fits its translated TextView " +
+                        "(lineBottom=$lineBottom, contentBottom=$contentBottom, " +
+                        "height=${text.height}, textSizePx=${text.textSize}, " +
+                        "fontScale=${text.resources.configuration.fontScale})",
+                    lineBottom <= contentBottom
+                )
 
                 val ink = Rect()
                 text.paint.getTextBounds(text.text, 0, text.text.length, ink)

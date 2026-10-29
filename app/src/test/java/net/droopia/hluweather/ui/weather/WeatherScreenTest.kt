@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import java.util.TimeZone
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
@@ -594,16 +595,22 @@ class WeatherScreenTest {
             locationRepository = EmptyLocationRepository()
         )
         var settingsClicked = false
+        var pickerClicked = false
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                WeatherScreen(viewModel = viewModel, onSettingsClick = { settingsClicked = true })
+                WeatherScreen(
+                    viewModel = viewModel,
+                    onSettingsClick = { settingsClicked = true },
+                    onAddLocationClick = { pickerClicked = true }
+                )
             }
         }
 
         composeRule.onNodeWithText("Add your first location").assertIsDisplayed()
         composeRule.onNodeWithText("Add location").performClick()
 
-        assertTrue(settingsClicked)
+        assertTrue(pickerClicked)
+        assertFalse(settingsClicked)
     }
 
     @Test
