@@ -4,6 +4,8 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -66,8 +68,8 @@ class WeatherWidgetRegistrationTest {
     fun provider_metadata_matches_responsive_layout_minimums_and_disables_xml_refreshes() {
         assertProvider(
             resourceName = "small_weather_widget_provider",
-            width = "110dp",
-            height = "110dp",
+            width = "${WeatherWidgetSizePolicy.SMALL_MIN_WIDTH_DP.toInt()}dp",
+            height = "${WeatherWidgetSizePolicy.SMALL_MIN_HEIGHT_DP.toInt()}dp",
             cellsWide = "2",
             cellsTall = "2",
             label = "small_weather_widget_name",
@@ -77,8 +79,8 @@ class WeatherWidgetRegistrationTest {
         )
         assertProvider(
             resourceName = "medium_weather_widget_provider",
-            width = "260dp",
-            height = "144dp",
+            width = "${WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP.toInt()}dp",
+            height = "${WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.toInt()}dp",
             cellsWide = "4",
             cellsTall = "2",
             label = "medium_weather_widget_name",
@@ -92,6 +94,21 @@ class WeatherWidgetRegistrationTest {
     fun static_picker_previews_use_the_production_card_surface_and_shared_weather_glyph_assets() {
         val small = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_small.xml"))
         val medium = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_medium.xml"))
+        assertEquals(
+            "${WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.toInt()}dp",
+            medium.documentElement.androidAttribute("layout_height")
+        )
+        assertEquals(
+            "40dp",
+            (medium.getElementsByTagName("LinearLayout").item(1) as Element)
+                .androidAttribute("layout_height")
+        )
+        assertTrue(
+            DpSize(
+                WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP.dp,
+                WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp
+            ) in MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES
+        )
         listOf(small, medium).forEach { layout ->
             assertEquals("@drawable/weather_widget_card_surface", layout.documentElement.androidAttribute("background"))
             assertTrue(layout.getElementsByTagName("ImageView").asElements().any {
