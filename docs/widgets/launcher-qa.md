@@ -44,7 +44,9 @@ Runtime checks are recorded separately below; “not run” means no device-leve
 | Runtime target | Result |
 | --- | --- |
 | API 28 launcher | **NOT RUN** — no API 28 device, AVD, platform, or system image is installed locally; no download was attempted. |
-| API 35 Pixel Launcher | **4×2 picker/placement PASS; overall QA BLOCKED** by the refresh-snapshot and font-scale findings below (2026-10-29 Sol fallback). Existing task AVD `hluweather-task6-5-api35`, Pixel 2 profile, Google APIs, 1080×1920, 420 dpi, 5×5 grid; Pixel Launcher version 15 / code 907. Same Google debug APK as task 6.4, package `net.droopia.hluweather`, version 3.5.1 / code 38. SHA-256: `77405d803e53d3650e63d1da95fd68ee29f2c92d307ea6de4e4d64bb499c865f`. No Kotlin/XML changes, rebuild, uninstall, or data clear. |
+| API 35 Pixel Launcher | **Historical 4×2 picker/placement PASS; overall QA BLOCKED** by the refresh-snapshot and font-scale findings below (2026-10-29 Sol fallback). Existing task AVD `hluweather-task6-5-api35`, Pixel 2 profile, Google APIs, 1080×1920, 420 dpi, 5×5 grid; Pixel Launcher version 15 / code 907. Runtime-tested APK: `net.droopia.hluweather`, version 3.5.1 / code 38, SHA-256 `77405d803e53d3650e63d1da95fd68ee29f2c92d307ea6de4e4d64bb499c865f`. No Kotlin/XML changes, rebuild, uninstall, or data clear during that runtime check. |
+
+**Fresh task 6.4 package (2026-10-29):** `app/build/outputs/apk/google/debug/app-google-debug.apk`, SHA-256 `afee4f76edcd93da3daf38d2d0faff9cb89ca3f0ace1cb8422e0e2f08b080992`. Packaged medium-provider metadata was verified as 260×110 dp with a 4×2 target. This package was inspected, not installed or runtime-tested. The API 35 screenshots and observations below use the preceding `77405d…` APK, built before `c91ddb6` and `ca485b7`; they do not verify the snapshot or font-fit fixes. Runtime reverification remains pending under task 6.5.
 
 ### 4×3 investigation: stale metadata, not another layout fix
 
