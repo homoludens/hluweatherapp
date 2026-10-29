@@ -16,6 +16,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.compose.ui.graphics.toArgb
 import androidx.glance.GlanceId
+import androidx.glance.LocalContext
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
@@ -48,6 +49,51 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [28])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class MediumWeatherWidgetTest {
+
+    @Config(sdk = [28, 34])
+    @Test
+    fun probability_values_meet_rendered_minimum_sizes_without_ellipsis() {
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            listOf(Triple(260f, 110f, 9f), Triple(320f, 144f, 11f)).flatMap { size ->
+                listOf(160, 240, 320, 420).map { size to it }
+            }.forEach { (size, densityDpi) ->
+                val (width, height, minimum) = size
+                val view = render(
+                    availableSnapshot(
+                        hours = referenceHours(probabilities = listOf(100, 0, null, 5, 60)),
+                        settings = PersistedSettings(themeMode = theme)
+                    ), width, height, densityDpi = densityDpi
+                )
+                listOf("100%", "0%", "—").forEach { value ->
+                    val text = findText(view, value)
+                    assertTrue("$value at $width×$height $theme ${densityDpi}dpi is ${text.textSize / view.resources.displayMetrics.scaledDensity}sp, minimum $minimum",
+                        text.textSize / view.resources.displayMetrics.scaledDensity >= minimum - 0.01f)
+                    assertEquals("$value must not be ellipsized", 0, text.layout.getEllipsisCount(0))
+                    assertTrue("$value fits its measured text width", text.paint.measureText(value) <=
+                        text.width - text.compoundPaddingLeft - text.compoundPaddingRight + 1f)
+                    assertTrue("$value line box fits its height", text.compoundPaddingTop + text.layout.getLineBottom(0) <=
+                        text.height - text.compoundPaddingBottom)
+                    val ink = Rect()
+                    text.paint.getTextBounds(value, 0, value.length, ink)
+                    assertTrue("$value ink fits vertically", text.baseline + ink.top >= text.compoundPaddingTop &&
+                        text.baseline + ink.bottom <= text.height - text.compoundPaddingBottom)
+                }
+                val timestamp = findText(view, "11:17")
+                val hostDensity = view.resources.displayMetrics.density
+                assertEquals(densityDpi / 160f, hostDensity, 0.001f)
+                assertEquals(hostDensity, timestamp.resources.displayMetrics.density, 0.001f)
+                val location = headerLocation(view, "Zaječar")
+                assertEquals("the complete location remains visible", "Zaječar", location.text.toString())
+                assertTimestampFullyVisible(view, location)
+                assertEquals(if (width == 260f) 3 else 4,
+                    findViews(view).filterIsInstance<TextView>().count {
+                        it.contentDescription?.toString()?.startsWith("Rain probability") == true
+                    })
+                assertLayoutFits(view, width, height)
+                assertTextInkFits(view, "$width×$height $theme ${densityDpi}dpi")
+            }
+        }
+    }
 
     @Test
     fun production_widget_uses_finite_responsive_sizes_and_advertises_probability_safe_minimum() {
@@ -399,9 +445,11 @@ class MediumWeatherWidgetTest {
             apparentTemperature = "124°F",
             hours = referenceHours(
                 temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
-                probabilities = listOf(null, 0, 5, 100, 60)
+                probabilities = listOf(100, 0, null, 5, 60)
             ),
-            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT)
+            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT),
+            stale = true,
+            refresh = WidgetRefreshStatus(isRefreshing = true)
         )
         val sizes = listOf(
             260f to 110f,
@@ -411,11 +459,30 @@ class MediumWeatherWidgetTest {
         )
 
         listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
-            val themedSnapshot = snapshot.copy(settings = snapshot.settings.copy(themeMode = theme))
-            sizes.forEach { (widthDp, heightDp) ->
+            sizes.flatMap { size ->
+                listOf(160, 240, 320, 420).flatMap { density ->
+                    listOf(listOf(100, 0, null, 5, 60), listOf(5, 100, null, 0, 60)).flatMap { probabilities ->
+                        listOf("Zaječar", "A very long saved location name for adaptive header text")
+                            .map { location -> Triple(size, density, probabilities to location) }
+                    }
+                }
+            }.forEach { (size, densityDpi, fixture) ->
+                val (widthDp, heightDp) = size
+                val (probabilities, locationName) = fixture
+                val themedSnapshot = snapshot.copy(
+                    settings = snapshot.settings.copy(themeMode = theme),
+                    weather = snapshot.weather.copy(
+                        locationName = locationName,
+                        hours = referenceHours(
+                            temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
+                            probabilities = probabilities
+                        )
+                    )
+                )
                 val baseContext = ApplicationProvider.getApplicationContext<Context>()
                 val initialConfiguration = Configuration(baseContext.resources.configuration).apply {
                     fontScale = 1f
+                    this.densityDpi = densityDpi
                     val nightMode = if (theme == ThemeMode.DARK) {
                         Configuration.UI_MODE_NIGHT_YES
                     } else {
@@ -425,12 +492,16 @@ class MediumWeatherWidgetTest {
                 }
                 val hostContext = baseContext.createConfigurationContext(initialConfiguration)
                 val density = hostContext.resources.displayMetrics.density
+                assertEquals(densityDpi / 160f, density, 0.001f)
                 val providerInfo = AppWidgetProviderInfo().apply {
                     minWidth = (widthDp * density).roundToInt()
                     minHeight = (heightDp * density).roundToInt()
                 }
                 val productionRemoteViews = runBlocking {
-                    PreviewMediumWeatherWidget(themedSnapshot).composeForPreview(
+                    PreviewMediumWeatherWidget(themedSnapshot) { compositionContext ->
+                        assertEquals(density, compositionContext.resources.displayMetrics.density, 0f)
+                        assertEquals(1f, compositionContext.resources.configuration.fontScale, 0f)
+                    }.composeForPreview(
                         hostContext,
                         AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
                         providerInfo
@@ -445,9 +516,10 @@ class MediumWeatherWidgetTest {
                     formattedTemperatureLength = "−123°F".length,
                     apparentTemperatureLength = "124°F".length
                 ).hourlyColumnCount
-                val expectedProbabilities = listOf("—", "0%", "5%", "100%", "60%")
+                val expectedProbabilities = probabilities.map { it?.let { value -> "$value%" } ?: "—" }
                     .take(expectedColumns)
                 val hostView = productionRemoteViews.apply(hostContext, FrameLayout(hostContext))
+                assertEquals(density, hostView.resources.displayMetrics.density, 0f)
                 hostView.measure(
                     View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
@@ -458,7 +530,10 @@ class MediumWeatherWidgetTest {
                 assertNativeAutoSizing(hostView)
                 assertLayoutFits(hostView, widthDp, heightDp)
                 assertTextInkFits(hostView, "$widthDp×$heightDp dp at host font scale 1.0")
-                val probabilityBeforeScale = findText(hostView, "5%")
+                if (locationName == "Zaječar") assertTimestampFullyVisible(hostView, headerLocation(hostView, locationName))
+                assertCachedHourlyContent(hostView, expectedColumns, theme)
+                assertCachedNormalScaleProbabilityMinimum(hostView, widthDp, heightDp)
+                val probabilityBeforeScale = findText(hostView, expectedProbabilities.first())
                 val initialMinTextSize = probabilityBeforeScale.autoSizeMinTextSize
 
                 // Simulate the launcher updating its resources and reapplying its cached RemoteViews.
@@ -479,7 +554,7 @@ class MediumWeatherWidgetTest {
                 assertText(hostView, "−123°F")
                 assertEquals(expectedProbabilities, visibleProbabilities(hostView))
                 assertNativeAutoSizing(hostView)
-                val probabilityAfterScale = findText(hostView, "5%")
+                val probabilityAfterScale = findText(hostView, expectedProbabilities.first())
                 assertEquals(initialMinTextSize, probabilityAfterScale.autoSizeMinTextSize)
                 assertTrue(
                     "host font fitting respects the readable physical minimum",
@@ -487,6 +562,8 @@ class MediumWeatherWidgetTest {
                 )
                 assertLayoutFits(hostView, widthDp, heightDp)
                 assertTextInkFits(hostView, "$widthDp×$heightDp dp at host font scale 1.3")
+                if (locationName == "Zaječar") assertTimestampFullyVisible(hostView, headerLocation(hostView, locationName))
+                assertCachedHourlyContent(hostView, expectedColumns, theme)
 
                 val restoredConfiguration = Configuration(scaledConfiguration).apply { fontScale = 1f }
                 hostContext.resources.updateConfiguration(
@@ -502,9 +579,13 @@ class MediumWeatherWidgetTest {
                 hostView.layout(0, 0, widthPx, heightPx)
                 assertEquals(1f, hostView.resources.configuration.fontScale, 0f)
                 assertNativeAutoSizing(hostView)
-                assertEquals(initialMinTextSize, findText(hostView, "5%").autoSizeMinTextSize)
+                assertEquals(initialMinTextSize, findText(hostView, expectedProbabilities.first()).autoSizeMinTextSize)
+                assertEquals(expectedProbabilities, visibleProbabilities(hostView))
                 assertLayoutFits(hostView, widthDp, heightDp)
                 assertTextInkFits(hostView, "$widthDp×$heightDp dp after host font scale restore")
+                if (locationName == "Zaječar") assertTimestampFullyVisible(hostView, headerLocation(hostView, locationName))
+                assertCachedHourlyContent(hostView, expectedColumns, theme)
+                assertCachedNormalScaleProbabilityMinimum(hostView, widthDp, heightDp)
             }
         }
     }
@@ -567,6 +648,36 @@ class MediumWeatherWidgetTest {
         assertTrue(location.contentDescription.toString().contains("Last weather update Wed, Oct 28, 2026 • 11:17"))
         assertNoMediumRefreshAction(view)
         assertLayoutFits(view, 260f, 110f)
+    }
+
+    @Config(sdk = [28, 34])
+    @Test
+    fun location_keeps_priority_over_time_at_multiple_densities() {
+        val baseContext = ApplicationProvider.getApplicationContext<Context>()
+        listOf(160, 240, 320, 420).forEach { densityDpi ->
+            val context = baseContext.createConfigurationContext(Configuration(baseContext.resources.configuration).apply {
+                fontScale = 1f
+                this.densityDpi = densityDpi
+            })
+            listOf(260f to 110f, 320f to 144f).forEach { (width, height) ->
+                val available = width - 8f - 18f
+                val timeWidth = measureMediumTextWidthDp("11:17", 9f, 1f, context, mediumTypeface = false)
+                val withTime = available - HEADER_UPDATE_START_GAP_DP - timeWidth
+                val name = (1..100).asSequence().map { "Zaječar" + "x".repeat(it) }.first {
+                    measureMediumTextWidthDp(it, 14f, 1f, context, mediumTypeface = true) > withTime
+                }
+                assertTrue("fixture fits without the time", measureMediumTextWidthDp(name, 14f, 1f, context, true) <= available)
+                val view = render(availableSnapshot(locationName = name), width, height, densityDpi = densityDpi)
+                val location = headerLocation(view, name)
+                assertEquals("the full location has priority at ${densityDpi}dpi", name, location.text.toString())
+                assertEquals("the location is not ellipsized", 0, location.layout.getEllipsisCount(0))
+                assertFalse("timestamp is omitted before sacrificing the location", hasText(view, "11:17"))
+                assertTrue("full fetch timestamp remains accessible",
+                    location.contentDescription.toString().contains("Last weather update Wed, Oct 28, 2026 • 11:17"))
+                assertLayoutFits(view, width, height)
+                assertTextInkFits(view, "$width×$height ${densityDpi}dpi location priority")
+            }
+        }
     }
 
     @Test
@@ -978,11 +1089,13 @@ class MediumWeatherWidgetTest {
         widthDp: Float,
         heightDp: Float,
         fontScale: Float = 1f,
-        systemDark: Boolean = false
+        systemDark: Boolean = false,
+        densityDpi: Int? = null
     ): View {
         val baseContext = ApplicationProvider.getApplicationContext<Context>()
         val configuration = Configuration(baseContext.resources.configuration).apply {
             this.fontScale = fontScale
+            densityDpi?.let { this.densityDpi = it }
             val nightMode = if (systemDark) {
                 Configuration.UI_MODE_NIGHT_YES
             } else {
@@ -997,7 +1110,10 @@ class MediumWeatherWidgetTest {
             minHeight = (heightDp * density).roundToInt()
         }
         val remoteViews = runBlocking {
-            PreviewMediumWeatherWidget(snapshot).composeForPreview(
+            PreviewMediumWeatherWidget(snapshot) { compositionContext ->
+                assertEquals(density, compositionContext.resources.displayMetrics.density, 0f)
+                assertEquals(fontScale, compositionContext.resources.configuration.fontScale, 0f)
+            }.composeForPreview(
                 context,
                 AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
                 providerInfo
@@ -1050,6 +1166,7 @@ class MediumWeatherWidgetTest {
             .filter { it.contentDescription?.toString()?.startsWith("Rain probability") == true }
             .forEach { probability ->
                 val width = probability.width - probability.compoundPaddingLeft - probability.compoundPaddingRight
+                assertEquals("probability '${probability.text}' is not ellipsized", 0, probability.layout.getEllipsisCount(0))
                 assertTrue("precipitation probability remains readable", width > 0)
                 assertTrue(
                     "probability '${probability.text}' fits its translated cell " +
@@ -1065,6 +1182,54 @@ class MediumWeatherWidgetTest {
                 )
             }
         assertRenderedContentFitsWithoutOverlap(root)
+    }
+
+    private fun assertCachedHourlyContent(root: View, columns: Int, theme: ThemeMode) {
+        val density = root.resources.displayMetrics.density
+        val accent = hluMaterialColorScheme(theme == ThemeMode.DARK).primary.toArgb()
+        val probabilities = findViews(root).filterIsInstance<TextView>()
+            .filter { it.contentDescription?.toString()?.startsWith("Rain probability") == true }
+        assertEquals(columns, probabilities.size)
+        probabilities.forEach { text -> assertEquals("probability retains theme accent", accent, text.currentTextColor) }
+        val droplets = findViews(root).filterIsInstance<ImageView>().filter { image ->
+            val bitmap = (image.drawable as? BitmapDrawable)?.bitmap
+            image.width <= 10f * density + 1f && bitmap?.hasPixelColor(accent) == true
+        }
+        assertEquals("one accented droplet per displayed probability", columns, droplets.size)
+        assertStatusGlyphs(root, warning = true, updating = true)
+        assertStatusGlyphInkFitsCurrentArea(root, "−123°F", "cached $theme")
+        val dividerColor = hluMaterialColorScheme(theme == ThemeMode.DARK).outlineVariant.toArgb()
+        val dividers = findViews(root).filter {
+            it.width <= 2f * density && it.height >= 30f * density &&
+                (it.background as? ColorDrawable)?.color == dividerColor
+        }.sortedBy { absoluteBounds(it, root).left }
+        assertEquals(columns, dividers.size)
+        val columnWidth = absoluteBounds(dividers[1], root).left - absoluteBounds(dividers[0], root).right
+        REFERENCE_HOURS.take(columns).forEachIndexed { index, hour ->
+            val text = findText(root, hour)
+            assertEquals("hour label is not ellipsized", 0, text.layout.getEllipsisCount(0))
+            val left = absoluteBounds(dividers[index], root).right
+            val right = dividers.getOrNull(index + 1)?.let { absoluteBounds(it, root).left } ?: left + columnWidth
+            val bounds = absoluteBounds(text, root)
+            val lineCenter = bounds.left + text.compoundPaddingLeft +
+                (text.layout.getLineLeft(0) + text.layout.getLineRight(0)) / 2f
+            assertTrue("$hour remains centered on cached reapply", abs(lineCenter - (left + right) / 2f) <= density)
+            assertEquals("hour icon remains accessible", "$hour, Partly cloudy", findDescription(root, "$hour, Partly cloudy"))
+        }
+    }
+
+    private fun assertCachedNormalScaleProbabilityMinimum(root: View, width: Float, height: Float) {
+        val minimum = when (width to height) {
+            260f to 110f -> 9f
+            320f to 144f -> 11f
+            else -> return
+        }
+        findViews(root).filterIsInstance<TextView>()
+            .filter { it.contentDescription?.toString()?.startsWith("Rain probability") == true }
+            .forEach { text ->
+                assertTrue("cached ${text.text} is at least ${minimum}sp at $width×$height",
+                    text.textSize / root.resources.displayMetrics.scaledDensity >= minimum - 0.01f)
+            }
     }
 
     private fun assertTransparentMediumSurface(root: View, widthDp: Float, heightDp: Float) {
@@ -1297,8 +1462,16 @@ class MediumWeatherWidgetTest {
         assertTrue(
             "timestamp text fits inside its real TextView content width " +
                 "(measured=$measuredTextWidth, usable=$usableWidth, bounds=${absoluteBounds(timestamp, root)})",
-            measuredTextWidth <= usableWidth + 1f
+            measuredTextWidth <= usableWidth + 0.01f
         )
+        val ink = Rect()
+        timestamp.paint.getTextBounds(timestamp.text, 0, timestamp.text.length, ink)
+        val inkStart = timestamp.compoundPaddingLeft + timestamp.layout.getLineLeft(0) + ink.left
+        val inkEnd = timestamp.compoundPaddingLeft + timestamp.layout.getLineLeft(0) + ink.right
+        assertTrue("timestamp glyph ink stays within its text slot: $inkStart..$inkEnd / ${timestamp.width}",
+            inkStart >= timestamp.compoundPaddingLeft && inkEnd <= timestamp.width - timestamp.compoundPaddingRight)
+        val renderedInk = visibleTextInkBounds(timestamp, root)
+        assertBoundsContain(absoluteBounds(timestamp, root), renderedInk, "timestamp has visible ink within its text slot")
         val timestampTextStart = absoluteBounds(timestamp, root).left + timestamp.compoundPaddingLeft +
             timestamp.layout.getLineLeft(0).roundToInt()
         val locationEnd = absoluteBounds(location, root).right
@@ -1690,7 +1863,8 @@ class MediumWeatherWidgetTest {
     )
 
     private class PreviewMediumWeatherWidget(
-        private val snapshot: WeatherWidgetSnapshot
+        private val snapshot: WeatherWidgetSnapshot,
+        private val onCompose: (Context) -> Unit = {}
     ) : GlanceAppWidget() {
         override val sizeMode: SizeMode = SizeMode.Responsive(MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES)
 
@@ -1699,7 +1873,10 @@ class MediumWeatherWidgetTest {
         override suspend fun providePreview(context: Context, widgetCategory: Int) = provideSnapshot()
 
         private suspend fun provideSnapshot() {
-            provideContent { MediumWeatherWidgetContent(snapshot) }
+            provideContent {
+                onCompose(LocalContext.current)
+                MediumWeatherWidgetContent(snapshot)
+            }
         }
     }
 

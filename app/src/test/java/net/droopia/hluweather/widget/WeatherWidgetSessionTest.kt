@@ -268,6 +268,51 @@ class WeatherWidgetSessionTest {
         }
     }
 
+    @Test
+    fun cached_session_remote_views_reapply_without_composition_or_network() = runBlocking {
+        val f = Fixture()
+        f.put(f.first, 23.0)
+        val configuration = configuration(Configuration(f.context.resources.configuration), 1f, false)
+        val host = contextFor(f.context, configuration)
+        val size = DpSize(320.dp, 144.dp)
+        val widget = TestWidget(
+            f.widgets, f.widgets.loadCachedState(), true,
+            MutableStateFlow(WidgetRenderConfiguration.from(configuration)), size
+        )
+        val session = RecordingSession(widget, f.context, true, size)
+        val job = launch(Dispatchers.Default) { session.runSession(f.context) }
+        try {
+            val (remote, view) = session.awaitRemoteView(host) {
+                texts(it).any { text -> text.text.toString() == "23°C" }
+            }
+            val translations = session.translations
+            val density = host.resources.displayMetrics.density
+            val width = (320f * density).roundToInt()
+            val height = (144f * density).roundToInt()
+            listOf(1.3f, 1f).forEach { scale ->
+                val changed = Configuration(configuration).apply { fontScale = scale }
+                host.resources.updateConfiguration(changed, host.resources.displayMetrics)
+                view.dispatchConfigurationChanged(changed)
+                remote.reapply(host, view)
+                view.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+                )
+                view.layout(0, 0, width, height)
+                assertEquals(scale, view.resources.configuration.fontScale, 0f)
+                assertRenderedContentFitsWithoutOverlap(view)
+                assertHourlyProbabilityInkFits(view)
+                texts(view).filter { it.contentDescription?.toString()?.startsWith("Rain probability") == true }
+                    .forEach { assertEquals("cached probability is not ellipsized", 0, it.layout.getEllipsisCount(0)) }
+                assertEquals("host reapply does not translate a new composition", translations, session.translations)
+                assertEquals("host reapply does not restart the widget", 1, widget.calls)
+                assertEquals("host reapply does not request weather", 0, f.networkCalls)
+            }
+        } finally {
+            job.cancelAndJoin()
+        }
+    }
+
     private class TestWidget(
         val repo: WeatherWidgetRepository,
         val initial: WeatherWidgetSnapshot,
@@ -299,29 +344,38 @@ class WeatherWidgetSessionTest {
         shouldPublish = false
     ) {
         private val updates = Channel<RemoteViews>(Channel.UNLIMITED)
+        @Volatile var translations = 0
+            private set
         override suspend fun processEmittableTree(context: Context, root: EmittableWithChildren): Boolean {
             val result = super.processEmittableTree(context, root)
             val field = AppWidgetSession::class.java.getDeclaredField("lastRemoteViews").apply { isAccessible = true }
             @Suppress("UNCHECKED_CAST")
             val remote = (field.get(this) as MutableStateFlow<RemoteViews?>).value
-            if (result && remote != null) updates.send(remote)
+            if (result && remote != null) {
+                translations++
+                updates.send(remote)
+            }
             return result
         }
-        suspend fun awaitView(renderContext: Context = context, matches: (View) -> Boolean): View = withTimeout(10_000) {
+        suspend fun awaitRemoteView(renderContext: Context = context, matches: (View) -> Boolean): Pair<RemoteViews, View> = withTimeout(10_000) {
             while (true) {
                 val density = renderContext.resources.displayMetrics.density
                 val width = (size.width.value * density).roundToInt()
                 val height = (size.height.value * density).roundToInt()
-                val view = updates.receive().apply(renderContext, FrameLayout(renderContext))
+                val remote = updates.receive()
+                val view = remote.apply(renderContext, FrameLayout(renderContext))
                 view.measure(
                     View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
                 )
                 view.layout(0, 0, width, height)
-                if (matches(view)) return@withTimeout view
+                if (matches(view)) return@withTimeout remote to view
             }
             error("unreachable")
         }
+
+        suspend fun awaitView(renderContext: Context = context, matches: (View) -> Boolean): View =
+            awaitRemoteView(renderContext, matches).second
 
         suspend fun awaitText(expected: String, absent: String? = null): View = awaitView { view ->
             val text = texts(view).map { it.text.toString() }

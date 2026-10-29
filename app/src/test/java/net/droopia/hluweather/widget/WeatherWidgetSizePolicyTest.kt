@@ -272,6 +272,21 @@ class WeatherWidgetSizePolicyTest {
         }
     }
 
+    @Test
+    fun medium_probability_targets_and_line_boxes_respect_actual_adaptive_minimums() {
+        listOf(Triple(260f, 110f, 9f), Triple(320f, 144f, 11f)).forEach { (width, height, minimum) ->
+            val policy = WeatherWidgetSizePolicy.medium(width, height, 1f, 4, textLineHeightMultiplier = 1.2f)
+            assertTrue("probability target at $width×$height", policy.hourlyProbabilityFontSizeSp >= minimum)
+            val lineMultiplier = WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
+            val timeHeight = (policy.hourlyTimeFontSizeSp * lineMultiplier).coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
+            val temperatureHeight = (policy.hourlyTemperatureFontSizeSp * lineMultiplier).coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
+            val probabilityHeight = (policy.hourlyProbabilityFontSizeSp * lineMultiplier).coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
+            assertEquals(timeHeight + policy.hourlyIconSizeDp + temperatureHeight + 4f,
+                policy.hourlyPrimaryContentHeightDp, EPSILON)
+            assertTrue("allocated hourly boxes fit body", policy.hourlyPrimaryContentHeightDp + 2f + probabilityHeight <= policy.bodyHeightDp + EPSILON)
+        }
+    }
+
     private data class SmallCase(
         val widthDp: Float,
         val heightDp: Float,

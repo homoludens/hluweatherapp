@@ -201,14 +201,16 @@ fun WeatherWidgetHeader(
             )
         }
         if (updateText != null) {
+            // Glance includes modifier padding inside the fixed width. The policy reserves the
+            // measured text width and this gap separately, so the slot must include both.
             WeatherWidgetAdaptiveText(
                 text = updateText,
                 role = WeatherWidgetAdaptiveTextRole.TINY_REGULAR,
                 color = palette.secondaryText,
                 fontSizeSp = HEADER_UPDATE_FONT_SIZE_SP,
                 modifier = GlanceModifier
-                    .padding(start = 4.dp)
-                    .then(updateTextWidthDp?.let { GlanceModifier.width(it.dp) } ?: GlanceModifier),
+                    .padding(start = HEADER_UPDATE_START_GAP_DP.dp)
+                    .then(updateTextWidthDp?.let { GlanceModifier.width((it + HEADER_UPDATE_START_GAP_DP).dp) } ?: GlanceModifier),
                 contentDescription = updateContentDescription ?: updateText
             )
         }
@@ -621,10 +623,11 @@ private fun Configuration.isNightMode(): Boolean =
 
 private const val LOCATION_FONT_SIZE_SP = 14f
 private const val HEADER_UPDATE_FONT_SIZE_SP = 9f
+internal const val HEADER_UPDATE_START_GAP_DP = 4f
 private const val EMPTY_STATE_FONT_SIZE_SP = 13f
 private const val STATUS_FONT_SIZE_SP = 10f
 private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
-private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
+internal const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
 internal const val MEDIUM_STATUS_GLYPH_SIZE_DP = 12f
 internal const val MEDIUM_STATUS_GLYPH_GAP_DP = 2f
 

@@ -30,7 +30,7 @@
 
     <style name="WeatherWidgetAdaptiveText.CompactMedium" parent="WeatherWidgetAdaptiveTextBase">
         <item name="android:autoSizeMinTextSize">7dp</item>
-        <item name="android:autoSizeMaxTextSize">10sp</item>
+        <item name="android:autoSizeMaxTextSize">14sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 

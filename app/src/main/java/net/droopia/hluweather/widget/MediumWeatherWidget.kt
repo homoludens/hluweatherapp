@@ -36,6 +36,7 @@ import androidx.glance.semantics.semantics
 import androidx.glance.unit.ColorProvider
 import androidx.glance.preview.ExperimentalGlancePreviewApi
 import androidx.glance.preview.Preview
+import kotlin.math.ceil
 import kotlinx.coroutines.flow.StateFlow
 import net.droopia.hluweather.HluWeatherApplication
 
@@ -113,13 +114,16 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         )
     }
     val headerTimeTextWidthDp = headerText?.let { text ->
-        measureMediumTextWidthDp(
+        val density = context.resources.displayMetrics.density
+        val measuredWidthDp = measureMediumTextWidthDp(
             text = text,
             fontSizeSp = MEDIUM_HEADER_TIME_FONT_SIZE_SP,
             fontScale = fontScale,
             context = context,
             mediumTypeface = false
         )
+        // Round up in pixels so the translated slot never loses a fractional glyph width.
+        ceil(measuredWidthDp * density) / density
     }
     val policy = WeatherWidgetSizePolicy.medium(
         widthDp = size.width.value,
