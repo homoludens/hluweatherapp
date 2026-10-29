@@ -3,6 +3,8 @@ package net.droopia.hluweather.widget
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
@@ -70,6 +72,50 @@ class MediumWeatherWidgetTest {
             ),
             MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES.map { it.width.value to it.height.value }.toSet()
         )
+    }
+
+    @Test
+    fun medium_surface_is_transparent_for_weather_and_empty_states_in_both_themes() {
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            val settings = PersistedSettings(themeMode = theme)
+            val states = listOf(
+                availableSnapshot(settings = settings),
+                WeatherWidgetSnapshot.NoWeather(
+                    settings = settings,
+                    request = widgetRequest("Trieste"),
+                    refresh = WidgetRefreshStatus(lastAttemptFailed = true)
+                ),
+                WeatherWidgetSnapshot.NoLocation(settings)
+            )
+
+            states.forEach { snapshot ->
+                val view = render(
+                    snapshot,
+                    widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+                    heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+                    systemDark = theme == ThemeMode.LIGHT
+                )
+
+                when (snapshot) {
+                    is WeatherWidgetSnapshot.Available -> assertText(view, "23°C")
+                    is WeatherWidgetSnapshot.NoWeather -> assertText(view, "No weather available for Trieste")
+                    is WeatherWidgetSnapshot.NoLocation -> assertText(view, "Open HluWeather to choose a location")
+                }
+                if (snapshot !is WeatherWidgetSnapshot.Available) {
+                    assertFalse("empty state does not invent a temperature", findViews(view)
+                        .filterIsInstance<TextView>().any { it.text.toString().contains("°") })
+                }
+                assertTransparentMediumSurface(view, 260f, 110f)
+                assertMediumContentStaysWithinOuterInsets(view, 4f)
+                assertLayoutFits(view, 260f, 110f)
+            }
+        }
+
+        val available = render(availableSnapshot(), widthDp = 320f, heightDp = 144f)
+        assertTransparentMediumSurface(available, 320f, 144f)
+        assertMediumContentStaysWithinOuterInsets(available, 4f)
+        assertMediumInternalGapsRemainVisible(available)
+        assertLayoutFits(available, 320f, 144f)
     }
 
     @Test
@@ -611,6 +657,139 @@ class MediumWeatherWidgetTest {
                 )
             }
         assertRenderedContentFitsWithoutOverlap(root)
+    }
+
+    private fun assertTransparentMediumSurface(root: View, widthDp: Float, heightDp: Float) {
+        val density = root.resources.displayMetrics.density
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        root.draw(Canvas(bitmap))
+
+        val edgeX = (2f * density).roundToInt()
+        val midY = root.height / 2
+        assertEquals("transparent left wallpaper strip", 0, bitmap.getPixel(edgeX, midY) ushr 24)
+        assertEquals(
+            "transparent right wallpaper strip",
+            0,
+            bitmap.getPixel(root.width - edgeX - 1, midY) ushr 24
+        )
+
+        val policy = WeatherWidgetSizePolicy.medium(
+            widthDp = widthDp,
+            heightDp = heightDp,
+            fontScale = root.resources.configuration.fontScale,
+            formattedTemperatureLength = 4
+        )
+        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
+        val refreshBounds = absoluteBounds(refresh, root)
+        val expectedTopInsetPx = (policy.cardVerticalPaddingDp * density).roundToInt()
+        assertTrue(
+            "medium header begins at its reduced vertical outer inset",
+            kotlin.math.abs(refreshBounds.top - expectedTopInsetPx) <= 1
+        )
+        assertTrue(
+            "medium header retains the policy's 48dp height inside the outer insets",
+            refreshBounds.bottom - refreshBounds.top >=
+                WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP * density - 1f
+        )
+        val betweenHeaderAndBodyY = (
+            policy.cardVerticalPaddingDp + WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP +
+                policy.headerToBodyGapDp / 2f
+            ) * density
+        assertEquals(
+            "transparent gap between header and weather body",
+            0,
+            bitmap.getPixel(root.width / 2, betweenHeaderAndBodyY.roundToInt()) ushr 24
+        )
+
+        val fullSizeBackgrounds = findViews(root).filterIsInstance<ImageView>().filter {
+            it.width >= root.width - 1 && it.height >= root.height - 1 && it.drawable !is BitmapDrawable
+        }
+        assertTrue("medium does not attach a card-sized background image", fullSizeBackgrounds.isEmpty())
+    }
+
+    private fun assertMediumContentStaysWithinOuterInsets(root: View, insetDp: Float) {
+        val density = root.resources.displayMetrics.density
+        val insetPx = insetDp * density
+        val renderedContent = findViews(root).filter { view ->
+            view.visibility == View.VISIBLE && when (view) {
+                is TextView -> view.text.isNotBlank()
+                is ImageView -> view.drawable is BitmapDrawable
+                else -> false
+            }
+        }
+        renderedContent.forEach { view ->
+            val bounds = absoluteBounds(view, root)
+            assertTrue(
+                "${view.javaClass.simpleName} begins after the ${insetDp}dp medium inset: $bounds",
+                bounds.left >= insetPx - 1f
+            )
+            assertTrue(
+                "${view.javaClass.simpleName} ends before the ${insetDp}dp medium inset: $bounds",
+                bounds.right <= root.width - insetPx + 1f
+            )
+        }
+    }
+
+    private fun assertMediumInternalGapsRemainVisible(root: View) {
+        val density = root.resources.displayMetrics.density
+        val time = findText(root, "22:00")
+        val icon = findViews(root).filterIsInstance<ImageView>()
+            .first { it.contentDescription == "22:00, Partly cloudy" }
+        val temperature = findText(root, "20°C")
+        val probability = findViews(root).filterIsInstance<TextView>()
+            .first { it.contentDescription == "Rain probability 0 percent" }
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        root.draw(Canvas(bitmap))
+        val timeInk = paintedBounds(bitmap, absoluteBounds(time, root))
+        val iconInk = paintedBounds(bitmap, absoluteBounds(icon, root))
+        val temperatureInk = paintedBounds(bitmap, absoluteBounds(temperature, root))
+        val probabilityInk = paintedBounds(bitmap, absoluteBounds(probability, root))
+
+        assertTrue(
+            "rendered hour label keeps a 2dp gap before its icon " +
+                "(gap=${iconInk.top - timeInk.bottom}px, time=$timeInk, icon=$iconInk)",
+            iconInk.top - timeInk.bottom >= 2f * density - 1f
+        )
+        assertTrue(
+            "rendered hour icon keeps a 2dp gap before its temperature " +
+                "(gap=${temperatureInk.top - iconInk.bottom}px, icon=$iconInk, temperature=$temperatureInk)",
+            temperatureInk.top - iconInk.bottom >= 2f * density - 1f
+        )
+        assertTrue(
+            "rendered temperature keeps a 2dp gap before precipitation " +
+                "(gap=${probabilityInk.top - temperatureInk.bottom}px, temperature=$temperatureInk, probability=$probabilityInk)",
+            probabilityInk.top - temperatureInk.bottom >= 2f * density - 1f
+        )
+
+        val divider = findViews(root).first { view ->
+            view.width <= 2f * density && view.height >= 30f * density &&
+                (view.background as? ColorDrawable)?.color == hluMaterialColorScheme(false).outlineVariant.toArgb()
+        }
+        val dividerBounds = absoluteBounds(divider, root)
+        val timeBounds = absoluteBounds(time, root)
+        assertTrue(
+            "hour cell retains horizontal padding after its divider",
+            timeBounds.left - dividerBounds.right >= 3f * density - 1f
+        )
+    }
+
+    private fun paintedBounds(bitmap: Bitmap, region: Bounds): Bounds {
+        var left = bitmap.width
+        var top = bitmap.height
+        var right = -1
+        var bottom = -1
+        for (y in region.top.coerceAtLeast(0) until region.bottom.coerceAtMost(bitmap.height)) {
+            for (x in region.left.coerceAtLeast(0) until region.right.coerceAtMost(bitmap.width)) {
+                if (bitmap.getPixel(x, y) ushr 24 > 32) {
+                    left = minOf(left, x)
+                    top = minOf(top, y)
+                    right = maxOf(right, x + 1)
+                    bottom = maxOf(bottom, y + 1)
+                }
+            }
+        }
+        assertTrue("rendered content has visible pixels inside $region", right >= 0)
+        return Bounds(left, top, right, bottom)
     }
 
     private fun assertTextInkFits(root: View, sizeDescription: String) {

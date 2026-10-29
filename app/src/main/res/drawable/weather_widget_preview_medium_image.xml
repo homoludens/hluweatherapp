@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:width="440dp" android:height="220dp" android:drawable="@drawable/weather_widget_card_surface" />
     <item android:width="105dp" android:height="8dp" android:left="22dp" android:top="20dp">
         <shape android:shape="rectangle">
             <solid android:color="#FF17233A" />

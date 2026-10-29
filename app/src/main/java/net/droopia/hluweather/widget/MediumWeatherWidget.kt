@@ -122,6 +122,8 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         headerUpdateText = headerText.takeIf { policy.showHeaderTimestamp },
         headerUpdateTextWidthDp = policy.headerTimestampTextWidthDp.takeIf { policy.showHeaderTimestamp },
         verticalPaddingDp = policy.cardVerticalPaddingDp,
+        horizontalPaddingDp = policy.cardHorizontalPaddingDp,
+        drawCardSurface = false,
         headerUpdateContentDescription = available?.let { current ->
             val currentWeather = current.weather
             buildString {
@@ -140,7 +142,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                         0f
                     } else {
                         (
-                            size.width.value - MEDIUM_HORIZONTAL_INSETS_DP -
+                            size.width.value - policy.cardHorizontalPaddingDp * 2f -
                                 policy.currentWeatherWidthDp - hours.size * MEDIUM_DIVIDER_WIDTH_DP
                             ).coerceAtLeast(0f) / hours.size
                     }
@@ -158,7 +160,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                             fontScale = fontScale,
                             textLineHeightMultiplier = textLineHeightMultiplier,
                             widthDp = if (hours.isEmpty()) {
-                                (size.width.value - MEDIUM_HORIZONTAL_INSETS_DP).coerceAtLeast(0f)
+                                (size.width.value - policy.cardHorizontalPaddingDp * 2f).coerceAtLeast(0f)
                             } else {
                                 policy.currentWeatherWidthDp
                             },
@@ -317,7 +319,6 @@ private fun mediumTextViewLineHeightMultiplier(context: Context, fontScale: Floa
 
 private const val DEFAULT_TEMPERATURE_LENGTH = 4
 private const val DEFAULT_CONDITION_LENGTH = 13
-private const val MEDIUM_HORIZONTAL_INSETS_DP = 16f
 private const val MEDIUM_CELL_PADDING_DP = 4f
 private const val MEDIUM_SECONDARY_GAP_DP = 2f
 private const val MEDIUM_DIVIDER_WIDTH_DP = 1f

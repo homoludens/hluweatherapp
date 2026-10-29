@@ -3,6 +3,8 @@ package net.droopia.hluweather.widget
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -65,6 +67,20 @@ class SmallWeatherWidgetTest {
             SMALL_WEATHER_WIDGET_RESPONSIVE_SIZES,
             (widget.sizeMode as SizeMode.Responsive).sizes
         )
+    }
+
+    @Test
+    fun small_production_card_keeps_its_opaque_shared_surface() {
+        val view = render(availableSnapshot(), widthDp = 200f, heightDp = 160f)
+        val surface = findViews(view).filterIsInstance<ImageView>().firstOrNull {
+            it.drawable is android.graphics.drawable.GradientDrawable &&
+                it.width >= view.width - 1 && it.height >= view.height - 1
+        }
+        assertNotNull("small widget keeps its full-card surface image", surface)
+
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(bitmap))
+        assertEquals("small card remains opaque behind its content", 255, bitmap.getPixel(2, view.height / 2) ushr 24)
     }
 
     @Test

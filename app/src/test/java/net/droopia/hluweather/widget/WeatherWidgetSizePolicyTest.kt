@@ -192,7 +192,7 @@ class WeatherWidgetSizePolicyTest {
     }
 
     @Test
-    fun medium_policy_uses_compact_insets_at_110dp_and_restores_normal_insets_at_144dp() {
+    fun medium_policy_reduces_outer_insets_at_110dp_and_144dp() {
         val compact = WeatherWidgetSizePolicy.medium(
             widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
             heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
@@ -206,12 +206,14 @@ class WeatherWidgetSizePolicyTest {
             formattedTemperatureLength = 4
         )
 
-        assertEquals(4f, compact.cardVerticalPaddingDp, EPSILON)
+        assertEquals(4f, compact.cardHorizontalPaddingDp, EPSILON)
+        assertEquals(2f, compact.cardVerticalPaddingDp, EPSILON)
         assertEquals(2f, compact.headerToBodyGapDp, EPSILON)
-        assertEquals(52f, compact.bodyHeightDp, EPSILON)
-        assertEquals(8f, normal.cardVerticalPaddingDp, EPSILON)
+        assertEquals(56f, compact.bodyHeightDp, EPSILON)
+        assertEquals(4f, normal.cardHorizontalPaddingDp, EPSILON)
+        assertEquals(4f, normal.cardVerticalPaddingDp, EPSILON)
         assertEquals(4f, normal.headerToBodyGapDp, EPSILON)
-        assertEquals(76f, normal.bodyHeightDp, EPSILON)
+        assertEquals(84f, normal.bodyHeightDp, EPSILON)
     }
 
     @Test

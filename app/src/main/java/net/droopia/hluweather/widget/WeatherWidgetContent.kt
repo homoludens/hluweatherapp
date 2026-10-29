@@ -76,6 +76,8 @@ fun WeatherWidgetCard(
     headerUpdateContentDescription: String? = null,
     headerUpdateTextWidthDp: Float? = null,
     verticalPaddingDp: Float = 8f,
+    horizontalPaddingDp: Float = 8f,
+    drawCardSurface: Boolean = true,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
     val context = LocalContext.current
@@ -97,13 +99,19 @@ fun WeatherWidgetCard(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                ImageProvider(R.drawable.weather_widget_card_surface),
-                contentScale = ContentScale.FillBounds,
-                colorFilter = ColorFilter.tint(ColorProvider(palette.cardSurface))
+            .then(
+                if (drawCardSurface) {
+                    GlanceModifier.background(
+                        ImageProvider(R.drawable.weather_widget_card_surface),
+                        contentScale = ContentScale.FillBounds,
+                        colorFilter = ColorFilter.tint(ColorProvider(palette.cardSurface))
+                    )
+                } else {
+                    GlanceModifier
+                }
             )
             .clickable(openMainWeatherAction(context))
-            .padding(horizontal = 8.dp, vertical = verticalPaddingDp.dp)
+            .padding(horizontal = horizontalPaddingDp.dp, vertical = verticalPaddingDp.dp)
     ) {
         WeatherWidgetHeader(
             locationName = locationName,

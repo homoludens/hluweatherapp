@@ -1,7 +1,10 @@
 package net.droopia.hluweather.widget
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.compose.ui.unit.DpSize
@@ -74,6 +77,7 @@ class WeatherWidgetRegistrationTest {
             cellsTall = "2",
             label = "small_weather_widget_name",
             description = "small_weather_widget_description",
+            initialLayout = "weather_widget_initial_state",
             previewImage = "weather_widget_preview_small_image",
             previewLayout = "weather_widget_preview_small"
         )
@@ -85,15 +89,18 @@ class WeatherWidgetRegistrationTest {
             cellsTall = "2",
             label = "medium_weather_widget_name",
             description = "medium_weather_widget_description",
+            initialLayout = "weather_widget_initial_state_medium",
             previewImage = "weather_widget_preview_medium_image",
             previewLayout = "weather_widget_preview_medium"
         )
     }
 
     @Test
-    fun static_picker_previews_use_the_production_card_surface_and_shared_weather_glyph_assets() {
+    fun medium_picker_preview_is_transparent_and_small_preview_keeps_its_surface() {
         val small = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_small.xml"))
         val medium = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_medium.xml"))
+        val smallInitial = parse(sourceFile("app/src/main/res/layout/weather_widget_initial_state.xml"))
+        val mediumInitial = parse(sourceFile("app/src/main/res/layout/weather_widget_initial_state_medium.xml"))
         assertEquals(
             "${WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.toInt()}dp",
             medium.documentElement.androidAttribute("layout_height")
@@ -109,8 +116,21 @@ class WeatherWidgetRegistrationTest {
                 WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp
             ) in MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES
         )
+        assertEquals(
+            "@drawable/weather_widget_card_surface",
+            small.documentElement.androidAttribute("background")
+        )
+        assertEquals(
+            "@drawable/weather_widget_card_surface",
+            smallInitial.documentElement.androidAttribute("background")
+        )
+        assertFalse("medium initial layout has no card background", mediumInitial.documentElement.hasAttributeNS(ANDROID_NS, "background"))
+        assertFalse("medium picker layout does not draw a card background", medium.documentElement.hasAttributeNS(ANDROID_NS, "background"))
+        assertEquals("4dp", medium.documentElement.androidAttribute("paddingStart"))
+        assertEquals("4dp", medium.documentElement.androidAttribute("paddingEnd"))
+        assertEquals("2dp", medium.documentElement.androidAttribute("paddingTop"))
+        assertEquals("2dp", medium.documentElement.androidAttribute("paddingBottom"))
         listOf(small, medium).forEach { layout ->
-            assertEquals("@drawable/weather_widget_card_surface", layout.documentElement.androidAttribute("background"))
             assertTrue(layout.getElementsByTagName("ImageView").asElements().any {
                 it.androidAttribute("src") == "@drawable/weather_widget_preview_sun"
             })
@@ -118,6 +138,16 @@ class WeatherWidgetRegistrationTest {
         }
         assertTrue(medium.getElementsByTagName("ImageView").asElements().any {
             it.androidAttribute("src") == "@drawable/weather_widget_preview_drop"
+        })
+        assertFalse("medium fallback image does not reference the shared card surface", parse(
+            sourceFile("app/src/main/res/drawable/weather_widget_preview_medium_image.xml")
+        ).getElementsByTagName("item").asElements().any {
+            it.androidAttribute("drawable") == "@drawable/weather_widget_card_surface"
+        })
+        assertTrue("small fallback image keeps its shared card surface", parse(
+            sourceFile("app/src/main/res/drawable/weather_widget_preview_small_image.xml")
+        ).getElementsByTagName("item").asElements().any {
+            it.androidAttribute("drawable") == "@drawable/weather_widget_card_surface"
         })
     }
 
@@ -127,6 +157,8 @@ class WeatherWidgetRegistrationTest {
         val inflater = LayoutInflater.from(context)
         val small = inflater.inflate(R.layout.weather_widget_preview_small, null)
         val medium = inflater.inflate(R.layout.weather_widget_preview_medium, null)
+        val smallInitial = inflater.inflate(R.layout.weather_widget_initial_state, null)
+        val mediumInitial = inflater.inflate(R.layout.weather_widget_initial_state_medium, null)
 
         assertTrue(small is ViewGroup)
         assertTrue(medium is ViewGroup)
@@ -136,8 +168,20 @@ class WeatherWidgetRegistrationTest {
         assertTrue(findViews(medium).filterIsInstance<TextView>().any {
             it.text == context.getString(R.string.weather_widget_preview_hour_00)
         })
+        assertTrue(smallInitial.background != null)
+        assertTrue("medium initial layout has no card background", mediumInitial.background == null)
+        assertPixelAlpha(mediumInitial, widthDp = 260, heightDp = 110, xDp = 2, yDp = 55)
+        assertEquals(0, drawDrawablePixelAlpha(
+            context.getDrawable(R.drawable.weather_widget_preview_medium_image)!!,
+            widthDp = 440,
+            heightDp = 220,
+            xDp = 2,
+            yDp = 110
+        ))
         assertNotNull(context.getDrawable(R.drawable.weather_widget_preview_small_image))
         assertNotNull(context.getDrawable(R.drawable.weather_widget_preview_medium_image))
+        assertTrue("small picker layout keeps its root surface", small.background != null)
+        assertPixelAlpha(medium, widthDp = 260, heightDp = 110, xDp = 2, yDp = 55)
     }
 
     private fun assertProvider(
@@ -148,6 +192,7 @@ class WeatherWidgetRegistrationTest {
         cellsTall: String,
         label: String,
         description: String,
+        initialLayout: String,
         previewImage: String,
         previewLayout: String
     ) {
@@ -163,13 +208,13 @@ class WeatherWidgetRegistrationTest {
         assertEquals("home_screen", provider.androidAttribute("widgetCategory"))
         assertEquals("@string/$label", provider.androidAttribute("label"))
         assertEquals("@string/$description", provider.androidAttribute("description"))
-        assertEquals("@layout/weather_widget_initial_state", provider.androidAttribute("initialLayout"))
+        assertEquals("@layout/$initialLayout", provider.androidAttribute("initialLayout"))
         assertEquals("@drawable/$previewImage", provider.androidAttribute("previewImage"))
         assertEquals("@layout/$previewLayout", provider.androidAttribute("previewLayout"))
         assertFalse("widgets must not require configuration", provider.hasAttributeNS(ANDROID_NS, "configure"))
 
         listOf(
-            "layout/weather_widget_initial_state.xml",
+            "layout/$initialLayout.xml",
             "layout/$previewLayout.xml",
             "drawable/$previewImage.xml",
             "drawable/weather_widget_card_surface.xml",
@@ -179,6 +224,44 @@ class WeatherWidgetRegistrationTest {
     }
 
     private fun Element.androidAttribute(name: String): String = getAttributeNS(ANDROID_NS, name)
+
+    private fun assertPixelAlpha(
+        view: View,
+        widthDp: Int,
+        heightDp: Int,
+        xDp: Int,
+        yDp: Int,
+        expectedAlpha: Int = 0
+    ) {
+        val density = view.resources.displayMetrics.density
+        val widthPx = (widthDp * density).toInt()
+        val heightPx = (heightDp * density).toInt()
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, widthPx, heightPx)
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(bitmap))
+        val pixel = bitmap.getPixel((xDp * density).toInt(), (yDp * density).toInt())
+        assertEquals("pixel alpha at ($xDp,$yDp) dp", expectedAlpha, pixel ushr 24)
+    }
+
+    private fun drawDrawablePixelAlpha(
+        drawable: android.graphics.drawable.Drawable,
+        widthDp: Int,
+        heightDp: Int,
+        xDp: Int,
+        yDp: Int
+    ): Int {
+        val density = ApplicationProvider.getApplicationContext<Context>().resources.displayMetrics.density
+        val widthPx = (widthDp * density).toInt()
+        val heightPx = (heightDp * density).toInt()
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        drawable.setBounds(0, 0, widthPx, heightPx)
+        drawable.draw(Canvas(bitmap))
+        return bitmap.getPixel((xDp * density).toInt(), (yDp * density).toInt()) ushr 24
+    }
 
     private fun org.w3c.dom.NodeList.asElements(): List<Element> =
         (0 until length).map { item(it) as Element }
