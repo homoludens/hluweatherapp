@@ -1,0 +1,181 @@
+Task 6.5 final launcher QA — 2026-10-29, authorized Sol fallback, no delegation
+Selected actual diagnostics and capture timestamps; device time zone +0100.
+All api35-final-*.png files are raw adb screencaps, not Robolectric images.
+
+PACKAGE / ENVIRONMENT
+APK: app/build/outputs/apk/google/debug/app-google-debug.apk
+net.droopia.hluweather, version 3.5.1 / code 38
+Local APK and installed base.apk SHA-256, verified again at cleanup:
+fd6a3ff728835d086f5f56c8702b47409d263bd80f98a404a79c441fadc7ec2c
+Installed base:
+/data/app/~~xfZi_HpYJR_Rz-h5B4lkXA==/net.droopia.hluweather-cFNy5RaloBS9cL5BxuIB3g==/base.apk
+Installed with SDK adb install -r after boot/RUNNING_UNLOCKED in the first part
+of this same QA continuation; persisted across the later task-AVD restart.
+No reinstall was needed after resuming: the on-device hash still matched.
+Source adaptation eefc396 + d5673e0; supplied build verification 0b16b61.
+No production edits, build, unit-suite rerun, release build or signing under QA.
+
+All adb commands:
+/home/homoludens/Android/Sdk/platform-tools/adb -P 5057 -s emulator-5562 ...
+Emulator inherited SDK platform-tools first on PATH and ANDROID_ADB_SERVER_PORT=5057.
+AVD: hluweather-task6-5-api35, existing preserved userdata, Pixel 2, 5x5 grid.
+API 35 Google APIs image, Pixel Launcher version 15 / code 907.
+Fingerprint: google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+wm size: Physical size: 1080x1920
+wm density: Physical density: 420
+Initial font_scale=1.0, night mode No, app Light/Celsius, saved Zajecar.
+MemTotal=2531956 kB; initial MemAvailable=1371788 kB (context, not a benchmark).
+No device/image download, physical device, uninstall, data clear, permission grant,
+weather-data injection, GPS fix, provider replacement or unrelated adb server used.
+On resume the launcher initially showed "Pixel is starting" and one UI dump had
+a null root. Waited for actual launcher readiness; those startup frames are not
+accepted as widget results.
+
+EXACT PREVIOUSLY FAILING REPRODUCTION — PASS
+The first part also captured a fitting normal cached font cycle at 12:39–12:40.
+The following repeated cycle supplies the retained raw state/bounds/resource proof
+for normal AND previously resized instances, before opening any MainActivity.
+
+15:01:43 shell am kill net.droopia.hluweather
+pidof then returned exit 1, no PID: background app really ended, not force-stopped.
+15:01:44 ordinary widget refresh tap (740,935), with launcher foreground.
+Only the widget action restarted the process; new PID 3480.
+15:01:46.368 WeatherWidgetWorker started:
+f4323090-db01-4934-9b95-eaab5477050d
+15:01:46.482–723 five SessionWorkers started.
+15:01:48.671 WeatherWidgetWorker SUCCESS; matching weather timestamp 15:01.
+15:02:04 api35-final-cached100-normal.png baseline, font_scale=1.0.
+Waited 55 seconds naturally; no manual session cancellation/recreation.
+15:02:33.381 session appWidget-8 closed.
+15:02:37.826/841/857/895 sessions appWidget-3/6/10/4 closed.
+All five had ended before font changes.
+
+State snapshots (pidof / am get-uid-state 10209 / settings get system font_scale):
+15:02:59 before:          PID 3480, 19 (CACHED_EMPTY), 1.0
+15:03:08 normal at 130%:  PID 3480, 19 (CACHED_EMPTY), 1.3
+15:03:14 resized at 130%: PID 3480, 19 (CACHED_EMPTY), 1.3
+15:03:28 after return:    PID 3480, 19 (CACHED_EMPTY), 1.0
+Every snapshot's foreground:
+topResumedActivity=ActivityRecord{55c9c06 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t31}
+At 130%, dumpsys activity processes for PID 3480 also reported:
+curProcState=19 mRepProcState=19 setProcState=19
+cached=true empty=true
+currentHostingComponentTypes=0x0
+
+15:03:00 settings put system font_scale 1.3
+15:03:07 api35-final-cached130-normal.png
+Swiped ONLY the launcher to page 1, no app/widget tap.
+15:03:14 api35-final-cached130-resized.png
+15:03:14 settings put system font_scale 1.0
+15:03:21 api35-final-cached100-resized-return.png
+Swiped ONLY the launcher back to page 0.
+15:03:28 api35-final-cached100-normal-return.png
+
+logcat -d -s GlanceSessionManager WM-WorkerWrapper WM-Processor was byte-identical
+before and after the font cycle. Both complete local log dumps SHA-256:
+789a0461dd2743b2d12aa8cd7e8271dbeecedbcec8994fe9374b291dfbcdd578
+Last relevant entry in each was session completion at 15:02:37.908; no new session,
+worker, weather result, refresh or app Activity occurred during the font changes.
+QA invoked no rendering callback/invalidation. This is runtime observation of
+host-only fit, not a claim of instrumented Android callback internals or a full
+network packet trace. Existing header/apparent-temperature rows stayed in place,
+unlike the layout-policy recomposition seen in the separate active cycle below.
+
+VISUAL / HIERARCHY RESULT
+At both scales all three future hourly time/icon/temperature/probability rows fit.
+15°C current, Cloudy, apparent 13°C; update timestamp remains 15:01 throughout.
+16:00/17:00/18:00, 14/14/13°C, blue probabilities 5/10/23%, all complete ink,
+with no bottom clipping, overlap, horizontal overflow, or lost unit suffix.
+Long location stays ellipsized, full semantic location remains available.
+Normal small host [56,326][424,810], normal medium [56,852][824,1336].
+Page-1 medium hosts [56,63][824,547] and [56,589][824,1073], the first previously
+resized 5x2->4x2. Each is 768x484 pixels, about 293x184dp before host padding.
+Normal medium at cached 130%:
+time row [301,1022][421,1058], temperature row [301,1110][421,1155]
+probabilities [339,1160][403,1196], [468,1160][560,1196], [611,1160][703,1196].
+These 36-pixel text slots retain complete blue glyphs in the actual screenshot.
+Refresh target [677,873][803,999] = 126x126 pixels = 48x48dp.
+Page-1 top refresh [677,84][803,210], same target size.
+Native auto-sizing is a local bounded-text overflow guard, not a global font cap.
+Current-temperature hierarchy and readable hourly values remain evident.
+
+LOCAL RESOURCE BASELINE (NOT A BATTERY/PERFORMANCE BENCHMARK)
+                         Before 130%       After return to 100%
+Device uptime ms            290724                    319409
+App PID                       3480                      3480
+App Activities / Views        0 / 0                     0 / 0
+App PSS KiB                  38994                     37550
+App RSS KiB                 114684                    112852
+App Swap PSS KiB             22604                     23271
+Android may compact/swap cached memory; these snapshots do not measure a leak,
+CPU usage, battery drain or long-term periodic behavior.
+Both location-service snapshots: no net.droopia.hluweather listener/registration;
+GPS ProviderRequest[OFF], mStarted=false, 0 location reports.
+No GPS, polling, worker or app activation was used to obtain this font-fit pass.
+This saved-location check is NOT verification of Track Me/passive-fix fallbacks.
+
+ACTIVE-SESSION REGRESSION / REFRESH — PASS
+15:04:05 ordinary refresh tap. WeatherWidgetWorker started 15:04:06.026:
+fb467d29-a3d8-443f-bcb9-f8e6545f7a66
+15:04:06.428–693 five SessionWorkers started.
+15:04:08.478 WeatherWidgetWorker SUCCESS.
+15:04:19 api35-final-refresh-complete.png: fresh 15:04 timestamp, no stuck loading,
+launcher still foreground; current weather retained.
+15:04:19 font_scale=1.3
+15:04:25 api35-final-active130-normal.png
+15:04:32 api35-final-active130-resized.png
+15:04:32 font_scale=1.0
+15:04:38 api35-final-active100-resized-return.png
+15:04:41 api35-final-active100-normal-return.png
+All precede the same sessions' closing at 15:04:53–55, with no replacement session
+or refresh between the font changes. Timestamp/apparent-temperature rows yield
+space at 130%, return at 100%; all hourly fields stay inside their cards. Locally
+smaller probability glyphs remain complete/readable in the bounded slots.
+Normal medium ID 8 session: 9b7ed1db-44f0-4a38-9be2-ae6d64446b64
+Resized ID 4 session: bb9055f3-cf90-451d-957b-66c9f66b4e73
+No distinct in-progress loading frame or strict overlapping-tap coalescing pass.
+
+FRESH 130% / ACTIONS — PASS
+After natural session expiry, set 130%, am kill only the background app, confirmed
+no PID, then ordinary widget refresh. At 15:06:22 api35-final-fresh130-normal.png
+shows a fitting fresh production composition, three complete hourly columns.
+Restored font_scale=1.0 before app actions.
+15:06:24 native location text tap (180,935) opened main weather independently:
+topResumedActivity=ActivityRecord{5c95962 u0 net.droopia.hluweather/.MainActivity t35}
+Then left app on Settings (UI hierarchy verified), returned home.
+15:06:59 blank background tap (500,1280), outside weather/header/refresh fields.
+15:07:08 api35-final-card-main.png shows main weather, not Settings:
+topResumedActivity=ActivityRecord{9a27213 u0 net.droopia.hluweather/.MainActivity t35}
+Native text semantics in the widget hierarchy include full location description,
+Cloudy, "15 degrees C", each future hour, "Rain probability 5/10/23 percent"
+and "Refresh weather". This is semantic inspection, NOT audible TalkBack testing.
+
+PICKER / RETAINED PLACEMENT — PASS
+15:07:30 api35-final-picker.png: actual launcher entries 2 x 2 / 4 x 2 with
+current-weather/hourly descriptions. No new instance added in this final run.
+Launcher model, retained IDs:
+3 small: screen=0 cell(0,1) span(2,2) minSpan(2,2)
+4 medium: screen=1 cell(0,0) span(4,2) minSpan(4,2)
+8 medium: screen=0 cell(0,3) span(4,2) minSpan(4,2)
+10 medium: screen=1 cell(0,2) span(4,2) minSpan(4,2)
+Old ID 6 remains deliberately unresized: screen=2 span(4,3) minSpan(4,2).
+Service medium min=(66561x28161), minResize=(66561x28161), updatePeriodMillis=0.
+These are Android complex-dimension encodings for 260x110dp, not pixels.
+Prior direct-add/no-configuration and four-column resize checks are historical;
+this final run checks retained placement, three-column normal/resized hosts.
+
+CLEANUP / LIMITS / STATUS
+15:08:01 font_scale=1.0, Night mode: no, wifi_on=1, mobile_data=1.
+App Light/Celsius unchanged; saved location/data and all five instances preserved.
+Only this task AVD was stopped via its isolated adb emu kill; server not killed.
+User AGENTS.md and the three source-reference PNGs were not edited or staged.
+API 28 unavailable (no download); TalkBack audio, Track Me/passive-fix and saved
+fallbacks, provider/selected-location switching, exact minima/five-hour launcher
+sizes, other display/density scales, strict tap coalescing, last-widget/mixed-size
+cancellation and exact periodic/Doze behavior remain NOT RUN/unverified.
+Final-package System/explicit themes, offline units/failure/recovery and offline
+reboot were not repeated; prior-APK observations remain explicitly historical.
+624/624 full-suite tests, including 125 widget tests, and the Google debug build
+were separately completed before QA and were NOT rerun here.
+6.5 deliverable complete with unavailable coverage recorded; 30/30 tasks complete.
+Only 6.5 checkbox changed. No archive, production fix, or broadened authorization.

@@ -1,0 +1,105 @@
+Task 6.5 — independent Terra API 35 latest-APK reverification, 2026-10-29
+Explicit user routing exception for this task; no delegation. Device times +0100.
+All api35-terra-*.png are raw SDK adb screencaps, not automated renders.
+
+PACKAGE / ENVIRONMENT
+Existing preserved AVD hluweather-task6-5-api35; Pixel 2 profile, API 35
+Google APIs, Pixel Launcher, 1080x1920, 420 dpi, 5x5 grid.
+SDK emulator and platform-tools, ANDROID_AVD_HOME=/tmp/opencode/android-avds;
+all device commands use adb -P 5057 -s emulator-5562. No physical device,
+unrelated ADB server, image download, uninstall, data clear, or fixture injection.
+Booted task AVD and waited for RUNNING_UNLOCKED. System UI initially displayed
+an ANR; selected Wait, after which the launcher and widgets became ready.
+At 15:16, install -r app/build/outputs/apk/google/debug/app-google-debug.apk
+returned Success. Local and installed base APK SHA-256:
+fd6a3ff728835d086f5f56c8702b47409d263bd80f98a404a79c441fadc7ec2c
+Installed package net.droopia.hluweather, version 3.5.1 / code 38, UID 10209.
+Installed base path:
+/data/app/~~TiNiVXuM-GsD6RMlUAKNaw==/net.droopia.hluweather-wrOK52QLVvxm8ju1ecpOxA==/base.apk
+Service medium min=(66561x28161), minResize=(66561x28161): Android complex
+dimension encodings for 260x110 dp. Retained saved Zajecar weather/instances.
+
+CACHED-EMPTY FONT-CYCLE REPRODUCTION — PASS FOR OBSERVED HOSTS AND CONTENT
+15:17:38 am kill while UID was transient did not kill PID 2918; no pass claimed.
+15:18:19 UID 19 (CACHED_EMPTY), launcher foreground, PID 2918.
+15:18:22 am kill net.droopia.hluweather; pidof returned no PID. No force-stop.
+15:18:25 ordinary widget refresh tap (740,935), the only app-restart action.
+New app PID 3357; launcher remained foreground. Worker started 15:18:27.866,
+five Glance SessionWorkers started 15:18:27.920–15:18:28.399. Worker
+1a13360e-de82-4abb-9f02-ae4bf859755a SUCCESS at 15:18:32.420; displayed
+weather timestamp 15:18, no stuck loading.
+Natural GlanceSessionManager closure:
+  15:19:14.603 appWidget-3
+  15:19:16.722 appWidget-6
+  15:19:16.769 appWidget-8
+  15:19:20.543 appWidget-10
+  15:19:20.577 appWidget-4
+All five closed before the first font change.
+15:19:52 api35-terra-cached100-normal.png, scale 1.0 baseline.
+15:20:00 PID 3357, UID 19 (CACHED_EMPTY), scale 1.0, launcher foreground.
+15:20:04 settings put system font_scale 1.3.
+15:20:17 PID 3357, UID 19, scale 1.3, launcher foreground.
+15:20:19 api35-terra-cached130-normal.png.
+15:20:27 swiped launcher page only, no widget or launcher tap.
+15:20:32 PID 3357, UID 19, scale 1.3, launcher foreground.
+15:20:34 api35-terra-cached130-resized.png.
+At 130%, an accessibility hierarchy dump inspected host views only; at 15:20:47
+PID 3357 was still UID 19, launcher foreground, font_scale 1.3.
+15:20:50 settings put system font_scale 1.0.
+15:21:03 PID 3357, UID 19, scale 1.0, launcher foreground.
+15:21:05 api35-terra-cached100-resized-return.png.
+15:21:07 launcher-only swipe to normal page; 15:21:14 PID 3357, UID 19,
+scale 1.0, launcher foreground; 15:21:16 cached100-normal-return screenshot.
+No Activity launch, refresh, widget tap, explicit invalidation or rendering
+callback was invoked by QA between the two scale changes. Full logcat dumps
+filtered by PID 3357 were byte-identical before, at both 130% samples, and after:
+SHA-256 284c3926b598ad117a48d840deb2ce1a396eab7fb60bef5a42d863fb1e609500.
+No new worker/session was observed. UID and foreground state are sampled, and
+the logs do not instrument Android callback internals or prove absence of every
+transient state. Old header/secondary rows remained, consistent with host-only
+reapplication rather than the distinct active layout-policy recomposition.
+
+Screenshots show complete 16:00/17:00/18:00, 14/14/13°C and blue 5/10/23%
+glyphs on all three medium widgets at 130%, plus legible current 15°C, location
+ellipsis and independent refresh. Each resized host is 768x484 px, about
+293x184 dp before padding; exact 260x110 dp is NOT RUN on this launcher.
+UI hierarchy on page 1 at 130%:
+  hosts [56,63][824,547] and [56,589][824,1073]
+  first host time [301,233][421,269], temperature [301,321][421,366]
+  first probabilities [339,371][403,407] [468,371][560,407] [611,371][703,407]
+  refresh [677,84][803,210] = 126x126 px = 48x48 dp
+Descriptions include full location, unit-bearing temperatures, hourly conditions,
+Rain probability 5/10/23 percent and Refresh weather. This semantic inspection
+is NOT audible TalkBack verification; screenshots establish visual fit.
+
+INDEPENDENT ACTIVE-SESSION / ACTION SPOT CHECKS
+15:21:33 ordinary widget refresh; WeatherWidgetWorker started 15:21:33.831,
+five SessionWorkers started 15:21:34.224–323, refresh SUCCESS 15:21:38.143.
+15:21:48 scale 1.3; 15:22:02 active130-normal screenshot, 15:22:12
+active130-resized screenshot. Hourly time/temp/probability glyphs fit; smaller
+blue probability text remains visible, while lower-priority rows yield space.
+Returned scale to 1.0 at 15:22:14. The first session closed at 15:22:20.062;
+all five had closed by 15:22:22.013. Returned-scale screenshot at 15:22:38
+was AFTER closure, so it is not claimed as same-session return evidence.
+api35-terra-refresh-complete.png shows 15:21 weather and loading cleared;
+launcher stayed foreground on the refresh. A distinct in-progress loading
+frame and strict overlapping-tap coalescing were not captured/verified.
+15:22:51 native location-text tap (180,935) opened main weather.
+Visited Settings without changing preferences, returned home; at 15:23:35
+blank card-background tap (500,1280) opened main weather, not Settings:
+api35-terra-card-main.png. Both actions were checked separately from refresh.
+15:25 api35-terra-picker.png shows actual 2x2 and 4x2 entries/descriptions.
+Launcher model: small ID 3 span(2,2); medium IDs 4, 8 and 10 span(4,2);
+old medium ID 6 retains its historical 4x3 placement. No new instance added
+or removed; direct placement/no-configuration remains previous-APK evidence.
+
+CLEANUP / LIMITS
+At 15:25:29 font_scale=1.0, night mode No, wifi_on=1, mobile_data=1;
+app Light/Celsius and saved location/forecast retained. Stopped only the AVD
+started for this continuation; isolated ADB server was not killed.
+API 28 unavailable without a download. TalkBack audio, Track Me and fallback,
+provider/location switching, exact minima/five-hour launcher sizes, other
+display/density scales, strict tap coalescing, mixed-size/last-widget work
+cancellation and exact periodic/Doze timing remain NOT RUN/unverified.
+Final-APK offline/theme/reboot cases were not repeated; older observations are
+clearly historical. No production edit, build, suite rerun or release signing.
