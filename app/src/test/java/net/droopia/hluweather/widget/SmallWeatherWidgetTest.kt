@@ -71,7 +71,11 @@ class SmallWeatherWidgetTest {
     fun translated_production_layout_preserves_small_weather_priorities_at_minimum_compact_and_normal_sizes() {
         val cases = listOf(
             LayoutCase(110f, 110f, 1f, ThemeMode.LIGHT, expectedCondition = false, expectedFeelsLike = false),
+            LayoutCase(110f, 128f, 1f, ThemeMode.LIGHT, expectedCondition = true, expectedFeelsLike = false),
+            LayoutCase(110f, 160f, 1f, ThemeMode.LIGHT, expectedCondition = true, expectedFeelsLike = true),
+            LayoutCase(110f, 160f, 1.3f, ThemeMode.DARK, expectedCondition = true, expectedFeelsLike = true),
             LayoutCase(160f, 128f, 1f, ThemeMode.SYSTEM, expectedCondition = true, expectedFeelsLike = false, systemDark = true),
+            LayoutCase(160f, 128f, 1.3f, ThemeMode.LIGHT, expectedCondition = false, expectedFeelsLike = false),
             LayoutCase(200f, 160f, 1f, ThemeMode.DARK, expectedCondition = true, expectedFeelsLike = true)
         )
 
@@ -85,7 +89,7 @@ class SmallWeatherWidgetTest {
             )
 
             if (case.widthDp > 110f) assertText(view, "Zaječar")
-            else assertTrue("minimum layout keeps an accessible location label", hasDescription(view, "Weather for Zaječar"))
+            else assertTrue("narrow layout keeps an accessible location label", hasDescription(view, "Weather for Zaječar"))
             assertText(view, "23°C")
             assertEquals(case.expectedCondition, hasText(view, "Clear sky"))
             assertEquals(case.expectedFeelsLike, hasText(view, "Feels like 24°C"))

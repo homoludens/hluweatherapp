@@ -26,7 +26,12 @@ import net.droopia.hluweather.HluWeatherApplication
 
 internal val SMALL_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     DpSize(110.dp, 110.dp),
+    // Launcher cells can be narrow and tall. Width and height must both fit for Glance/the
+    // host to select a variant, so include tall layouts without requiring a wider widget.
+    DpSize(110.dp, 128.dp),
+    DpSize(110.dp, 160.dp),
     DpSize(160.dp, 128.dp),
+    DpSize(160.dp, 160.dp),
     DpSize(200.dp, 160.dp),
     DpSize(280.dp, 184.dp)
 )
