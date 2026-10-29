@@ -1,0 +1,141 @@
+Task 6.5 — API 35 launcher QA, 2026-10-29, device times +0100
+User-authorized Terra 6.1 max exception for this task; no delegation.
+All api35-1f3f-*.png files are raw SDK adb screencaps, not example renders.
+
+PACKAGE, ENVIRONMENT, AND OPTIONS
+Existing AVD hluweather-task6-5-api35, Pixel 2 profile, API 35 Google APIs,
+Pixel Launcher 15/code 907, 1080x1920, 420 dpi, 5x5 grid. Used SDK emulator
+and platform-tools, ANDROID_AVD_HOME=/tmp/opencode/android-avds, isolated ADB
+port 5057 and serial emulator-5562. No download, physical device, unrelated
+ADB server, uninstall, data clear, or weather fixture injection. Boot reached
+RUNNING_UNLOCKED; an initial System UI ANR was dismissed with Wait.
+16:08: install -r app/build/outputs/apk/google/debug/app-google-debug.apk
+returned Success. The local APK and installed base.apk both hashed:
+1f3f8365c795c5ec9534e95ca6d23f50996eb8a31628d3a56b5a30cd6c0eaa17
+Package net.droopia.hluweather 3.5.1/code 38, UID 10209; installed base:
+/data/app/~~GPrvOsPJffV7_cg05FRH_A==/net.droopia.hluweather-2YikthJvg3GObvmqkv1XWA==/base.apk
+
+Service metadata min/minResize: small 28161x28161 (110x110 dp encoded),
+medium 66561x28161 (260x110 dp encoded); updatePeriodMillis=0, resizeMode=3.
+The launcher model before and after QA retained small ID 3, screen 0, cell(0,1),
+span(2,2); medium IDs 4, 8, 10 span(4,2), ID 6 remains its older span(4,3).
+Picker shows separate HluWeatherApp 2x2 and 4x2 entries and descriptions.
+No instance was added or removed in this run; direct placement without a
+configuration screen is earlier-APK evidence, not a new-package assertion.
+
+Options read without modifying app data using:
+  adb -P 5057 -s emulator-5562 shell run-as net.droopia.hluweather \
+    service call appwidget 13 s16 net.droopia.hluweather i32 <widget-id>
+Here Android 15 IAppWidgetService transaction 13 is getAppWidgetOptions.
+Values below decode the returned Parcel; appWidgetSizes has duplicate entries
+for each listed size. These are host options, not a claim about internal Glance
+variant selection or removal of host padding:
+  ID 3, 2x2: minWidth=140, maxWidth=211, minHeight=139, maxHeight=184 dp;
+    sizes=140.1905x184.3810, 211.0476x139.4286 dp.
+    Raw float words: 430c30c3 43386186; 43530c31 430b6db7.
+  ID 3, 3x2: minWidth=216, maxWidth=322, minHeight=139, maxHeight=184 dp;
+    sizes=216.3810x184.3810, 322.6667x139.4286 dp.
+    Raw float words: 43586186 43386186; 43a15555 430b6db7.
+  ID 3, 4x2: minWidth=292, maxWidth=434, minHeight=139, maxHeight=184 dp;
+    sizes=292.5714x184.3810, 434.2857x139.4286 dp.
+    Raw float words: 43924925 43386186; 43d92492 430b6db7.
+  Medium ID 4, 4x2: same integer options and float sizes as small 4x2.
+UIAutomator normal small host [56,326][424,810] = 368x484 px, approximately
+140.19x184.38 dp at 420 dpi. Refresh [277,347][403,473] = 126x126 px =
+48x48 dp. Medium on that page [56,852][824,1336] = 768x484 px, approximately
+292.57x184.38 dp. 3x2 small host [56,326][624,810] = 568x484 px.
+These are not the exact advertised minima or a five-hour host.
+
+NORMAL SMALL, RESIZE, AND FONT SCALE
+At 16:08 the 2x2 small showed saved Zajecar with location ellipsis, cloud icon,
+15°C, Cloudy, Feels like 13°C, and no hourly strip; no row overlapped/clipped.
+Refresh target and full location description were visible in the hierarchy.
+The initial saved weather was not injected. Ordinary online refresh at 16:09:37
+left the launcher foreground; worker SUCCESS at 16:09:42.097.
+
+16:10:51 refresh: PID 2921's five Glance SessionWorkers started 16:10:52.758
+through 16:10:53.112; refresh SUCCESS 16:10:56.013. With no further refresh
+between font changes, 130% normal captured 16:11:03, 130% resized medium
+16:11:07, 100% resized return 16:11:12, and 100% normal return 16:11:16.
+Session closures were 16:11:38.382–16:11:40.334, after all captures. At 130%
+the normal small retains primary content, Cloudy, Feels like 12°C; both medium
+pages retain complete 17:00/18:00/19:00, 14/13/12°C and blue 10/23/18% glyphs.
+The active medium drops lower-priority fields as available space changes.
+
+Resized existing small ID 3 2x2 -> 3x2; model and option bundle confirmed the
+span. At 16:14:26 ordinary refresh started five sessions, worker SUCCESS at
+16:14:29.106. At 16:14:37 the 130% capture shows location, icon, 14°C,
+Cloudy and Feels like 12°C inside the 3x2 card; 100% returned at 16:14:42.
+All captures precede the 16:15:12–13 session closures. Later resized to 4x2
+and captured its failure status at 130%; no overlap or visible ink clipping.
+Restored ID 3 to 2x2 and confirmed model, settings, and all retained instances.
+Exact small 110x110, compact-height and other density/display scales NOT RUN.
+
+WIDGET-ONLY CACHED-EMPTY FONT CYCLE
+16:11:41 PID 2921 UID 19 (CACHED_EMPTY), font 1.0, launcher foreground.
+16:11:43 background-only am kill; pidof returned no PID, no force-stop/data
+clear. Ordinary small refresh at (340,410) was the only app restart action.
+PID 3703 started five sessions at 16:11:45.218–406; the worker succeeded at
+16:11:48.816. Sessions closed naturally: ID 3 at 16:12:31.753; IDs 10/4/6
+16:12:34.035/107/122; ID 8 at 16:12:35.894.
+16:12:37 all five closed, PID 3703, UID 19, font 1.0.
+16:12:38 normal 100% baseline; 16:12:43 normal 130%; 16:12:47 previously
+resized medium 130%; 16:12:52 resized medium 100% return; 16:12:56 normal
+100% return. PID 3703 and UID 19 were sampled at each capture; launcher page
+navigation used swipes only. No widget tap, refresh, explicit invalidation or
+app Activity was invoked by QA between font changes. Full PID log dumps before
+and after were byte-identical, SHA-256
+74517442089aaa181b3c992b73ef3759f87682c97148ca1e096ea41c2240f77b.
+Cached 16:11 weather, small secondary rows, and complete medium hourly blue
+10/23/18% glyphs remained visible. This is sampled state/log evidence, not
+instrumentation excluding every possible transient state or Android callback.
+
+OFFLINE FAILURE, RETRY BACKOFF, AND ACTIONS
+Before 16:15:24 Wi-Fi and mobile data were both enabled. Disabled both on the
+task AVD; 16:15:30 settings wifi_on=0, mobile_data=0. Tapped small refresh.
+Worker ID 1086ccca-9391-4ab7-a6cb-b70ec917382f started 16:15:31.053 and
+returned RETRY at 16:15:31.658. At 16:15:46 the small card retained 14°C,
+Cloudy, Feels like 12°C and Stale weather; medium retained the true 16:14
+timestamp and showed Stale. Loading was not stuck. At 16:15:55 Wi-Fi/data
+were restored to 1/1. A tap after restoring and a second tap at 16:18:00 left
+the stale display. By 16:16:31 the Wi-Fi default network was VALIDATED.
+Read-only sqlite queries via run-as before and after the 16:18 tap showed:
+  widget.weather.manual_refresh | 1086ccca-9391-4ab7-a6cb-b70ec917382f
+  state=0 (ENQUEUED), run_attempt_count=1, backoff_delay_duration=600000 ms.
+No new WeatherWidgetWorker start was logged between that tap and 16:18:09.
+JobScheduler showed WeatherWidgetWorker job 323 waiting on TIMING_DELAY with
+10-minute initial backoff. This is evidence that the online tap did not start
+a new manual refresh during pending retry; there was no direct network tracing
+or instrumentation proving the individual action callback's internals.
+Source inspection is consistent with the observation: enqueueManualRefresh
+uses unique work with KEEP and a 10-minute backoff; the retry is non-manual.
+Introduction version/cause has not been independently established. This is a
+current manual-refresh-after-failure blocker, not a claim of a newly introduced
+regression or an accepted pass.
+
+At 16:18:37 location tap opened MainActivity/main weather; the app independently
+loaded weather while online, updating the forecast to 16:18/16:19. Went to
+Settings without changing preferences, returned home, tapped blank small-card
+background (300,720): main weather opened at 16:19:11, separately from refresh.
+After this app activity, the displayed 16:19 forecast was newer, but the cards
+still showed Update failed / Stale. At 130% the small failure status also fit.
+At 16:25:31.719 the old retry started and reported SUCCESS at 16:25:31.766;
+before another tap the cards still showed failure/stale with timestamp 16:19.
+At 16:26:06 a later small refresh started a new worker ID 22ee2412-0b5b-4a93-
+b022-098ab40a96ed; SUCCESS 16:26:13.687. A screenshot around 16:26:18 still
+showed the medium Updating, but the 16:26:23 UI dump and later screenshot show
+Updated 16:26, no failure/loading, and the launcher foreground. This proves
+later recovery, not prompt response to the taps while the retry was pending.
+
+CLEANUP AND COVERAGE
+At 16:27:19 font_scale=1.0, system night No, wifi_on=1, mobile_data=1;
+launcher foreground, all five widget IDs retained, small restored to 2x2.
+Saved location and app Light/Celsius settings retained; only the task AVD this
+continuation started was stopped. No production change, rebuild, suite rerun,
+release build/signing, or unrelated user-file staging.
+API 28 not locally available; no download attempted. TalkBack audio, Track Me
+and saved-location fallbacks, provider/location switching, exact minima and
+five-hour launcher size, other display scales, strict overlapping-tap
+coalescing, last-widget/mixed-size cancellation, and exact periodic timing are
+NOT RUN/unverified. Explicit/system theme switching and offline reboot were not
+repeated on this APK. The checklist retains earlier-package historical results.
