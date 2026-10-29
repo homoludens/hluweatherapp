@@ -212,6 +212,54 @@ class WeatherWidgetReconciliationTest {
         assertTrue(f.calls.isEmpty())
     }
 
+    @Test
+    fun active_snapshot_observation_expires_loading_and_cancels_old_attempt_timers() = runTest {
+        val f = Fixture(this)
+        val snapshots = mutableListOf<WeatherWidgetSnapshot>()
+        val observation = backgroundScope.launch { f.widgets.observeSnapshots().collect { snapshots += it } }
+        runCurrent()
+        val request = f.widgets.resolveRequest()!!
+        val attempt = f.widgets.beginRefresh(request)
+        runCurrent()
+        assertTrue((snapshots.last() as WeatherWidgetSnapshot.NoWeather).refresh.isRefreshing)
+        f.widgets.finishRefresh(request, attempt, null)
+        runCurrent()
+        val afterFinish = snapshots.size
+        advanceTimeBy(15 * 60 * 1000L)
+        runCurrent()
+        assertEquals(afterFinish, snapshots.size)
+        f.widgets.beginRefresh(request)
+        runCurrent()
+        assertTrue((snapshots.last() as WeatherWidgetSnapshot.NoWeather).refresh.isRefreshing)
+        advanceTimeBy(15 * 60 * 1000L)
+        runCurrent()
+        assertFalse((snapshots.last() as WeatherWidgetSnapshot.NoWeather).refresh.isRefreshing)
+        assertTrue((snapshots.last() as WeatherWidgetSnapshot.NoWeather).refresh.lastAttemptFailed)
+        observation.cancel()
+        runCurrent()
+        assertEquals(0, f.settings.subscriptionCount.value)
+        assertTrue(f.calls.isEmpty())
+    }
+
+    @Test
+    fun active_snapshot_observation_ignores_unrelated_and_lru_writes_without_a_loop() = runTest {
+        val f = Fixture(this)
+        f.put(first)
+        f.put(second)
+        val snapshots = mutableListOf<WeatherWidgetSnapshot>()
+        backgroundScope.launch { f.widgets.observeSnapshots().collect { snapshots += it } }
+        runCurrent()
+        assertTrue(snapshots.last() is WeatherWidgetSnapshot.Available)
+        val count = snapshots.size
+        f.cache.get(f.key(second))
+        f.cache.get(f.key(first))
+        f.data.edit { it[stringPreferencesKey("unrelated")] = "changed" }
+        f.settings.value = f.settings.value.copy(weatherAlerts = true)
+        runCurrent()
+        assertEquals(count, snapshots.size)
+        assertTrue(f.calls.isEmpty())
+    }
+
     private inner class Fixture(private val scope: TestScope) {
         val installed = MutableStateFlow(true)
         val settings = MutableStateFlow(PersistedSettings())

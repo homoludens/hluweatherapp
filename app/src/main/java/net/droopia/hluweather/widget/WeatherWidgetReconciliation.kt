@@ -102,7 +102,7 @@ private data class Content(
 
 /** One timer per active attempt, cancelled by completion or selection/inventory changes. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-private fun Flow<WidgetRefreshStatus>.expireLoading(clock: Clock): Flow<WidgetRefreshStatus> =
+internal fun Flow<WidgetRefreshStatus>.expireLoading(clock: Clock): Flow<WidgetRefreshStatus> =
     transformLatest { status ->
         emit(status)
         val started = status.startedAt

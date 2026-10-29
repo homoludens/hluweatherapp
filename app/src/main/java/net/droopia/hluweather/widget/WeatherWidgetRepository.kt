@@ -2,8 +2,13 @@ package net.droopia.hluweather.widget
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlin.time.Clock
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.GeoPoint
@@ -105,6 +110,24 @@ class WeatherWidgetRepository(
 
     fun observeRefreshStatus(request: WeatherWidgetRequest) =
         refreshMetadata.observe(request.identity, clock::now)
+
+    /** Cache-only updates for an active Glance composition. Never schedules or fetches weather. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    internal fun observeSnapshots(): Flow<WeatherWidgetSnapshot> = observeSelection()
+        .distinctUntilChanged { (a, ar), (b, br) ->
+            ar?.identity == br?.identity && ar?.locationName == br?.locationName &&
+                a.temperatureUnit == b.temperatureUnit && a.themeMode == b.themeMode
+        }
+        .flatMapLatest { (_, request) ->
+            val changes = if (request == null) flowOf(Unit) else combine(
+                observeCachedForecast(request),
+                observeRefreshStatus(request).expireLoading(clock)
+            ) { forecast, status -> forecast to status }
+                .distinctUntilChanged()
+                .map { Unit }
+                .onStart { emit(Unit) }
+            changes.mapLatest { loadCachedState() }
+        }.distinctUntilChanged()
 
     /** Reads the existing repository cache only; refreshes are owned by asynchronous work. */
     suspend fun loadCachedState(): WeatherWidgetSnapshot {

@@ -6,6 +6,9 @@ import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
@@ -38,16 +41,24 @@ internal val MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     DpSize(400.dp, 160.dp)
 )
 
-/** Current conditions and three to five future hours; all data is loaded before composition. */
+/** Current conditions and three to five future hours, observed from the app's cache. */
 class MediumWeatherWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Responsive(MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES)
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         // Loading is cache-only. The application reconciliation/worker paths own weather requests.
         val application = context.applicationContext as HluWeatherApplication
-        val snapshot = application.weatherWidgetRepository.loadCachedState()
-        provideContent { MediumWeatherWidgetContent(snapshot) }
+        val repository = application.weatherWidgetRepository
+        val snapshot = repository.loadCachedState()
+        provideContent { ObservedMediumWeatherWidget(repository, snapshot) }
     }
+}
+
+@Composable
+internal fun ObservedMediumWeatherWidget(repository: WeatherWidgetRepository, initial: WeatherWidgetSnapshot) {
+    val updates = remember(repository) { repository.observeSnapshots() }
+    val current by updates.collectAsState(initial)
+    MediumWeatherWidgetContent(current)
 }
 
 /** Production medium-card composition shared with translated RemoteViews tests. */

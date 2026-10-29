@@ -6,6 +6,9 @@ import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
@@ -35,9 +38,17 @@ class SmallWeatherWidget : GlanceAppWidget() {
         // Loading is strictly cache-only. Do not enqueue from render: worker updates can re-render
         // stale or unavailable states, and doing so here would create a refresh feedback loop.
         val application = context.applicationContext as HluWeatherApplication
-        val snapshot = application.weatherWidgetRepository.loadCachedState()
-        provideContent { SmallWeatherWidgetContent(snapshot) }
+        val repository = application.weatherWidgetRepository
+        val snapshot = repository.loadCachedState()
+        provideContent { ObservedSmallWeatherWidget(repository, snapshot) }
     }
+}
+
+@Composable
+internal fun ObservedSmallWeatherWidget(repository: WeatherWidgetRepository, initial: WeatherWidgetSnapshot) {
+    val updates = remember(repository) { repository.observeSnapshots() }
+    val current by updates.collectAsState(initial)
+    SmallWeatherWidgetContent(current)
 }
 
 /** Production small-card composition shared with translated RemoteViews tests. */
