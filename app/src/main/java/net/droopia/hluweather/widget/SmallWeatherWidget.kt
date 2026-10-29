@@ -22,7 +22,65 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.time.Instant
 import net.droopia.hluweather.HluWeatherApplication
+import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.WeatherCondition
+import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.ui.settings.PersistedSettings
+import androidx.glance.preview.ExperimentalGlancePreviewApi
+import androidx.glance.preview.Preview
+
+
+@OptIn(ExperimentalGlancePreviewApi::class)
+@Preview(widthDp = 110, heightDp = 110)
+@Preview(widthDp = 160, heightDp = 160)
+@Composable
+private fun SmallWeatherWidgetPreview() {
+    SmallWeatherWidgetContent(snapshot = previewWeatherSnapshot())
+}
+
+/** Sample values for editing widget layouts in Android Studio. */
+internal fun previewWeatherSnapshot(): WeatherWidgetSnapshot.Available =
+    WeatherWidgetSnapshot.Available(
+        settings = PersistedSettings(),
+        request = WeatherWidgetRequest(
+            provider = WeatherProvider.OPEN_METEO,
+            location = ActiveLocation.Saved(
+                WeatherLocation("zajecar", "Zaječar", 43.9, 20.3)
+            ),
+            locationName = "Zaječar"
+        ),
+        weather = WeatherWidgetState(
+            locationName = "Zaječar",
+            temperatureText = "23°C",
+            temperatureContentDescription = "23 degrees Celsius",
+            apparentTemperatureText = "24°C",
+            apparentTemperatureContentDescription = "Feels like 24 degrees Celsius",
+            condition = WeatherCondition.CLEAR,
+            conditionLabel = "Clear sky",
+            isDay = true,
+            hours = (1..5).map { hour ->
+                WidgetHour(
+                    time = Instant.parse("2026-10-28T10:17:00Z"),
+                    timeText = "${11 + hour}:00",
+                    temperatureText = "${23 - hour}°C",
+                    temperatureContentDescription = "${23 - hour} degrees Celsius",
+                    condition = WeatherCondition.CLEAR,
+                    conditionLabel = "Clear sky",
+                    isDay = true,
+                    precipitationProbability = 10,
+                    precipitationProbabilityText = "10%",
+                    precipitationProbabilityContentDescription = "Rain probability 10 percent"
+                )
+            },
+            lastWeatherUpdate = Instant.parse("2026-10-28T10:17:00Z"),
+            lastWeatherUpdateText = "Wed, Oct 28 • 11:17",
+            lastWeatherUpdateCompactText = "Oct 28 11:17",
+            isStale = false
+        )
+    )
 
 internal val SMALL_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     DpSize(110.dp, 110.dp),

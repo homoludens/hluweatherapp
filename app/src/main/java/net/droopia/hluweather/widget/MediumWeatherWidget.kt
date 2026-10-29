@@ -33,8 +33,18 @@ import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.unit.ColorProvider
+import androidx.glance.preview.ExperimentalGlancePreviewApi
+import androidx.glance.preview.Preview
 import kotlinx.coroutines.flow.StateFlow
 import net.droopia.hluweather.HluWeatherApplication
+
+@OptIn(ExperimentalGlancePreviewApi::class)
+@Preview(widthDp = 260, heightDp = 110)
+@Preview(widthDp = 400, heightDp = 160)
+@Composable
+private fun MediumWeatherWidgetPreview() {
+    MediumWeatherWidgetContent(previewWeatherSnapshot())
+}
 
 internal val MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     DpSize(260.dp, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp),

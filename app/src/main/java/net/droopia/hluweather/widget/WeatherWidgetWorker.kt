@@ -22,6 +22,9 @@ interface WeatherWidgetWorkerDependencies {
      * this worker's completion (KEEP on this still-running work alone is not sufficient).
      */
     suspend fun deferSelectionReconciliation()
+
+    /** Persist bounded delayed recovery before a one-shot manual worker completes. */
+    suspend fun enqueueRecovery()
 }
 
 class WeatherWidgetWorker(
@@ -36,6 +39,12 @@ class WeatherWidgetWorker(
             val manual = runAttemptCount == 0 && inputData.getBoolean(INPUT_MANUAL, false)
             val result = dependencies.coordinator.refresh(manual)
             dependencies.updateAllWidgets()
+            if (manual && inputData.getBoolean(INPUT_SEPARATE_RECOVERY, false) &&
+                (result == WidgetRefreshResult.FAILED || result == WidgetRefreshResult.SELECTION_CHANGED)
+            ) {
+                dependencies.enqueueRecovery()
+                return Result.success()
+            }
             return when (result) {
                 WidgetRefreshResult.SUCCESS, WidgetRefreshResult.NO_LOCATION,
                 WidgetRefreshResult.PERMANENT_FAILURE -> Result.success()
@@ -43,7 +52,7 @@ class WeatherWidgetWorker(
                 // failures as IO errors. Treat those ambiguous failures as transient, but bounded.
                 WidgetRefreshResult.FAILED -> retryIfAllowed()
                 WidgetRefreshResult.SELECTION_CHANGED -> {
-                    if (runAttemptCount < MAX_RETRIES) Result.retry() else {
+                    if (retryAllowed()) Result.retry() else {
                         dependencies.deferSelectionReconciliation()
                         Result.success()
                     }
@@ -61,10 +70,15 @@ class WeatherWidgetWorker(
     }
 
     private fun retryIfAllowed(): Result =
-        if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.success()
+        if (retryAllowed()) Result.retry() else Result.success()
+
+    private fun retryAllowed(): Boolean = runAttemptCount <
+        if (inputData.getBoolean(INPUT_RECOVERY, false)) MAX_RETRIES - 1 else MAX_RETRIES
 
     companion object {
         const val INPUT_MANUAL = "widget.weather.manual"
+        const val INPUT_SEPARATE_RECOVERY = "widget.weather.separate_recovery"
+        const val INPUT_RECOVERY = "widget.weather.recovery"
         const val MAX_RETRIES = 2
     }
 }

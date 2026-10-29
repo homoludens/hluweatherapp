@@ -21,6 +21,7 @@ serialization = "1.9.0"
 maplibreCompose = "0.16.0"
 playServicesLocation = "21.3.0"
 glanceAppwidget = "1.2.0"
+glancePreview = "1.2.0"
 
 [libraries]
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -58,6 +59,8 @@ maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.r
 maplibre-compose-runtime-opengl = { module = "org.maplibre.compose:maplibre-compose-runtime-opengl-android", version.ref = "maplibreCompose" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glanceAppwidget" }
+androidx-glance-preview = { group = "androidx.glance", name = "glance-preview", version.ref = "glancePreview" }
+androidx-glance-appwidget-preview = { group = "androidx.glance", name = "glance-appwidget-preview", version.ref = "glancePreview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -194,6 +194,10 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
             override suspend fun deferSelectionReconciliation() {
                 weatherWidgetUpdater.enqueueSelectionRefresh()
             }
+
+            override suspend fun enqueueRecovery() {
+                weatherWidgetUpdater.enqueueRecovery()
+            }
         }
     }
 

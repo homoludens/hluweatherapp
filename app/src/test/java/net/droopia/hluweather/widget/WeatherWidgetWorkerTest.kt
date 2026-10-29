@@ -240,6 +240,7 @@ class WeatherWidgetWorkerTest {
         override val coordinator = WeatherWidgetRefreshCoordinator(widgets, weather) { updateAllWidgets() }
         override suspend fun updateAllWidgets() { deliveries += listOf(1, 2, 3) }
         override suspend fun deferSelectionReconciliation() { deferred++ }
+        override suspend fun enqueueRecovery() { deferred++ }
         suspend fun snapshot() = widgets.loadCachedState()
         fun forecast(location: WeatherLocation, fetchedAt: Instant = now) = WeatherForecast(
             location, WeatherProvider.OPEN_METEO, fetchedAt,

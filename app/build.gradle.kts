@@ -90,6 +90,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.androidx.glance.preview)
     add("googleImplementation", libs.play.services.location)
 
     implementation(libs.core.ktx)
@@ -134,4 +135,7 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    debugImplementation(libs.androidx.glance.appwidget.preview)
+
 }

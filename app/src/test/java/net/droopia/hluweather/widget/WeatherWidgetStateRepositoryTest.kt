@@ -80,6 +80,54 @@ class WeatherWidgetStateRepositoryTest {
     }
 
     @Test
+    fun newer_matching_fresh_app_cache_supersedes_only_an_older_completed_failure() = runTest {
+        var now = Instant.parse("2026-10-28T12:00:00Z")
+        val file = temporaryFolder.newFile("foreground-recovery.preferences_pb")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val metadata = DataStoreWidgetRefreshMetadataStore(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
+            val weather = FakeWeatherRepository(ForecastLoad(forecast(fetchedAt = now - 2.hours), true))
+            val repository = widgetRepository(locations = listOf(SAVED_LOCATION), active = ActiveLocation.Saved(SAVED_LOCATION),
+                weatherRepository = weather, clock = object : Clock { override fun now() = now }, metadata = metadata)
+            val request = repository.resolveRequest()!!
+            val oldAttempt = repository.beginRefresh(request)
+            repository.finishRefresh(request, oldAttempt, null)
+            val failedAt = now
+
+            for (time in listOf(failedAt - 1.minutes, failedAt)) {
+                weather.cachedForecast = ForecastLoad(forecast(fetchedAt = time))
+                val snapshot = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+                assertTrue(snapshot.refresh.lastAttemptFailed)
+                assertTrue(snapshot.weather.isStale)
+                assertEquals(time, snapshot.weather.lastWeatherUpdate)
+            }
+            now += 2.minutes
+            val newer = forecast(fetchedAt = now)
+            weather.cachedForecast = ForecastLoad(newer, true)
+            assertTrue((repository.loadCachedState() as WeatherWidgetSnapshot.Available).refresh.lastAttemptFailed)
+            weather.cachedForecast = ForecastLoad(newer.copy(provider = WeatherProvider.MET_NO))
+            assertTrue((repository.loadCachedState() as WeatherWidgetSnapshot.NoWeather).refresh.lastAttemptFailed)
+
+            weather.cachedForecast = ForecastLoad(newer)
+            val recovered = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+            assertFalse(recovered.refresh.lastAttemptFailed)
+            assertFalse(recovered.weather.isStale)
+            assertEquals(newer.fetchedAt, recovered.weather.lastWeatherUpdate)
+            assertEquals(0, weather.liveCalls)
+
+            now += 1.minutes
+            val newAttempt = repository.beginRefresh(request)
+            repository.finishRefresh(request, oldAttempt, null)
+            assertTrue((repository.loadCachedState() as WeatherWidgetSnapshot.Available).refresh.isRefreshing)
+            repository.finishRefresh(request, newAttempt, null)
+            val newlyFailed = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+            assertTrue(newlyFailed.refresh.lastAttemptFailed)
+            assertTrue(newlyFailed.weather.isStale)
+            assertEquals(newer.fetchedAt, newlyFailed.weather.lastWeatherUpdate)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
+
+    @Test
     fun interrupted_attempt_survives_recreation_then_expires_and_old_completion_cannot_end_new_attempt() = runTest {
         var now = Instant.parse("2026-10-28T12:00:00Z")
         val file = temporaryFolder.newFile("interrupted.preferences_pb")
@@ -454,7 +502,7 @@ class WeatherWidgetStateRepositoryTest {
     }
 
     private class FakeWeatherRepository(
-        private val cachedForecast: ForecastLoad?
+        var cachedForecast: ForecastLoad?
     ) : WeatherRepository {
         var cacheReads = 0
             private set
