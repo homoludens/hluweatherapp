@@ -1,0 +1,161 @@
+Task 6.5 — latest APK runtime continuation, 2026-10-29, Sol fallback
+Selected output/fields from SDK ADB, UIAutomator and WorkManager logs.
+Device timestamps below use +0100. Screenshots are raw adb screencap PNGs.
+UI dumps follow screencaps and can reflect a later frame; do not equate their
+field-update time with the start of an earlier screencap.
+
+APK / DEVICE
+Local APK: app/build/outputs/apk/google/debug/app-google-debug.apk
+Package: net.droopia.hluweather, versionName=3.5.1, versionCode=38, targetSdk=36
+Local and installed base APK SHA-256:
+afee4f76edcd93da3daf38d2d0faff9cb89ca3f0ace1cb8422e0e2f08b080992
+Installed path:
+/data/app/~~UtgbfxntjQc3iqfJeNavBg==/net.droopia.hluweather-xUWone7EZBCKO4onGCIC7g==/base.apk
+AVD: hluweather-task6-5-api35, existing Pixel 2 profile, Google APIs API 35
+Fingerprint: google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+1080x1920, physical density 420, Pixel Launcher 15 / code 907, 5x5 grid
+SDK platform-tools first on emulator PATH; ANDROID_ADB_SERVER_PORT=5057
+All adb calls: /home/homoludens/Android/Sdk/platform-tools/adb -P 5057 -s emulator-5562
+Waited for sys.boot_completed=1 and user 0 RUNNING_UNLOCKED before installation.
+install -r app/build/outputs/apk/google/debug/app-google-debug.apk -> Success
+No uninstall, clear-data, new permissions, provider-stack replacement, weather
+fixture injection, production edits, assembly or unit-suite rerun in this continuation.
+
+PICKER / PLACEMENT / REBOOTED METADATA
+Picker UI text:
+HluWeatherApp widget, 2 wide by 2 high Current conditions in a compact home-screen card.
+2 × 2
+HluWeatherApp widget, 4 wide by 2 high Current conditions and upcoming hourly forecasts.
+4 × 2
+Medium Add placed directly, without a configuration Activity.
+New launcher model (selected fields):
+id=9 type=WIDGET MediumWeatherWidgetReceiver screen=1 cell(0,2) span(4,2) minSpan(4,2) appWidgetId=10
+New host UI bounds: [56,589][824,1073] = 768x484 pixels, four columns / two rows.
+After offline reboot, all five IDs remained: 3, 4, 6, 8, 10.
+IDs 4, 8, 10 were 4x2; old ID 6 retained its unresized 4x3 placement.
+Small ID 3 remained 2x2.
+dumpsys appwidget medium provider, after install and after reboot:
+min=(66561x28161) minResize=(66561x28161) updatePeriodMillis=0 resizeMode=3 widgetCategory=1
+Complex encodings: 66561=0x10401=260dp, 28161=0x6e01=110dp (not pixels).
+Packaged XML targetCellWidth=4, targetCellHeight=2; height/minResizeHeight=110dp.
+
+SAME ACTIVE SESSIONS — SUCCESS
+09:37:43.700 processing c595c03d-9d3a-4c42-b3ee-800311c8b0dc (small ID 3 session)
+09:37:43.756 Starting work for androidx.glance.session.SessionWorker
+09:37:43.848 processing 3b1e7db3-a6d0-48ff-ae59-4f6a2ec6bdb6 (medium ID 8 session)
+09:37:43.875 Starting work for androidx.glance.session.SessionWorker
+09:37:59 manual refresh tap, while those sessions were active
+09:37:59.310 Starting work for net.droopia.hluweather.widget.WeatherWidgetWorker
+09:38:05.160 Worker result SUCCESS, id=26446c96-e9a1-449f-b6e2-867c3dac6f37
+UI dump immediately afterward (by 09:38:08):
+Updated Oct 29 09:38 / Last weather update Thu, Oct 29, 2026 • 09:38
+14°C / 14 degrees C; Cloudy; Feels like 12°C
+No Refreshing status; launcher foreground.
+09:38:30.780 Closing session appWidget-3
+09:38:30.785 SessionWorker c595c03d-9d3a-4c42-b3ee-800311c8b0dc SUCCESS
+09:38:30.810 Closing session appWidget-8
+09:38:30.814 SessionWorker 3b1e7db3-a6d0-48ff-ae59-4f6a2ec6bdb6 SUCCESS
+No session restart between the second tap and the updated UI state.
+
+SAME ACTIVE SESSIONS — FRESH RESULT THEN OFFLINE FAILURE
+09:39:16 sessions started:
+adbc471f-c208-4bfe-9593-f43d6ba1333b (small ID 3)
+1840e6dd-10bf-4ff4-8d18-34b05e20ebfe (medium ID 8)
+Other medium sessions: 436d8bc9-c74d-4eb9-99eb-5c22d73910c0 and ac3ffa91-7fc4-47f1-969a-0ff8a12f5820
+09:39:20.290 Worker d7f86ac5-2988-414b-a2b6-94cbd92b8c18 SUCCESS
+09:39:21.296 Worker d5a9dce4-16db-473a-8dee-a58100472c6f SUCCESS
+09:39:30 capture shows Updated Oct 29 09:39, cached/current/hourly weather intact.
+09:39:32 disabled this AVD's Wi-Fi and mobile data, then tapped refresh.
+09:39:33.625 WeatherWidgetWorker started.
+09:39:34.747 Worker 6e8f0c6d-9607-4ecb-8ce0-7391471140a5 RETRY (offline failure).
+UI dump by 09:39:43:
+Small: Stale weather; 14°C
+Medium: Stale · Oct 29 09:39 / Stale weather. Last weather update Thu, Oct 29, 2026 • 09:39
+Hourly values remained; no stuck Refreshing; forecast timestamp did not advance.
+Foreground: com.google.android.apps.nexuslauncher/.NexusLauncherActivity
+Small session did not close until 09:40:03.580; medium ID 8 until 09:40:03.796.
+Thus both result and failure status arrived before session expiry.
+The linked offline PNG is a later retained-state capture, before the unit/theme change.
+Temporary console network delay 500ms was used for the tap sequence and restored
+to none at 09:39:32. Rapid taps straddled request completion; strict coalescing
+under overlap and a distinct in-progress loading frame are not claimed as captured.
+
+ONLINE RECOVERY
+Restored connectivity; retained normal WorkManager backoff, did not force jobs.
+09:49:34.773 original offline work 6e8f0c6d-9607-4ecb-8ce0-7391471140a5 started its retry.
+09:49:34.843 that retry SUCCESS (reconciled already-fresh app cache).
+Its previous failure label remained in that intermediate render.
+09:51:06 manual tap after the prior unique work had finished.
+09:51:07.053 WeatherWidgetWorker started.
+09:51:12.797 work 6ad7facf-9415-48a6-81c2-1ec916445617 SUCCESS.
+09:51:18 UI dump: Updated Oct 29 09:51; no stale/failure/Refreshing label.
+Weather and original independent refresh target remained visible; launcher foreground.
+
+OFFLINE UNIT/THEME CHANGES, REPEATED WITH SETTLED CAPTURES
+Wi-Fi and mobile data disabled; only existing app Settings controls used.
+10:00:26 Dark/Fahrenheit actions began.
+10:00:26-27 SessionWorkers started: 23ccdbad-5b26-421b-9a76-7b6ee8ff90cd,
+dc7a1d41-b595-4d57-b957-2ae2bc975aa0, 4a4dca0b-c07b-492e-b928-07a6a67e74e1,
+6370bd4e-ce39-428e-a531-a6ee6ed70e0a, 43b07b30-1986-4d4b-b83d-e374a03ea31a.
+10:00:34 settled screenshot: dark navy cards; current 57°F, apparent 53°F;
+future 11:00/12:00/13:00 hours 59/61/62°F; retained forecast timestamp 09:51.
+Then opened app Settings and selected Light/Celsius.
+10:00:56 settled screenshot: light cards, current 14°C, apparent 12°C;
+hours 15/16/16°C, same timestamp 09:51, still offline.
+No session closure/new SessionWorker between those settings changes and captures.
+No restart or successful forecast request needed for the conversion/theme change.
+Wi-Fi/mobile data restored after the captures.
+
+FONT SCALE — REMAINING LIVE-CONFIGURATION FAILURE VERSUS FRESH PASS
+100% layout was visible and fit; then settings put system font_scale 1.3.
+09:41:43 capture: medium ID 8 retained its old row geometry while text enlarged.
+3%, 8%, 0% glyph bottoms visibly clipped; the larger 5x2 instance also clipped.
+The UI dump retains full probability semantics, but that does not prove visual fit.
+ID 8 session was still active until 09:41:45.071.
+No production change, data clear or font cap was applied to hide this failure.
+Recreated only the background app process (am kill net.droopia.hluweather),
+then used the ordinary widget refresh target to start a fresh composition at 130%.
+New sessions started 09:43:20; subsequent settled fresh render fit.
+09:44:46: another medium resized from 5x2 to 4x2, host [56,63][824,547].
+09:44:51: normal medium ID 8, host [56,852][824,1336].
+Both fresh 130% renders showed complete time/icon/temperature/probability rows,
+full percentage glyphs, and omitted lower-priority apparent-temperature/timestamp rows.
+Refresh bounds [677,873][803,999] = 126x126 pixels = 48x48dp.
+Relevant existing dispatcher only handles night-mode differences in
+WidgetSystemThemeChangeHandler; font-dependent recomposition on configuration
+changes is a candidate original-task follow-up, not proven fixed by cold renders.
+An attempted standard APPWIDGET_UPDATE broadcast from shell was denied by Android;
+it was not bypassed and was not used as test evidence.
+Font scale restored to 1.0 afterward.
+
+INDEPENDENT ACTIONS
+Verified launcher page and actual host bounds before the background tap.
+Before validated tap, medium ID 8 bounds were [56,852][824,1336].
+09:50:26 tapped blank card background (500,1280), outside header/weather fields,
+after leaving the app on Settings.
+topResumedActivity=ActivityRecord{ebf698 u0 net.droopia.hluweather/.MainActivity t23}
+UI tree and screenshot show main weather, Hourly/Daily/Map tabs, not Settings.
+Location-header taps independently opened main weather.
+Refresh taps retained com.google.android.apps.nexuslauncher/.NexusLauncherActivity.
+An earlier apparent failed tap was on empty space on launcher page 1, not a widget;
+it is not counted as an app action failure.
+
+OFFLINE REBOOT / CLEANUP
+09:52:58 disabled Wi-Fi and mobile data, rebooted only this task AVD.
+RUNNING_UNLOCKED; System UI ANR dismissed with Wait (not Close app).
+09:54:43 settled screenshot: both visible cards restored 14°C; medium retained
+Updated Oct 29 09:51, hours/values unchanged, no data clear.
+All five widget IDs and 110dp metadata persisted; new ID 10 remained 4x2.
+Wi-Fi and mobile data restored, font_scale=1.0, emulator network latency 0ms.
+Only this task AVD was stopped at the end; no physical device/unrelated server touched.
+
+NOT RUN / UNVERIFIED
+API 28: no local image/platform/device; no download.
+TalkBack audio interaction; Track Me/passive GPS fix; System-theme switching;
+provider/selected-location switching; exact 260x110dp/small minimum launcher size;
+400dp/five-hour branch; larger display size; strict overlapping-tap coalescing;
+last-widget/mixed-size removal cancellation; periodic timing after reboot.
+No new user location was added this time; preserved the existing saved Zajecar setup.
+Historical api35-* images without latest are a different APK, not current verification.
+Task 6.5 remains open for live font-scale re-rendering, not the resolved snapshot issue.
+Task 6.3 untouched: separately recorded 621/622 suite, 123/123 widget tests; not rerun here.
