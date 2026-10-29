@@ -59,8 +59,15 @@ class MediumWeatherWidgetTest {
             }
         )
         assertEquals(
-            listOf(260f, 320f, 400f),
-            MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES.map { it.width.value }.sorted()
+            setOf(
+                260f to 110f,
+                320f to 110f,
+                400f to 110f,
+                260f to 144f,
+                320f to 144f,
+                400f to 160f
+            ),
+            MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES.map { it.width.value to it.height.value }.toSet()
         )
     }
 
@@ -98,6 +105,47 @@ class MediumWeatherWidgetTest {
             assertEquals("Last weather update Wed, Oct 28, 2026 • 11:17", findDescription(view, "Last weather update Wed, Oct 28, 2026 • 11:17"))
             assertCurrentTemperatureColor(view, dark = case.theme == ThemeMode.DARK || case.theme == ThemeMode.SYSTEM)
             assertHeaderMetadataDoesNotOverlap(view)
+            assertRefreshTarget(view)
+            assertDividers(
+                view,
+                expectedCount = case.columns,
+                expectedColor = hluMaterialColorScheme(
+                    darkTheme = case.theme == ThemeMode.DARK || case.theme == ThemeMode.SYSTEM
+                ).outlineVariant.toArgb()
+            )
+            assertLayoutFits(view, case.widthDp, case.heightDp)
+        }
+    }
+
+    @Test
+    fun compact_110dp_production_layout_keeps_current_weather_and_probability_for_three_to_five_hours() {
+        val cases = listOf(
+            MediumCase(260f, 110f, columns = 3, theme = ThemeMode.LIGHT),
+            MediumCase(320f, 110f, columns = 4, theme = ThemeMode.SYSTEM),
+            MediumCase(400f, 110f, columns = 5, theme = ThemeMode.DARK)
+        )
+
+        cases.forEach { case ->
+            val view = render(
+                availableSnapshot(settings = PersistedSettings(themeMode = case.theme)),
+                widthDp = case.widthDp,
+                heightDp = case.heightDp,
+                fontScale = 1f,
+                systemDark = case.theme == ThemeMode.SYSTEM
+            )
+            val text = findViews(view).filterIsInstance<TextView>().map { it.text.toString() }
+            val visibleHours = text.filter { it in REFERENCE_HOURS }
+            val visibleProbabilities = text.filter { it in listOf("0%", "10%", "20%", "60%") }
+
+            assertEquals("hour branch at compact minimum for $case", REFERENCE_HOURS.take(case.columns), visibleHours)
+            assertEquals(
+                "every compact hourly column retains its probability for $case",
+                listOf("0%", "0%", "10%", "20%", "60%").take(case.columns),
+                visibleProbabilities
+            )
+            assertText(view, "23°C")
+            assertText(view, "Clear sky")
+            assertText(view, "Zaječar")
             assertRefreshTarget(view)
             assertDividers(
                 view,
@@ -256,7 +304,7 @@ class MediumWeatherWidgetTest {
                     apparentTemperature = "124°F",
                     hours = referenceHours(
                         temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
-                        probabilities = listOf(100, 0, 10, 20, 60)
+                        probabilities = listOf(null, 100, 10, 20, 60)
                     ),
                     settings = PersistedSettings(
                         temperatureUnit = TemperatureUnit.FAHRENHEIT,
@@ -270,7 +318,9 @@ class MediumWeatherWidgetTest {
             )
 
             assertText(view, temperature)
+            assertText(view, "—")
             assertText(view, "100%")
+            assertEquals("Rain probability unavailable", findDescription(view, "Rain probability unavailable"))
             assertFalse(
                 "long update metadata yields at larger font scales",
                 findViews(view).any { it.contentDescription?.toString()?.startsWith("Last weather update") == true }

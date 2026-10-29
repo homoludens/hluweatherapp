@@ -67,6 +67,7 @@ fun WeatherWidgetCard(
     locationDisplayName: String? = null,
     headerUpdateText: String? = null,
     headerUpdateContentDescription: String? = null,
+    verticalPaddingDp: Float = 8f,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
     val context = LocalContext.current
@@ -94,7 +95,7 @@ fun WeatherWidgetCard(
                 colorFilter = ColorFilter.tint(ColorProvider(palette.cardSurface))
             )
             .clickable(openMainWeatherAction(context))
-            .padding(8.dp)
+            .padding(horizontal = 8.dp, vertical = verticalPaddingDp.dp)
     ) {
         WeatherWidgetHeader(
             locationName = locationName,

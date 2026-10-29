@@ -39,6 +39,8 @@ data class MediumWeatherWidgetSize(
     val refreshTouchTargetDp: Int,
     val showHeaderTimestamp: Boolean,
     val headerLocationTextWidthDp: Float,
+    val cardVerticalPaddingDp: Float,
+    val headerToBodyGapDp: Float,
     val bodyHeightDp: Float,
     val currentIconSizeDp: Float,
     val currentTemperatureFontSizeSp: Float,
@@ -78,7 +80,8 @@ object WeatherWidgetSizePolicy {
     const val MEDIUM_MIN_WIDTH_DP = 260f
     // The hourly strip always includes time, icon, temperature, and probability. This height
     // leaves enough translated RemoteViews space for those four rows even at larger font scales.
-    const val MEDIUM_MIN_HEIGHT_DP = 144f
+    const val MEDIUM_MIN_HEIGHT_DP = 110f
+    const val MEDIUM_STANDARD_HEIGHT_DP = 144f
 
     const val REFRESH_TOUCH_TARGET_DP = 48
 
@@ -92,6 +95,8 @@ object WeatherWidgetSizePolicy {
     private const val LOCATION_ICON_SIZE_DP = 18f
     private const val MEDIUM_DIVIDER_WIDTH_DP = 1f
     private const val MEDIUM_CELL_PADDING_DP = 4f
+    private const val MEDIUM_MIN_VERTICAL_PADDING_DP = 4f
+    private const val MEDIUM_MIN_HEADER_TO_BODY_GAP_DP = 2f
     private const val MEDIUM_HEADER_GAP_DP = 4f
     private const val MEDIUM_HEADER_TIMESTAMP_FONT_SP = 9f
     private const val MEDIUM_MIN_LOCATION_TEXT_WIDTH_DP = 40f
@@ -216,6 +221,21 @@ object WeatherWidgetSizePolicy {
         val width = widthDp.nonNegative()
         val height = heightDp.nonNegative()
         val scale = fontScale.positiveOrOne()
+        val compactHeightProgress = (
+            (height - MEDIUM_MIN_HEIGHT_DP) /
+                (MEDIUM_STANDARD_HEIGHT_DP - MEDIUM_MIN_HEIGHT_DP)
+            ).coerceIn(0f, 1f)
+        val cardVerticalPadding = interpolate(
+            MEDIUM_MIN_VERTICAL_PADDING_DP,
+            VERTICAL_PADDING_DP,
+            compactHeightProgress
+        )
+        val headerToBodyGap = interpolate(
+            MEDIUM_MIN_HEADER_TO_BODY_GAP_DP,
+            MEDIUM_HEADER_GAP_DP,
+            compactHeightProgress
+        )
+        val compactHeight = height < MEDIUM_STANDARD_HEIGHT_DP
         val normalizedWidth = width / scale
         val columnCount = when {
             normalizedWidth >= FIVE_COLUMN_WIDTH_DP -> 5
@@ -251,7 +271,7 @@ object WeatherWidgetSizePolicy {
                 .coerceAtLeast(0f)
         }
         val bodyHeight = (
-            height - VERTICAL_PADDING_DP * 2f - HEADER_HEIGHT_DP - HEADER_TO_BODY_GAP_DP
+            height - cardVerticalPadding * 2f - HEADER_HEIGHT_DP - headerToBodyGap
             ).coerceAtLeast(0f)
         val temperatureLength = formattedTemperatureLength.coerceAtLeast(1)
 
@@ -311,10 +331,12 @@ object WeatherWidgetSizePolicy {
             currentSecondaryHeight >= currentConditionHeight + SECONDARY_ROW_GAP_DP +
             lineHeight(currentApparentFont, scale, SMALL_TEXT_LINE_HEIGHT)
 
-        val hourlyIconSize = minOf(18f, hourlyColumnWidth * 0.35f, bodyHeight * 0.35f)
+        val hourlyIconTarget = if (compactHeight) 12f else 18f
+        val hourlyIconSize = minOf(hourlyIconTarget, hourlyColumnWidth * 0.35f, bodyHeight * 0.35f)
             .coerceAtLeast(0f)
         val hourlyTimeWidthLimit = hourlyTextWidth / (HOUR_LABEL_CHARACTERS * AVERAGE_LABEL_GLYPH_WIDTH * scale)
-        val hourlyTimeFont = minOf(10f, 12f / scale, hourlyTimeWidthLimit).coerceAtLeast(0f)
+        val hourlyTimeTarget = if (compactHeight) 9f / scale else 10f
+        val hourlyTimeFont = minOf(hourlyTimeTarget, 12f / scale, hourlyTimeWidthLimit).coerceAtLeast(0f)
         val hourlyTimeHeight = lineHeight(hourlyTimeFont, scale, MEDIUM_TEXT_LINE_HEIGHT)
         val hourlyAvailableForTemperature = (
             bodyHeight - hourlyTimeHeight - hourlyIconSize - SECONDARY_ROW_GAP_DP * 2f
@@ -323,8 +345,9 @@ object WeatherWidgetSizePolicy {
             (temperatureLength * AVERAGE_TEMPERATURE_GLYPH_WIDTH * scale)
         val hourlyTemperatureHeightLimit = hourlyAvailableForTemperature /
             (MEDIUM_TEXT_LINE_HEIGHT * scale)
+        val hourlyTemperatureTarget = if (compactHeight) 12f / scale else 14f
         val hourlyTemperatureFont = minOf(
-            14f,
+            hourlyTemperatureTarget,
             hourlyTemperatureWidthLimit,
             hourlyTemperatureHeightLimit
         ).coerceAtLeast(0f)
@@ -343,7 +366,8 @@ object WeatherWidgetSizePolicy {
         val probabilityHeightLimit = (
             bodyHeight - hourlyPrimaryHeight - SECONDARY_ROW_GAP_DP
             ).coerceAtLeast(0f) / (MEDIUM_TEXT_LINE_HEIGHT * scale)
-        val probabilityFont = minOf(10f, probabilityWidthLimit, probabilityHeightLimit)
+        val probabilityTarget = if (compactHeight) 8f / scale else 10f
+        val probabilityFont = minOf(probabilityTarget, probabilityWidthLimit, probabilityHeightLimit)
             .coerceAtLeast(0f)
 
         return MediumWeatherWidgetSize(
@@ -355,6 +379,8 @@ object WeatherWidgetSizePolicy {
             refreshTouchTargetDp = REFRESH_TOUCH_TARGET_DP,
             showHeaderTimestamp = showHeaderTimestamp,
             headerLocationTextWidthDp = headerLocationWidth,
+            cardVerticalPaddingDp = cardVerticalPadding,
+            headerToBodyGapDp = headerToBodyGap,
             bodyHeightDp = bodyHeight,
             currentIconSizeDp = currentIconSize,
             currentTemperatureFontSizeSp = currentTemperatureFont,
@@ -389,6 +415,9 @@ object WeatherWidgetSizePolicy {
 
     private fun lineHeight(fontSizeSp: Float, scale: Float, multiplier: Float): Float =
         fontSizeSp * scale * multiplier
+
+    private fun interpolate(start: Float, end: Float, progress: Float): Float =
+        start + (end - start) * progress
 
     private fun Float.nonNegative(): Float =
         if (isFinite()) coerceAtLeast(0f) else 0f

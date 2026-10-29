@@ -150,10 +150,15 @@ class WeatherWidgetSizePolicyTest {
     @Test
     fun medium_policy_fits_current_and_hourly_primary_content_at_supported_minimums() {
         val cases = listOf(
-            MediumCase(WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP, 1f, 3, WeatherWidgetSizeClass.COMPACT),
-            MediumCase(WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP, 1.5f, 3, WeatherWidgetSizeClass.COMPACT),
-            MediumCase(WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP, 2f, 3, WeatherWidgetSizeClass.COMPACT),
-            MediumCase(320f, 2f, 3, WeatherWidgetSizeClass.COMPACT)
+            MediumCase(260f, 1f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(320f, 1f, 4, WeatherWidgetSizeClass.NORMAL),
+            MediumCase(400f, 1f, 5, WeatherWidgetSizeClass.WIDE),
+            MediumCase(260f, 1.5f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(320f, 1.5f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(400f, 1.5f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(260f, 2f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(320f, 2f, 3, WeatherWidgetSizeClass.COMPACT),
+            MediumCase(400f, 2f, 3, WeatherWidgetSizeClass.COMPACT)
         )
 
         cases.forEach { case ->
@@ -184,6 +189,29 @@ class WeatherWidgetSizePolicyTest {
             )
             assertTrue("current condition remains present at minimum for $case", policy.showCurrentCondition)
         }
+    }
+
+    @Test
+    fun medium_policy_uses_compact_insets_at_110dp_and_restores_normal_insets_at_144dp() {
+        val compact = WeatherWidgetSizePolicy.medium(
+            widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+            fontScale = 1f,
+            formattedTemperatureLength = 4
+        )
+        val normal = WeatherWidgetSizePolicy.medium(
+            widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+            heightDp = WeatherWidgetSizePolicy.MEDIUM_STANDARD_HEIGHT_DP,
+            fontScale = 1f,
+            formattedTemperatureLength = 4
+        )
+
+        assertEquals(4f, compact.cardVerticalPaddingDp, EPSILON)
+        assertEquals(2f, compact.headerToBodyGapDp, EPSILON)
+        assertEquals(52f, compact.bodyHeightDp, EPSILON)
+        assertEquals(8f, normal.cardVerticalPaddingDp, EPSILON)
+        assertEquals(4f, normal.headerToBodyGapDp, EPSILON)
+        assertEquals(76f, normal.bodyHeightDp, EPSILON)
     }
 
     @Test

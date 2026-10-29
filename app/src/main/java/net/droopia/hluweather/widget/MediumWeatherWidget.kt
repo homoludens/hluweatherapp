@@ -32,6 +32,9 @@ import net.droopia.hluweather.HluWeatherApplication
 internal val MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     DpSize(260.dp, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp),
     DpSize(320.dp, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp),
+    DpSize(400.dp, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp),
+    DpSize(260.dp, WeatherWidgetSizePolicy.MEDIUM_STANDARD_HEIGHT_DP.dp),
+    DpSize(320.dp, WeatherWidgetSizePolicy.MEDIUM_STANDARD_HEIGHT_DP.dp),
     DpSize(400.dp, 160.dp)
 )
 
@@ -74,6 +77,7 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         snapshot = snapshot,
         locationDisplayName = displayLocationName,
         headerUpdateText = headerText.takeIf { policy.showHeaderTimestamp },
+        verticalPaddingDp = policy.cardVerticalPaddingDp,
         headerUpdateContentDescription = available?.let { current ->
             val currentWeather = current.weather
             buildString {
@@ -82,7 +86,9 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
             }
         }
     ) { palette ->
-        Column(modifier = GlanceModifier.fillMaxWidth().padding(top = 4.dp)) {
+        Column(
+            modifier = GlanceModifier.fillMaxWidth().padding(top = policy.headerToBodyGapDp.dp)
+        ) {
             when (snapshot) {
                 is WeatherWidgetSnapshot.Available -> {
                     val hours = snapshot.weather.hours.take(policy.hourlyColumnCount)
