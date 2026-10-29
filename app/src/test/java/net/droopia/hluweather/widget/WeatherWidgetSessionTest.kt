@@ -2,9 +2,13 @@ package net.droopia.hluweather.widget
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.RemoteViews
 import android.widget.TextView
 import androidx.compose.ui.graphics.toArgb
@@ -22,7 +26,9 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
 import androidx.glance.session.runSession
 import androidx.test.core.app.ApplicationProvider
+import kotlin.math.roundToInt
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
@@ -37,6 +43,7 @@ import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.cache.ForecastCacheKey
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.CurrentWeather
+import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherCondition
@@ -67,8 +74,11 @@ class WeatherWidgetSessionTest {
         for (medium in listOf(false, true)) {
             val f = Fixture()
             val initial = f.widgets.loadCachedState()
-            val widget = TestWidget(f.widgets, initial, medium)
-            val session = RecordingSession(widget, f.context, medium)
+            val renderConfiguration = MutableStateFlow(
+                WidgetRenderConfiguration.from(f.context.resources.configuration)
+            )
+            val widget = TestWidget(f.widgets, initial, medium, renderConfiguration)
+            val session = RecordingSession(widget, f.context, medium, widget.size)
             val job = launch(Dispatchers.Default) { session.runSession(f.context) }
             try {
                 session.awaitText("No weather available")
@@ -113,19 +123,140 @@ class WeatherWidgetSessionTest {
         }
     }
 
-    private class TestWidget(val repo: WeatherWidgetRepository, val initial: WeatherWidgetSnapshot, val medium: Boolean) : GlanceAppWidget() {
-        var calls = 0
-        override val stateDefinition = null
-        override val sizeMode = SizeMode.Responsive(setOf(if (medium) DpSize(400.dp, 160.dp) else DpSize(200.dp, 160.dp)))
-        override suspend fun provideGlance(context: Context, id: GlanceId) {
-            calls++
-            provideContent {
-                if (medium) ObservedMediumWeatherWidget(repo, initial) else ObservedSmallWeatherWidget(repo, initial)
+    @Test
+    fun same_sessions_relayout_font_scale_and_follow_system_theme_changes_without_weather_requests() = runBlocking {
+        for (medium in listOf(false, true)) {
+            val f = Fixture()
+            val initialConfiguration = configuration(
+                Configuration(f.context.resources.configuration),
+                fontScale = 1f,
+                night = false
+            )
+            var widgetUpdates = 0
+            val configurationHandler = WidgetSystemThemeChangeHandler(
+                initialConfiguration = initialConfiguration,
+                refreshWidgetInventory = { true },
+                updateAllWidgets = { widgetUpdates++ }
+            )
+            val size = if (medium) DpSize(320.dp, 144.dp) else DpSize(200.dp, 160.dp)
+            val widget = TestWidget(
+                f.widgets,
+                f.widgets.loadCachedState(),
+                medium,
+                configurationHandler.renderConfiguration,
+                size
+            )
+            val session = RecordingSession(widget, f.context, medium, size)
+            val job = launch(Dispatchers.Default) { session.runSession(f.context) }
+            try {
+                f.put(f.first, 23.0)
+                val initialView = session.awaitView(contextFor(f.context, initialConfiguration)) {
+                    texts(it).any { text -> text.text.toString() == "23°C" }
+                }
+                assertConfigurationRender(initialView, medium, size, 1f, dark = false)
+
+                val largeFont = configuration(initialConfiguration, fontScale = 1.3f, night = false)
+                configurationHandler.onConfigurationChanged(largeFont)
+                val largeFontView = session.awaitView(contextFor(f.context, largeFont)) {
+                    texts(it).any { text -> text.text.toString() == "23°C" } &&
+                        it.resources.configuration.fontScale == 1.3f
+                }
+                assertConfigurationRender(largeFontView, medium, size, 1.3f, dark = false)
+
+                val largeFontDark = configuration(largeFont, fontScale = 1.3f, night = true)
+                configurationHandler.onConfigurationChanged(largeFontDark)
+                val darkView = session.awaitView(contextFor(f.context, largeFontDark)) {
+                    texts(it).any { text -> text.text.toString() == "23°C" } &&
+                        (it.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                        Configuration.UI_MODE_NIGHT_YES
+                }
+                assertConfigurationRender(darkView, medium, size, 1.3f, dark = true)
+
+                val normalFontDark = configuration(largeFontDark, fontScale = 1f, night = true)
+                configurationHandler.onConfigurationChanged(normalFontDark)
+                val normalFontDarkView = session.awaitView(contextFor(f.context, normalFontDark)) {
+                    texts(it).any { text -> text.text.toString() == "23°C" } &&
+                        it.resources.configuration.fontScale == 1f
+                }
+                assertConfigurationRender(normalFontDarkView, medium, size, 1f, dark = true)
+
+                val normalFontLight = configuration(normalFontDark, fontScale = 1f, night = false)
+                configurationHandler.onConfigurationChanged(normalFontLight)
+                val lightView = session.awaitView(contextFor(f.context, normalFontLight)) {
+                    texts(it).any { text -> text.text.toString() == "23°C" } &&
+                        (it.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                        Configuration.UI_MODE_NIGHT_NO
+                }
+                assertConfigurationRender(lightView, medium, size, 1f, dark = false)
+
+                f.settings.value = f.settings.value.copy(themeMode = ThemeMode.LIGHT)
+                val explicitLight = session.awaitView(contextFor(f.context, normalFontLight)) {
+                    hasTemperatureColor(it, dark = false)
+                }
+                assertConfigurationRender(explicitLight, medium, size, 1f, dark = false)
+                val explicitLightDarkSystem = configuration(normalFontLight, fontScale = 1f, night = true)
+                configurationHandler.onConfigurationChanged(explicitLightDarkSystem)
+                val explicitLightUnderDarkSystem = session.awaitView(contextFor(f.context, explicitLightDarkSystem)) {
+                    hasTemperatureColor(it, dark = false)
+                }
+                assertConfigurationRender(explicitLightUnderDarkSystem, medium, size, 1f, dark = false)
+
+                f.settings.value = f.settings.value.copy(themeMode = ThemeMode.DARK)
+                val explicitDark = session.awaitView(contextFor(f.context, explicitLightDarkSystem)) {
+                    hasTemperatureColor(it, dark = true)
+                }
+                assertConfigurationRender(explicitDark, medium, size, 1f, dark = true)
+                val explicitDarkLightSystem = configuration(explicitLightDarkSystem, fontScale = 1f, night = false)
+                configurationHandler.onConfigurationChanged(explicitDarkLightSystem)
+                val explicitDarkUnderLightSystem = session.awaitView(contextFor(f.context, explicitDarkLightSystem)) {
+                    hasTemperatureColor(it, dark = true)
+                }
+                assertConfigurationRender(explicitDarkUnderLightSystem, medium, size, 1f, dark = true)
+
+                val higherDensity = Configuration(explicitDarkLightSystem).apply {
+                    densityDpi = (initialConfiguration.densityDpi + 40).coerceAtLeast(200)
+                }
+                configurationHandler.onConfigurationChanged(higherDensity)
+                val higherDensityView = session.awaitView(contextFor(f.context, higherDensity)) {
+                    hasTemperatureColor(it, dark = true) &&
+                        it.resources.displayMetrics.densityDpi == higherDensity.densityDpi
+                }
+                assertConfigurationRender(higherDensityView, medium, size, 1f, dark = true)
+
+                assertEquals("configuration changes do not restart provideGlance", 1, widget.calls)
+                assertEquals("render-only configuration changes do not request weather", 0, f.networkCalls)
+                assertTrue("relevant configuration callbacks invalidate installed widgets", widgetUpdates >= 6)
+            } finally {
+                job.cancelAndJoin()
             }
         }
     }
 
-    private class RecordingSession(widget: TestWidget, private val context: Context, medium: Boolean) : AppWidgetSession(
+    private class TestWidget(
+        val repo: WeatherWidgetRepository,
+        val initial: WeatherWidgetSnapshot,
+        val medium: Boolean,
+        private val renderConfigurations: kotlinx.coroutines.flow.StateFlow<WidgetRenderConfiguration>,
+        val size: DpSize = if (medium) DpSize(400.dp, 160.dp) else DpSize(200.dp, 160.dp)
+    ) : GlanceAppWidget() {
+        var calls = 0
+        override val stateDefinition = null
+        override val sizeMode = SizeMode.Responsive(setOf(size))
+        override suspend fun provideGlance(context: Context, id: GlanceId) {
+            calls++
+            provideContent {
+                if (medium) ObservedMediumWeatherWidget(repo, initial, renderConfigurations)
+                else ObservedSmallWeatherWidget(repo, initial, renderConfigurations)
+            }
+        }
+    }
+
+    private class RecordingSession(
+        widget: TestWidget,
+        private val context: Context,
+        medium: Boolean,
+        private val size: DpSize
+    ) : AppWidgetSession(
         widget = widget,
         id = AppWidgetId(if (medium) -2002 else -2001),
         lambdaReceiver = ComponentName(context, SmallWeatherWidgetReceiver::class.java),
@@ -140,13 +271,137 @@ class WeatherWidgetSessionTest {
             if (result && remote != null) updates.send(remote)
             return result
         }
-        suspend fun awaitText(expected: String, absent: String? = null): View = withTimeout(10_000) {
+        suspend fun awaitView(renderContext: Context = context, matches: (View) -> Boolean): View = withTimeout(10_000) {
             while (true) {
-                val view = updates.receive().apply(context, FrameLayout(context))
-                val text = texts(view).map { it.text.toString() }
-                if (text.any { it.contains(expected) } && (absent == null || text.none { it.contains(absent) })) return@withTimeout view
+                val density = renderContext.resources.displayMetrics.density
+                val width = (size.width.value * density).roundToInt()
+                val height = (size.height.value * density).roundToInt()
+                val view = updates.receive().apply(renderContext, FrameLayout(renderContext))
+                view.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+                )
+                view.layout(0, 0, width, height)
+                if (matches(view)) return@withTimeout view
             }
             error("unreachable")
+        }
+
+        suspend fun awaitText(expected: String, absent: String? = null): View = awaitView { view ->
+            val text = texts(view).map { it.text.toString() }
+            text.any { it.contains(expected) } && (absent == null || text.none { it.contains(absent) })
+        }
+    }
+
+    private fun configuration(
+        base: Configuration,
+        fontScale: Float,
+        night: Boolean
+    ) = Configuration(base).apply {
+        this.fontScale = fontScale
+        val nightMode = if (night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+        uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+    }
+
+    private fun contextFor(context: Context, configuration: Configuration): Context =
+        WidgetRenderConfiguration.from(configuration).contextFrom(context)
+
+    private fun assertConfigurationRender(
+        root: View,
+        medium: Boolean,
+        size: DpSize,
+        fontScale: Float,
+        dark: Boolean
+    ) {
+        assertEquals(fontScale, root.resources.configuration.fontScale, 0f)
+        assertTemperatureTheme(root, dark)
+        assertRenderedContentFitsWithoutOverlap(root)
+
+        val density = root.resources.displayMetrics.density
+        val refresh = allViews(root).first { it.contentDescription == "Refresh weather" }
+        assertTrue("refresh target remains at least 48dp", refresh.width >= 48f * density - 1f)
+        val expectedIconSizeDp = if (medium) {
+            WeatherWidgetSizePolicy.medium(
+                widthDp = size.width.value,
+                heightDp = size.height.value,
+                fontScale = fontScale,
+                formattedTemperatureLength = "23°C".length,
+                apparentTemperatureLength = "24°C".length
+            ).currentIconSizeDp
+        } else {
+            WeatherWidgetSizePolicy.small(
+                widthDp = size.width.value,
+                heightDp = size.height.value,
+                fontScale = fontScale,
+                formattedTemperatureLength = "23°C".length,
+                apparentTemperatureLength = "24°C".length
+            ).iconSizeDp
+        }
+        val largestIconBitmapWidth = allViews(root).filterIsInstance<ImageView>()
+            .mapNotNull { (it.drawable as? BitmapDrawable)?.bitmap?.width }
+            .maxOrNull()
+        assertEquals(
+            "weather vectors are rasterized at the current resource density",
+            (expectedIconSizeDp * density).toInt(),
+            largestIconBitmapWidth
+        )
+
+        if (!medium) return
+
+        val expectedHours = listOf("13:00", "14:00", "15:00", "16:00", "17:00")
+        val expectedColumns = WeatherWidgetSizePolicy.medium(
+            widthDp = size.width.value,
+            heightDp = size.height.value,
+            fontScale = fontScale,
+            formattedTemperatureLength = "23°C".length,
+            apparentTemperatureLength = "24°C".length
+        ).hourlyColumnCount
+        val viewTexts = texts(root).map { it.text.toString() }
+        val visibleHours = viewTexts.filter { it in expectedHours }
+        assertEquals(expectedHours.take(expectedColumns), visibleHours)
+        assertEquals(
+            (20 downTo 20 - expectedColumns + 1).map { "$it°C" },
+            viewTexts.filter { it in listOf("20°C", "19°C", "18°C", "17°C", "16°C") }
+        )
+        val expectedProbabilities = listOf("0%", "0%", "10%", "20%", "60%").take(expectedColumns)
+        val probabilityTexts = viewTexts.filter { it in listOf("0%", "10%", "20%", "60%") }
+        assertEquals(expectedProbabilities, probabilityTexts)
+        assertEquals(
+            expectedHours.take(expectedColumns).map { "$it, Partly cloudy" },
+            allViews(root).mapNotNull { it.contentDescription?.toString() }
+                .filter { description -> expectedHours.any { description == "$it, Partly cloudy" } }
+        )
+        assertHourlyProbabilityInkFits(root)
+    }
+
+    private fun assertTemperatureTheme(root: View, dark: Boolean) {
+        val expectedColor = hluMaterialColorScheme(dark).onSurface.toArgb()
+        val temperature = texts(root).first { it.text.toString() == "23°C" }
+        assertEquals("current temperature follows the selected theme", expectedColor, temperature.currentTextColor)
+    }
+
+    private fun hasTemperatureColor(root: View, dark: Boolean): Boolean = runCatching {
+        assertTemperatureTheme(root, dark)
+    }.isSuccess
+
+    private fun assertHourlyProbabilityInkFits(root: View) {
+        texts(root).filter { it.text.toString() in setOf("0%", "10%", "20%", "60%") }
+            .forEach { text ->
+                val contentTop = text.compoundPaddingTop
+                val contentBottom = text.height - text.compoundPaddingBottom
+                val lineBottom = contentTop + text.layout.getLineBottom(0)
+                assertTrue("${text.text} line box fits its translated TextView", lineBottom <= contentBottom)
+
+                val ink = Rect()
+                text.paint.getTextBounds(text.text, 0, text.text.length, ink)
+                assertTrue("${text.text} glyph ink stays inside its translated TextView", text.baseline + ink.bottom <= contentBottom)
+            }
+    }
+
+    private fun allViews(root: View): List<View> = buildList {
+        add(root)
+        if (root is ViewGroup) {
+            for (index in 0 until root.childCount) addAll(allViews(root.getChildAt(index)))
         }
     }
 
@@ -190,8 +445,32 @@ class WeatherWidgetSessionTest {
             override suspend fun selectSaved(id: String) = Unit
             override suspend fun setTrackMe(enabled: Boolean) = Unit
         }, weather, clock, DataStoreWidgetRefreshMetadataStore(data))
-        fun forecast(location: WeatherLocation, temperature: Double) = WeatherForecast(location, WeatherProvider.OPEN_METEO, now,
-            CurrentWeather(temperature, 24.0, null, null, null, WeatherCondition.CLEAR, true), emptyList(), emptyList(), 0.0, "UTC")
+        fun forecast(location: WeatherLocation, temperature: Double): WeatherForecast {
+            val probabilities = listOf(0, 0, 10, 20, 60)
+            val hours = (0..4).map { index ->
+                HourForecast(
+                    time = now + (index + 1).hours,
+                    temperature = 20.0 - index,
+                    apparentTemperature = null,
+                    humidity = null,
+                    dewPoint = null,
+                    precipitation = null,
+                    precipitationProbability = probabilities[index],
+                    condition = WeatherCondition.PARTLY_CLOUDY,
+                    isDay = true
+                )
+            }
+            return WeatherForecast(
+                location,
+                WeatherProvider.OPEN_METEO,
+                now,
+                CurrentWeather(temperature, 24.0, null, null, null, WeatherCondition.CLEAR, true),
+                hours,
+                emptyList(),
+                0.0,
+                "UTC"
+            )
+        }
         suspend fun put(location: WeatherLocation, temperature: Double, provider: WeatherProvider = WeatherProvider.OPEN_METEO) = cache.put(
             ForecastCacheKey(provider, "saved:${location.id}"), forecast(location, temperature).copy(provider = provider)
         )

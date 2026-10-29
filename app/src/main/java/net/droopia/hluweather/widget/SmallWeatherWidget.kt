@@ -21,6 +21,7 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import kotlinx.coroutines.flow.StateFlow
 import net.droopia.hluweather.HluWeatherApplication
 
 internal val SMALL_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
@@ -40,15 +41,23 @@ class SmallWeatherWidget : GlanceAppWidget() {
         val application = context.applicationContext as HluWeatherApplication
         val repository = application.weatherWidgetRepository
         val snapshot = repository.loadCachedState()
-        provideContent { ObservedSmallWeatherWidget(repository, snapshot) }
+        val renderConfiguration = application.widgetRenderConfiguration
+        provideContent { ObservedSmallWeatherWidget(repository, snapshot, renderConfiguration) }
     }
 }
 
 @Composable
-internal fun ObservedSmallWeatherWidget(repository: WeatherWidgetRepository, initial: WeatherWidgetSnapshot) {
+internal fun ObservedSmallWeatherWidget(
+    repository: WeatherWidgetRepository,
+    initial: WeatherWidgetSnapshot,
+    renderConfigurations: StateFlow<WidgetRenderConfiguration>
+) {
     val updates = remember(repository) { repository.observeSnapshots() }
     val current by updates.collectAsState(initial)
-    SmallWeatherWidgetContent(current)
+    val renderConfiguration by renderConfigurations.collectAsState(renderConfigurations.value)
+    WidgetRenderConfigurationContext(renderConfiguration) {
+        SmallWeatherWidgetContent(current)
+    }
 }
 
 /** Production small-card composition shared with translated RemoteViews tests. */

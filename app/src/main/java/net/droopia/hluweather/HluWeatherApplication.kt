@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -69,12 +70,16 @@ import net.droopia.hluweather.widget.WeatherWidgetWorker
 import net.droopia.hluweather.widget.WeatherWidgetWorkerDependencies
 import net.droopia.hluweather.widget.WeatherWidgetRefreshCoordinator
 import net.droopia.hluweather.widget.WidgetSystemThemeChangeHandler
+import net.droopia.hluweather.widget.WidgetRenderConfiguration
 import net.droopia.hluweather.widget.startWidgetReconciliation
 
 class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidgetUpdaterOwner {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var widgetSystemThemeChangeHandler: WidgetSystemThemeChangeHandler? = null
+
+    internal val widgetRenderConfiguration: StateFlow<WidgetRenderConfiguration>
+        get() = requireNotNull(widgetSystemThemeChangeHandler).renderConfiguration
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

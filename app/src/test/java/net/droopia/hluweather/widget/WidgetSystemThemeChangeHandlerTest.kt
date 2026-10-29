@@ -20,7 +20,7 @@ class WidgetSystemThemeChangeHandlerTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun night_mode_changes_update_both_installed_sizes_without_enqueuing_weather_work() {
+    fun font_scale_density_and_night_mode_changes_update_both_sizes_once() {
         val smallReceiver = ComponentName(context.packageName, SMALL_RECEIVER)
         val mediumReceiver = ComponentName(context.packageName, MEDIUM_RECEIVER)
         val ids = mapOf(
@@ -39,9 +39,11 @@ class WidgetSystemThemeChangeHandlerTest {
             updateAllWidgets = dispatcher::updateAllWidgets
         )
 
-        handler.onConfigurationChanged(configuration(night = true))
+        val fontScaled = configuration(night = false).apply { fontScale = 1.3f }
+        handler.onConfigurationChanged(fontScaled)
 
         assertEquals(2, updates.size)
+        assertEquals(1.3f, handler.renderConfiguration.value.fontScale, 0f)
         assertEquals(setOf(smallReceiver, mediumReceiver), updates.map { it.component }.toSet())
         assertTrue(updates.all { it.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE })
         assertArrayEquals(
@@ -55,12 +57,27 @@ class WidgetSystemThemeChangeHandlerTest {
                 .getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
         )
 
-        // Other configuration changes and duplicate night-mode notifications don't re-render.
-        handler.onConfigurationChanged(configuration(night = true).apply { fontScale = 1.2f })
+        // Exact duplicates and unrelated configuration changes do not invalidate the sessions.
+        handler.onConfigurationChanged(fontScaled)
+        handler.onConfigurationChanged(fontScaled.apply { orientation = Configuration.ORIENTATION_LANDSCAPE })
         assertEquals(2, updates.size)
 
-        handler.onConfigurationChanged(configuration(night = false))
+        val dark = Configuration(fontScaled).apply {
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        handler.onConfigurationChanged(dark)
         assertEquals(4, updates.size)
+        assertEquals(
+            Configuration.UI_MODE_NIGHT_YES,
+            handler.renderConfiguration.value.uiModeNight
+        )
+
+        handler.onConfigurationChanged(Configuration(dark).apply { densityDpi += 40 })
+        assertEquals(6, updates.size)
+
+        handler.onConfigurationChanged(configuration(night = false).apply { fontScale = 1.3f })
+        assertEquals(8, updates.size)
         assertTrue(updates.all { it.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE })
     }
 
@@ -78,10 +95,11 @@ class WidgetSystemThemeChangeHandlerTest {
             updateAllWidgets = dispatcher::updateAllWidgets
         )
 
-        handler.onConfigurationChanged(configuration(night = true))
+        handler.onConfigurationChanged(configuration(night = true).apply { fontScale = 1.3f })
 
         assertTrue(updates.isEmpty())
         assertTrue(!dispatcher.installedWidgets.value)
+        assertEquals(1.3f, handler.renderConfiguration.value.fontScale, 0f)
     }
 
     private fun configuration(night: Boolean) = Configuration(context.resources.configuration).apply {

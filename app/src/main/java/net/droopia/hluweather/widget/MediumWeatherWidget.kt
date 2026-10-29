@@ -33,6 +33,7 @@ import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.unit.ColorProvider
+import kotlinx.coroutines.flow.StateFlow
 import net.droopia.hluweather.HluWeatherApplication
 
 internal val MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
@@ -53,15 +54,23 @@ class MediumWeatherWidget : GlanceAppWidget() {
         val application = context.applicationContext as HluWeatherApplication
         val repository = application.weatherWidgetRepository
         val snapshot = repository.loadCachedState()
-        provideContent { ObservedMediumWeatherWidget(repository, snapshot) }
+        val renderConfiguration = application.widgetRenderConfiguration
+        provideContent { ObservedMediumWeatherWidget(repository, snapshot, renderConfiguration) }
     }
 }
 
 @Composable
-internal fun ObservedMediumWeatherWidget(repository: WeatherWidgetRepository, initial: WeatherWidgetSnapshot) {
+internal fun ObservedMediumWeatherWidget(
+    repository: WeatherWidgetRepository,
+    initial: WeatherWidgetSnapshot,
+    renderConfigurations: StateFlow<WidgetRenderConfiguration>
+) {
     val updates = remember(repository) { repository.observeSnapshots() }
     val current by updates.collectAsState(initial)
-    MediumWeatherWidgetContent(current)
+    val renderConfiguration by renderConfigurations.collectAsState(renderConfigurations.value)
+    WidgetRenderConfigurationContext(renderConfiguration) {
+        MediumWeatherWidgetContent(current)
+    }
 }
 
 /** Production medium-card composition shared with translated RemoteViews tests. */
