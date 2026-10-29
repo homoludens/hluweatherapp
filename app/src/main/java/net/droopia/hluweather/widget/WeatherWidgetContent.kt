@@ -6,9 +6,11 @@ import android.content.res.Configuration
 import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,6 +34,8 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
+import androidx.glance.layout.RowScope
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -67,6 +71,20 @@ data class WeatherWidgetPalette internal constructor(
     val secondaryText: Color,
     val divider: Color
 )
+
+/** Accessible, non-interactive visual status cues used by the medium presentation. */
+internal data class WeatherWidgetStatusDescriptions(
+    val staleOrFailed: String? = null,
+    val updating: String? = null
+) {
+    val hasIndicators: Boolean get() = staleOrFailed != null || updating != null
+    val glyphStripWidthDp: Float
+        get() {
+            val count = listOf(staleOrFailed, updating).count { it != null }
+            return count * MEDIUM_STATUS_GLYPH_SIZE_DP +
+                (count - 1).coerceAtLeast(0) * MEDIUM_STATUS_GLYPH_GAP_DP
+        }
+}
 
 /** The same card and header are used by both widget sizes; content remains size-specific. */
 @Composable
@@ -255,6 +273,8 @@ fun WeatherWidgetCurrentWeather(
     conditionDisplayText: String = weather.conditionLabel,
     secondaryItemGapDp: Float = 0f,
     textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
+    statusContent: (@Composable RowScope.() -> Unit)? = null,
+    conditionTextWidthDp: Float? = null,
     modifier: GlanceModifier = GlanceModifier
 ) {
     Column(modifier = modifier) {
@@ -276,16 +296,36 @@ fun WeatherWidgetCurrentWeather(
                 contentDescription = weather.temperatureContentDescription
             )
         }
-        if (showCondition) {
-            WeatherWidgetAdaptiveText(
-                text = conditionDisplayText,
-                role = WeatherWidgetAdaptiveTextRole.MEDIUM,
-                color = palette.mainText,
-                fontSizeSp = conditionFontSizeSp.coerceAtLeast(0.1f),
-                lineHeightMultiplier = textLineHeightMultiplier,
+        if (statusContent == null) {
+            if (showCondition) {
+                WeatherWidgetAdaptiveText(
+                    text = conditionDisplayText,
+                    role = WeatherWidgetAdaptiveTextRole.MEDIUM,
+                    color = palette.mainText,
+                    fontSizeSp = conditionFontSizeSp.coerceAtLeast(0.1f),
+                    lineHeightMultiplier = textLineHeightMultiplier,
+                    modifier = GlanceModifier.fillMaxWidth().padding(top = secondaryItemGapDp.dp),
+                    contentDescription = weather.conditionLabel
+                )
+            }
+        } else {
+            Row(
                 modifier = GlanceModifier.fillMaxWidth().padding(top = secondaryItemGapDp.dp),
-                contentDescription = weather.conditionLabel
-            )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showCondition) {
+                    WeatherWidgetAdaptiveText(
+                        text = conditionDisplayText,
+                        role = WeatherWidgetAdaptiveTextRole.MEDIUM,
+                        color = palette.mainText,
+                        fontSizeSp = conditionFontSizeSp.coerceAtLeast(0.1f),
+                        lineHeightMultiplier = textLineHeightMultiplier,
+                        modifier = GlanceModifier.width(requireNotNull(conditionTextWidthDp).dp),
+                        contentDescription = weather.conditionLabel
+                    )
+                }
+                statusContent.invoke(this)
+            }
         }
         if (showApparentTemperature && weather.apparentTemperatureText != null) {
             WeatherWidgetAdaptiveText(
@@ -300,6 +340,37 @@ fun WeatherWidgetCurrentWeather(
                     ?: "Feels like ${weather.apparentTemperatureText}"
             )
         }
+    }
+}
+
+/** Renders static warning/hourglass glyphs. The icons have no action or progress animation. */
+@Composable
+internal fun RowScope.WeatherWidgetStatusGlyphs(
+    descriptions: WeatherWidgetStatusDescriptions,
+    palette: WeatherWidgetPalette,
+    startGapDp: Float = 0f
+) {
+    if (!descriptions.hasIndicators) return
+    if (startGapDp > 0f) Spacer(GlanceModifier.width(startGapDp.dp))
+
+    descriptions.staleOrFailed?.let { description ->
+        WeatherWidgetVectorIcon(
+            imageVector = Icons.Filled.Warning,
+            tint = palette.secondaryText,
+            sizeDp = MEDIUM_STATUS_GLYPH_SIZE_DP,
+            contentDescription = description
+        )
+    }
+    descriptions.updating?.let { description ->
+        if (descriptions.staleOrFailed != null) {
+            Spacer(GlanceModifier.width(MEDIUM_STATUS_GLYPH_GAP_DP.dp))
+        }
+        WeatherWidgetVectorIcon(
+            imageVector = Icons.Filled.HourglassEmpty,
+            tint = palette.secondaryText,
+            sizeDp = MEDIUM_STATUS_GLYPH_SIZE_DP,
+            contentDescription = description
+        )
     }
 }
 
@@ -554,6 +625,8 @@ private const val EMPTY_STATE_FONT_SIZE_SP = 13f
 private const val STATUS_FONT_SIZE_SP = 10f
 private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
 private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
+internal const val MEDIUM_STATUS_GLYPH_SIZE_DP = 12f
+internal const val MEDIUM_STATUS_GLYPH_GAP_DP = 2f
 
 private fun openMainWeatherAction(context: Context): Action = actionStartActivity(
     Intent(context, MainActivity::class.java).addFlags(

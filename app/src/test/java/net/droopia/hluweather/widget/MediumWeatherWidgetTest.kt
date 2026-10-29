@@ -35,6 +35,7 @@ import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -534,13 +535,10 @@ class MediumWeatherWidgetTest {
         assertText(expired, "Clear sky")
         assertText(expired, "11:17")
         assertFalse("medium header has no visible stale status word", hasVisibleTextContaining(expired, "Stale"))
-        // Non-text stale/updating visual-indicator assertions belong to the following 1.4 task.
         assertTrue(
             "stale status and fetch time remain accessible",
-            findViews(expired).any {
-                it.contentDescription?.toString() ==
-                    "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17"
-            }
+            findViews(expired).any { isWarningDescription(it.contentDescription?.toString().orEmpty()) } &&
+                findDescription(expired, "Last weather update Wed, Oct 28, 2026 • 11:17") != null
         )
         assertFalse("expired forecast contributes no hourly label", REFERENCE_HOURS.any { hasText(expired, it) })
         assertFalse("no future hours does not invent a probability", hasText(expired, "60%"))
@@ -580,11 +578,163 @@ class MediumWeatherWidgetTest {
         listOf("68°F", "64°F", "63°F", "61°F", "59°F", "—", "0%").forEach { assertText(view, it) }
         assertText(view, "11:17")
         assertFalse("failed refresh status is not rendered as header text", hasVisibleTextContaining(view, "Stale"))
+        assertEquals("Weather update failed.", findDescription(view, "Weather update failed."))
         assertEquals(
-            "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17",
-            findDescription(view, "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17")
+            "Last weather update Wed, Oct 28, 2026 • 11:17",
+            findDescription(view, "Last weather update Wed, Oct 28, 2026 • 11:17")
         )
         assertLayoutFits(view, 400f, 160f)
+    }
+
+    @Test
+    fun medium_status_glyphs_are_distinct_accessible_non_clickable_and_fit_available_and_empty_states() {
+        val longLocation = "A very long saved location name that hides the medium timestamp"
+        val statusCases = listOf(
+            MediumStatusCase("fresh", availableSnapshot(locationName = longLocation), false, false),
+            MediumStatusCase("stale", availableSnapshot(locationName = longLocation, stale = true), true, false),
+            MediumStatusCase(
+                "failed",
+                availableSnapshot(
+                    locationName = longLocation,
+                    refresh = WidgetRefreshStatus(
+                        endedAt = Instant.parse("2026-10-28T12:00:00Z"),
+                        lastAttemptFailed = true
+                    )
+                ),
+                warning = true,
+                updating = false
+            ),
+            MediumStatusCase(
+                "updating",
+                availableSnapshot(locationName = longLocation, refresh = WidgetRefreshStatus(isRefreshing = true)),
+                warning = false,
+                updating = true
+            ),
+            MediumStatusCase(
+                "stale while updating",
+                availableSnapshot(
+                    locationName = longLocation,
+                    stale = true,
+                    refresh = WidgetRefreshStatus(isRefreshing = true)
+                ),
+                warning = true,
+                updating = true
+            )
+        )
+        val sizes = listOf(260f to 110f, 320f to 144f)
+
+        statusCases.forEach { case ->
+            sizes.forEach { (widthDp, heightDp) ->
+                val view = render(case.snapshot, widthDp, heightDp)
+
+                assertStatusGlyphs(view, case.warning, case.updating)
+                assertNoMediumRefreshAction(view)
+                assertFalse(
+                    "${case.name} status is not repeated as visible status text",
+                    findViews(view).filterIsInstance<TextView>().any { text ->
+                        listOf("Stale weather", "Weather update failed", "in progress", "Refreshing")
+                            .any(text.text.toString()::contains)
+                    }
+                )
+                assertText(view, "23°C")
+                assertFalse("the long location hides the header time", hasText(view, "11:17"))
+                val location = headerLocation(view, longLocation)
+                assertTrue(
+                    "${case.name} keeps the actual fetch date/time accessible when hidden",
+                    location.contentDescription.toString()
+                        .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                )
+                assertTrue("${case.name} keeps the location first", location.text.endsWith("…"))
+                assertLayoutFits(view, widthDp, heightDp)
+                assertTextInkFits(view, "$case at ${widthDp}×${heightDp} dp")
+
+                val warning = if (case.warning) statusImage(view, staleOrFailed = true) else null
+                val updating = if (case.updating) statusImage(view, staleOrFailed = false) else null
+                if (case.warning && case.updating) {
+                    assertTrue(
+                        "combined status exposes the fetch timestamp on the warning glyph",
+                        requireNotNull(warning).contentDescription.toString()
+                            .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    )
+                    assertTrue(
+                        "combined status exposes the fetch timestamp on the updating glyph",
+                        requireNotNull(updating).contentDescription.toString()
+                            .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    )
+                    assertStatusGlyphShapesDiffer(requireNotNull(warning), requireNotNull(updating))
+                    assertConditionToStatusGlyphGap(view, "${widthDp}×${heightDp} dp")
+                } else if (case.warning) {
+                    assertTrue(
+                        "warning description includes its cause and hidden fetch time",
+                        requireNotNull(warning).contentDescription.toString()
+                            .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    )
+                } else if (case.updating) {
+                    assertTrue(
+                        "updating description stays meaningful and includes hidden fetch time",
+                        requireNotNull(updating).contentDescription.toString()
+                            .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    )
+                }
+            }
+        }
+
+        val noWeatherCases = listOf(
+            MediumStatusCase(
+                "no-weather fresh",
+                WeatherWidgetSnapshot.NoWeather(PersistedSettings(), widgetRequest("Trieste")),
+                warning = false,
+                updating = false
+            ),
+            MediumStatusCase(
+                "no-weather failed",
+                WeatherWidgetSnapshot.NoWeather(
+                    PersistedSettings(),
+                    widgetRequest("Trieste"),
+                    WidgetRefreshStatus(lastAttemptFailed = true)
+                ),
+                warning = true,
+                updating = false
+            ),
+            MediumStatusCase(
+                "no-weather updating",
+                WeatherWidgetSnapshot.NoWeather(
+                    PersistedSettings(),
+                    widgetRequest("Trieste"),
+                    WidgetRefreshStatus(isRefreshing = true)
+                ),
+                warning = false,
+                updating = true
+            )
+        )
+
+        noWeatherCases.forEach { case ->
+            val view = render(case.snapshot, 260f, 110f)
+            assertText(view, "No weather available for Trieste")
+            assertFalse("no-weather state invents a temperature", findViews(view)
+                .filterIsInstance<TextView>().any { it.text.toString().contains("°") })
+            assertStatusGlyphs(view, case.warning, case.updating)
+            if (case.warning) {
+                assertEquals(
+                    "Weather update failed; no cached weather is available.",
+                    findDescription(view, "Weather update failed; no cached weather is available.")
+                )
+            }
+            if (case.updating) {
+                assertEquals(
+                    "Weather update in progress; no cached weather is available yet.",
+                    findDescription(view, "Weather update in progress; no cached weather is available yet.")
+                )
+            }
+            assertNoMediumRefreshAction(view)
+            assertLayoutFits(view, 260f, 110f)
+            assertTextInkFits(view, case.name)
+        }
+
+        val noLocation = render(WeatherWidgetSnapshot.NoLocation(PersistedSettings()), 320f, 144f)
+        assertText(noLocation, "Open HluWeather to choose a location")
+        assertStatusGlyphs(noLocation, warning = false, updating = false)
+        assertNoMediumRefreshAction(noLocation)
     }
 
     @Test
@@ -604,7 +754,9 @@ class MediumWeatherWidgetTest {
                     settings = PersistedSettings(
                         temperatureUnit = TemperatureUnit.FAHRENHEIT,
                         themeMode = theme
-                    )
+                    ),
+                    stale = true,
+                    refresh = WidgetRefreshStatus(isRefreshing = true)
                 ),
                 widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
                 heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
@@ -615,6 +767,16 @@ class MediumWeatherWidgetTest {
             assertText(view, temperature)
             assertText(view, "—")
             assertText(view, "100%")
+            assertStatusGlyphs(view, warning = true, updating = true)
+            assertTrue(
+                "extreme stale status remains accessible",
+                statusImage(view, staleOrFailed = true).contentDescription.toString().contains("Stale weather")
+            )
+            assertTrue(
+                "extreme updating status remains accessible",
+                statusImage(view, staleOrFailed = false).contentDescription.toString()
+                    .contains("Weather update in progress")
+            )
             assertEquals("Rain probability unavailable", findDescription(view, "Rain probability unavailable"))
             assertTrue(
                 "fetch date/time remains accessible at larger font scales",
@@ -622,11 +784,98 @@ class MediumWeatherWidgetTest {
                     it.contentDescription?.toString()?.contains("Last weather update Wed, Oct 28, 2026 • 11:17") == true
                 }
             )
+            assertStatusGlyphInkFitsCurrentArea(view, temperature, "200% ${theme.name} $temperature")
             assertLayoutFits(
                 view,
                 WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
                 WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
             )
+        }
+    }
+
+    @Test
+    fun combined_status_glyph_ink_fits_compact_and_normal_layouts_at_130_percent_in_both_themes() {
+        val longLocation = "A very long saved location name that hides the medium timestamp"
+        val sizes = listOf(260f to 110f, 320f to 144f)
+
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            sizes.forEach { (widthDp, heightDp) ->
+                val temperature = "23°C"
+                val view = render(
+                    availableSnapshot(
+                        locationName = longLocation,
+                        temperature = temperature,
+                        apparentTemperature = "24°C",
+                        stale = true,
+                        refresh = WidgetRefreshStatus(isRefreshing = true),
+                        settings = PersistedSettings(themeMode = theme)
+                    ),
+                    widthDp = widthDp,
+                    heightDp = heightDp,
+                    fontScale = 1.3f,
+                    systemDark = theme == ThemeMode.DARK
+                )
+
+                assertStatusGlyphs(view, warning = true, updating = true)
+                assertNoMediumRefreshAction(view)
+                assertText(view, temperature)
+                assertFalse("long location hides the visible timestamp", hasText(view, "11:17"))
+                val location = headerLocation(view, longLocation)
+                assertTrue(
+                    "hidden timestamp retains its actual date and time",
+                    location.contentDescription.toString()
+                        .contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                )
+                assertTrue(
+                    "warning description includes stale state and hidden fetch time",
+                    statusImage(view, staleOrFailed = true).contentDescription.toString().let {
+                        it.contains("Stale weather") && it.contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    }
+                )
+                assertTrue(
+                    "updating description includes progress and hidden fetch time",
+                    statusImage(view, staleOrFailed = false).contentDescription.toString().let {
+                        it.contains("Weather update in progress") &&
+                            it.contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+                    }
+                )
+                assertStatusGlyphInkFitsCurrentArea(
+                    view,
+                    temperature,
+                    "130% ${theme.name} ${widthDp}×${heightDp} dp"
+                )
+                assertConditionToStatusGlyphGap(
+                    view,
+                    "130% ${theme.name} ${widthDp}×${heightDp} dp"
+                )
+                assertLayoutFits(view, widthDp, heightDp)
+                assertTextInkFits(view, "130% ${theme.name} ${widthDp}×${heightDp} dp")
+            }
+        }
+    }
+
+    @Test
+    fun combined_status_has_a_rendered_two_dp_condition_gap_at_compact_and_normal_sizes() {
+        listOf(260f to 110f, 320f to 144f).forEach { (widthDp, heightDp) ->
+            val sizeDescription = "${widthDp}×${heightDp} dp at normal font scale"
+            val view = render(
+                availableSnapshot(
+                    apparentTemperature = null,
+                    stale = true,
+                    refresh = WidgetRefreshStatus(isRefreshing = true)
+                ),
+                widthDp = widthDp,
+                heightDp = heightDp,
+                fontScale = 1f
+            )
+
+            assertStatusGlyphs(view, warning = true, updating = true)
+            assertStatusGlyphInkFitsCurrentArea(view, "23°C", sizeDescription)
+            assertTrue(
+                "condition is rendered and has the required status gap at $sizeDescription",
+                assertConditionToStatusGlyphGap(view, sizeDescription, requireConditionShown = true)
+            )
+            assertLayoutFits(view, widthDp, heightDp)
         }
     }
 
@@ -966,6 +1215,187 @@ class MediumWeatherWidgetTest {
         )
     }
 
+    private fun assertStatusGlyphs(root: View, warning: Boolean, updating: Boolean) {
+        val images = findViews(root).filterIsInstance<ImageView>()
+        val warningImage = images.filter { it.contentDescription?.toString()?.let(::isWarningDescription) == true }
+        val updatingImage = images.filter {
+            it.contentDescription?.toString()?.startsWith("Weather update in progress") == true
+        }
+        assertEquals("warning/failure glyph presence", warning, warningImage.isNotEmpty())
+        assertEquals("updating glyph presence", updating, updatingImage.isNotEmpty())
+        assertEquals("one warning/failure glyph", if (warning) 1 else 0, warningImage.size)
+        assertEquals("one updating glyph", if (updating) 1 else 0, updatingImage.size)
+        (warningImage + updatingImage).forEach { image ->
+            assertTrue("status glyph has a rendered non-text bitmap", image.drawable is BitmapDrawable)
+            assertTrue("status glyph has positive translated dimensions", image.width > 0 && image.height > 0)
+            assertFalse("status glyph is not independently clickable", image.isClickable)
+            assertFalse("status glyph has no click listener", image.hasOnClickListeners())
+            assertFalse("status glyph is not independently focusable", image.isFocusable)
+            assertTrue("status glyph has a meaningful accessible description", image.contentDescription
+                ?.toString()?.isNotBlank() == true)
+            val bounds = absoluteBounds(image, root)
+            assertTrue("status glyph stays within widget bounds: $bounds", bounds.left >= 0 && bounds.right <= root.width)
+            assertTrue("status glyph stays within widget bounds: $bounds", bounds.top >= 0 && bounds.bottom <= root.height)
+        }
+    }
+
+    private fun isWarningDescription(description: String): Boolean =
+        description.startsWith("Stale weather") || description.startsWith("Weather update failed")
+
+    private fun statusImage(root: View, staleOrFailed: Boolean): ImageView = findViews(root)
+        .filterIsInstance<ImageView>()
+        .first {
+            val description = it.contentDescription?.toString() ?: return@first false
+            if (staleOrFailed) isWarningDescription(description)
+            else description.startsWith("Weather update in progress")
+        }
+
+    private fun assertStatusGlyphInkFitsCurrentArea(root: View, currentTemperature: String, sizeDescription: String) {
+        val density = root.resources.displayMetrics.density
+        val firstHourlyDivider = findViews(root).filter { view ->
+            view.width <= 2f * density && view.height >= 30f * density && view.background is ColorDrawable
+        }.minByOrNull { absoluteBounds(it, root).left }
+        requireNotNull(firstHourlyDivider) { "hourly divider is present for $sizeDescription" }
+        val dividerBounds = absoluteBounds(firstHourlyDivider, root)
+        val currentTexts = findViews(root).filterIsInstance<TextView>().filter { text ->
+            val bounds = absoluteBounds(text, root)
+            bounds.right <= dividerBounds.left &&
+                (text.text.toString() == currentTemperature ||
+                    text.contentDescription?.toString() == "Clear sky" ||
+                    text.text.toString().startsWith("Feels like"))
+        }
+        assertTrue("current temperature is in the current-weather area ($sizeDescription)",
+            currentTexts.any { it.text.toString() == currentTemperature })
+
+        listOf(
+            statusImage(root, staleOrFailed = true),
+            statusImage(root, staleOrFailed = false)
+        ).forEach { glyph ->
+            val imageBounds = absoluteBounds(glyph, root)
+            val sourceBitmap = (glyph.drawable as BitmapDrawable).bitmap
+            assertTrue(
+                "status glyph has measurable bounds for $sizeDescription: " +
+                    "bounds=$imageBounds bitmap=${sourceBitmap.width}×${sourceBitmap.height} " +
+                    "ancestors=${viewAncestors(glyph)}",
+                glyph.width > 0 && glyph.height > 0
+            )
+            assertTrue(
+                "status ImageView can display the complete bitmap without clipping ($sizeDescription): " +
+                    "view=${glyph.width}×${glyph.height}, bitmap=${sourceBitmap.width}×${sourceBitmap.height}",
+                glyph.width >= sourceBitmap.width && glyph.height >= sourceBitmap.height
+            )
+            val inkBounds = visibleStatusGlyphInkBounds(glyph, root)
+            val parentBounds = absoluteBounds(glyph.parent as View, root)
+
+            assertBoundsContain(parentBounds, inkBounds, "status bitmap ink stays inside its parent ($sizeDescription)")
+            assertBoundsContain(
+                Bounds(0, 0, root.width, root.height),
+                inkBounds,
+                "status bitmap ink stays inside the widget ($sizeDescription)"
+            )
+            assertTrue(
+                "status bitmap ink stays before the first hourly cell ($sizeDescription): " +
+                    "ink=$inkBounds divider=$dividerBounds",
+                inkBounds.right <= dividerBounds.left
+            )
+            currentTexts.forEach { text ->
+                assertFalse(
+                    "status bitmap ink does not overlap '${text.text}' ($sizeDescription): " +
+                        "ink=$inkBounds text=${absoluteBounds(text, root)}",
+                    boundsOverlap(inkBounds, absoluteBounds(text, root))
+                )
+            }
+        }
+    }
+
+    private fun assertConditionToStatusGlyphGap(
+        root: View,
+        sizeDescription: String,
+        requireConditionShown: Boolean = false
+    ): Boolean {
+        val condition = findViews(root).filterIsInstance<TextView>().firstOrNull {
+            it.visibility == View.VISIBLE && it.contentDescription?.toString() == "Clear sky"
+        }
+        if (condition == null) {
+            assertFalse("condition is intentionally hidden at $sizeDescription", requireConditionShown)
+            return false
+        }
+        val warning = statusImage(root, staleOrFailed = true)
+        val conditionBounds = absoluteBounds(condition, root)
+        val glyphBounds = absoluteBounds(warning, root)
+        val minimumGapPx = 2f * root.resources.displayMetrics.density - 1f
+        assertTrue(
+            "a rendered 2dp spacer separates condition and warning view at $sizeDescription " +
+                "(gap=${glyphBounds.left - conditionBounds.right}px)",
+            glyphBounds.left - conditionBounds.right >= minimumGapPx
+        )
+
+        val conditionInk = visibleTextInkBounds(condition, root)
+        val glyphInk = visibleStatusGlyphInkBounds(warning, root)
+        assertTrue(
+            "visible condition and warning ink stay separated at $sizeDescription " +
+                "(gap=${glyphInk.left - conditionInk.right}px)",
+            glyphInk.left - conditionInk.right >= minimumGapPx
+        )
+        return true
+    }
+
+    private fun visibleTextInkBounds(text: TextView, root: View): Bounds {
+        val textBounds = absoluteBounds(text, root)
+        val bitmap = Bitmap.createBitmap(text.width, text.height, Bitmap.Config.ARGB_8888)
+        text.draw(Canvas(bitmap))
+        val localInk = paintedBounds(bitmap, Bounds(0, 0, bitmap.width, bitmap.height))
+        return Bounds(
+            textBounds.left + localInk.left,
+            textBounds.top + localInk.top,
+            textBounds.left + localInk.right,
+            textBounds.top + localInk.bottom
+        )
+    }
+
+    private fun visibleStatusGlyphInkBounds(glyph: ImageView, root: View): Bounds {
+        val imageBounds = absoluteBounds(glyph, root)
+        val bitmap = Bitmap.createBitmap(glyph.width, glyph.height, Bitmap.Config.ARGB_8888)
+        glyph.draw(Canvas(bitmap))
+        val localInk = paintedBounds(bitmap, Bounds(0, 0, bitmap.width, bitmap.height))
+        return Bounds(
+            imageBounds.left + localInk.left,
+            imageBounds.top + localInk.top,
+            imageBounds.left + localInk.right,
+            imageBounds.top + localInk.bottom
+        )
+    }
+
+    private fun assertBoundsContain(outer: Bounds, inner: Bounds, message: String) {
+        assertTrue("$message: inner=$inner outer=$outer", inner.left >= outer.left && inner.right <= outer.right)
+        assertTrue("$message: inner=$inner outer=$outer", inner.top >= outer.top && inner.bottom <= outer.bottom)
+    }
+
+    private fun boundsOverlap(first: Bounds, second: Bounds): Boolean =
+        first.left < second.right && second.left < first.right &&
+            first.top < second.bottom && second.top < first.bottom
+
+    private fun assertStatusGlyphShapesDiffer(warning: ImageView, updating: ImageView) {
+        val warningBitmap = (warning.drawable as BitmapDrawable).bitmap
+        val updatingBitmap = (updating.drawable as BitmapDrawable).bitmap
+        assertEquals("warning and hourglass use the same compact icon width", warningBitmap.width, updatingBitmap.width)
+        assertEquals("warning and hourglass use the same compact icon height", warningBitmap.height, updatingBitmap.height)
+        assertNotEquals(
+            "warning and hourglass have distinct rendered, non-text shapes",
+            statusGlyphMask(warningBitmap),
+            statusGlyphMask(updatingBitmap)
+        )
+    }
+
+    private fun statusGlyphMask(bitmap: Bitmap): String = buildString {
+        for (y in 0 until bitmap.height) {
+            for (x in 0 until bitmap.width) {
+                append(if (bitmap.getPixel(x, y) ushr 24 > 32) '#' else '.')
+            }
+            append('\n')
+        }
+    }
+
     private fun assertCurrentTemperatureColor(root: View, dark: Boolean) {
         val expected = hluMaterialColorScheme(darkTheme = dark).onSurface.toArgb()
         val actual = findViews(root).filterIsInstance<TextView>()
@@ -1146,6 +1576,13 @@ class MediumWeatherWidgetTest {
     )
 
     private data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+    private data class MediumStatusCase(
+        val name: String,
+        val snapshot: WeatherWidgetSnapshot,
+        val warning: Boolean,
+        val updating: Boolean
+    )
 
     private class PreviewMediumWeatherWidget(
         private val snapshot: WeatherWidgetSnapshot

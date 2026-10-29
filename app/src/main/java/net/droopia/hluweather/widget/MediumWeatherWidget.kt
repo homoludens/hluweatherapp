@@ -26,6 +26,7 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
+import androidx.glance.layout.RowScope
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -136,18 +137,18 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         ellipsizeMediumLocationName(name, policy.headerLocationTextWidthDp, context)
     }
     val updateDescription = available?.let { current ->
-        buildString {
-            if (current.weather.isStale || current.refresh.lastAttemptFailed) append("Stale weather. ")
-            append("Last weather update ${current.weather.lastWeatherUpdateText}")
-        }
+        "Last weather update ${current.weather.lastWeatherUpdateText}"
     }
+    val statusDescriptions = snapshot.mediumStatusDescriptions(
+        includeFetchTime = available != null && !policy.showHeaderTimestamp
+    )
     val locationDescription = locationName?.let { name ->
         buildString {
             append("Weather for $name")
             if (available != null && !policy.showHeaderTimestamp) {
-                updateDescription?.let {
+                updateDescription?.let { timestamp ->
                     append(". ")
-                    append(it)
+                    append(timestamp)
                 }
             }
         }
@@ -198,6 +199,18 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                             } else {
                                 policy.currentWeatherWidthDp
                             },
+                            statusGlyphWidthDp = statusDescriptions.glyphStripWidthDp,
+                            statusContent = if (statusDescriptions.hasIndicators) {
+                                {
+                                    WeatherWidgetStatusGlyphs(
+                                        descriptions = statusDescriptions,
+                                        palette = palette,
+                                        startGapDp = if (policy.showCurrentCondition) MEDIUM_SECONDARY_GAP_DP else 0f
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                             modifier = if (hours.isEmpty()) {
                                 GlanceModifier.fillMaxWidth().padding(horizontal = MEDIUM_CELL_PADDING_DP.dp)
                             } else {
@@ -234,8 +247,23 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
 
                 is WeatherWidgetSnapshot.NoLocation,
                 is WeatherWidgetSnapshot.NoWeather -> {
-                    WeatherWidgetEmptyContent(snapshot, palette)
-                    WeatherWidgetStatus(snapshot, palette, compact = true)
+                    Column(modifier = GlanceModifier.fillMaxWidth()) {
+                        WeatherWidgetEmptyContent(
+                            snapshot = snapshot,
+                            palette = palette,
+                            modifier = GlanceModifier.fillMaxWidth()
+                        )
+                        if (statusDescriptions.hasIndicators) {
+                            Row(
+                                modifier = GlanceModifier
+                                    .width(statusDescriptions.glyphStripWidthDp.dp)
+                                    .padding(top = MEDIUM_SECONDARY_GAP_DP.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                WeatherWidgetStatusGlyphs(statusDescriptions, palette)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -251,12 +279,19 @@ private fun MediumCurrentWeather(
     fontScale: Float,
     textLineHeightMultiplier: Float,
     widthDp: Float,
+    statusGlyphWidthDp: Float,
+    statusContent: (@Composable RowScope.() -> Unit)?,
     modifier: GlanceModifier
 ) {
     val contentWidth = (widthDp - MEDIUM_CELL_PADDING_DP * 2f).coerceAtLeast(0f)
+    val conditionTextWidth = if (statusContent != null && policy.showCurrentCondition) {
+        (contentWidth - statusGlyphWidthDp - MEDIUM_SECONDARY_GAP_DP).coerceAtLeast(0f)
+    } else {
+        contentWidth
+    }
     val conditionText = ellipsizeMediumText(
         text = weather.conditionLabel,
-        widthDp = contentWidth,
+        widthDp = conditionTextWidth,
         fontSizeSp = policy.currentConditionFontSizeSp,
         fontScale = fontScale,
         context = context
@@ -273,8 +308,46 @@ private fun MediumCurrentWeather(
         conditionDisplayText = conditionText,
         secondaryItemGapDp = MEDIUM_SECONDARY_GAP_DP,
         textLineHeightMultiplier = textLineHeightMultiplier,
+        statusContent = statusContent,
+        conditionTextWidthDp = conditionTextWidth,
         modifier = modifier
     )
+}
+
+private fun WeatherWidgetSnapshot.mediumStatusDescriptions(
+    includeFetchTime: Boolean
+): WeatherWidgetStatusDescriptions = when (this) {
+    is WeatherWidgetSnapshot.NoLocation -> WeatherWidgetStatusDescriptions()
+    is WeatherWidgetSnapshot.NoWeather -> WeatherWidgetStatusDescriptions(
+        staleOrFailed = if (refresh.lastAttemptFailed) {
+            "Weather update failed; no cached weather is available."
+        } else {
+            null
+        },
+        updating = if (refresh.isRefreshing) {
+            "Weather update in progress; no cached weather is available yet."
+        } else {
+            null
+        }
+    )
+    is WeatherWidgetSnapshot.Available -> {
+        val fetchTime = if (includeFetchTime) {
+            " Last weather update ${weather.lastWeatherUpdateText}."
+        } else {
+            ""
+        }
+        val staleOrFailedDescription = when {
+            weather.isStale && refresh.lastAttemptFailed ->
+                "Stale weather; the last update failed.$fetchTime"
+            weather.isStale -> "Stale weather.$fetchTime"
+            refresh.lastAttemptFailed -> "Weather update failed.$fetchTime"
+            else -> null
+        }
+        WeatherWidgetStatusDescriptions(
+            staleOrFailed = staleOrFailedDescription,
+            updating = if (refresh.isRefreshing) "Weather update in progress.$fetchTime" else null
+        )
+    }
 }
 
 @Composable

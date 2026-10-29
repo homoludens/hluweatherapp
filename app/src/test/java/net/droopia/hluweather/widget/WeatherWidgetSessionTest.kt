@@ -29,6 +29,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
@@ -86,22 +87,55 @@ class WeatherWidgetSessionTest {
                 session.awaitText("23°C")
                 val request = f.widgets.resolveRequest()!!
                 val attempt = f.widgets.beginRefresh(request)
-                if (!medium) session.awaitText("Refreshing")
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", present = true)
+                else session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, attempt, ForecastLoad(f.forecast(f.first, 23.0), false))
-                if (!medium) session.awaitText("23°C", absent = "Refreshing")
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", present = false)
+                else session.awaitText("23°C", absent = "Refreshing")
+
+                // Give the failed attempt a later time than the cached forecast's real fetch time.
+                f.now += 5.minutes
                 val failed = f.widgets.beginRefresh(request)
-                if (!medium) session.awaitText("Refreshing")
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", present = true)
+                else session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, failed, ForecastLoad(f.forecast(f.first, 23.0), true))
-                if (medium) session.awaitAccessibleStaleStatus(true) else session.awaitText("Stale weather")
+                val stale = if (medium) {
+                    session.awaitAccessibleDescription("Stale weather", present = true)
+                } else {
+                    session.awaitText("Stale weather")
+                }
+                if (medium) {
+                    assertTrue("failed refresh preserves its original cached fetch time", texts(stale)
+                        .any { it.text.toString() == "12:00" })
+                    assertTrue("cached timestamp remains accessible after failure", allViews(stale)
+                        .any { it.contentDescription?.toString() == "Last weather update Wed, Oct 28, 2026 • 12:00" })
+                }
                 val recovery = f.widgets.beginRefresh(request)
-                if (!medium) session.awaitText("Refreshing")
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", present = true)
+                else session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, recovery, ForecastLoad(f.forecast(f.first, 23.0), false))
-                if (medium) session.awaitAccessibleStaleStatus(false)
-                else session.awaitText("23°C", absent = "Stale")
+                if (medium) {
+                    val recovered = session.awaitAccessibleDescription("Weather update in progress", present = false)
+                    assertFalse("successful refresh clears stale status", allViews(recovered)
+                        .any { it.contentDescription?.toString()?.contains("Stale weather") == true })
+                } else {
+                    session.awaitText("23°C", absent = "Stale")
+                }
+
+                f.now += 5.minutes
                 val failure = f.widgets.beginRefresh(request)
-                if (!medium) session.awaitText("Refreshing")
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", present = true)
+                else session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, failure, null)
-                if (medium) session.awaitAccessibleStaleStatus(true) else session.awaitText("Stale weather")
+                if (medium) {
+                    val failedView = session.awaitAccessibleDescription("the last update failed", present = true)
+                    assertTrue("null refresh failure leaves cached fetch time unchanged", texts(failedView)
+                        .any { it.text.toString() == "12:00" })
+                    assertTrue("cached timestamp remains available to accessibility after failure", allViews(failedView)
+                        .any { it.contentDescription?.toString() == "Last weather update Wed, Oct 28, 2026 • 12:00" })
+                } else {
+                    session.awaitText("Stale weather")
+                }
                 f.settings.value = f.settings.value.copy(temperatureUnit = TemperatureUnit.FAHRENHEIT, themeMode = ThemeMode.DARK)
                 val dark = session.awaitText("73°F")
                 val temperature = texts(dark).first { it.text.toString() == "73°F" }
@@ -294,7 +328,7 @@ class WeatherWidgetSessionTest {
             text.any { it.contains(expected) } && (absent == null || text.none { it.contains(absent) })
         }
 
-        suspend fun awaitAccessibleStaleStatus(stale: Boolean): View = awaitView { view ->
+        suspend fun awaitAccessibleDescription(description: String, present: Boolean): View = awaitView { view ->
             val descriptions = buildList {
                 fun collect(current: View) {
                     current.contentDescription?.toString()?.let { add(it) }
@@ -304,7 +338,7 @@ class WeatherWidgetSessionTest {
                 }
                 collect(view)
             }
-            descriptions.any { it.contains("Stale weather") } == stale
+            descriptions.any { it.contains(description) } == present
         }
     }
 
@@ -449,7 +483,7 @@ class WeatherWidgetSessionTest {
             }
         }
         val cache = ForecastCache(data)
-        val now = Instant.parse("2026-10-28T12:00:00Z")
+        var now = Instant.parse("2026-10-28T12:00:00Z")
         val clock = object : Clock { override fun now() = now }
         var networkCalls = 0
         val source = object : WeatherSource {
