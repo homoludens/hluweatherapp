@@ -62,6 +62,21 @@ class SmallWeatherWidgetResponsiveHostTest {
     @Test
     fun recorded_narrow_tall_host_selects_a_composition_with_secondary_weather() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val originalSettings = app.settingsRepository.settings.first()
+        // The real application store may already contain non-default settings. Seed a
+        // conflicting unit first so this fixture proves it selects its own starting state.
+        app.settingsRepository.save(originalSettings.copy(
+            provider = WeatherProvider.OPEN_METEO,
+            temperatureUnit = TemperatureUnit.FAHRENHEIT,
+            themeMode = ThemeMode.DARK
+        ))
+        assertEquals(TemperatureUnit.FAHRENHEIT, app.settingsRepository.settings.first().temperatureUnit)
+        app.settingsRepository.save(originalSettings.copy(
+            provider = WeatherProvider.OPEN_METEO,
+            temperatureUnit = TemperatureUnit.CELSIUS,
+            themeMode = ThemeMode.LIGHT
+        ))
+        assertEquals(TemperatureUnit.CELSIUS, app.settingsRepository.settings.first().temperatureUnit)
         val name = "Zajecar, a very long location name for ellipsis"
         val location = WeatherLocation("responsive-host", name, 43.9, 20.3)
         app.locationRepository.add(location)
@@ -200,6 +215,7 @@ class SmallWeatherWidgetResponsiveHostTest {
             assertWeather(host(largeContext, noApparent, 140.19f, 184.38f, 8f), name, "-123°F", true, null)
         } finally {
             job.cancelAndJoin()
+            app.settingsRepository.save(originalSettings)
         }
     }
 
