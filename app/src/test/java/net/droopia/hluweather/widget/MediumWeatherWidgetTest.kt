@@ -3,6 +3,7 @@ package net.droopia.hluweather.widget
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.view.View
@@ -155,6 +156,70 @@ class MediumWeatherWidgetTest {
                 ).outlineVariant.toArgb()
             )
             assertLayoutFits(view, case.widthDp, case.heightDp)
+        }
+    }
+
+    @Test
+    fun translated_medium_text_ink_fits_at_normal_and_130_percent_font_scale() {
+        val snapshot = availableSnapshot(
+            temperature = "73°F",
+            apparentTemperature = "124°F",
+            hours = referenceHours(
+                temperatures = listOf("−123°F", "123°F", "99°F", "88°F", "77°F"),
+                probabilities = listOf(null, 0, 5, 100, 60)
+            ),
+            settings = PersistedSettings(temperatureUnit = TemperatureUnit.FAHRENHEIT)
+        )
+        val sizes = listOf(
+            293f to 184f,
+            320f to 144f,
+            400f to 160f,
+            260f to 110f
+        )
+
+        sizes.forEach { (widthDp, heightDp) ->
+            listOf(1f, 1.3f).forEach { fontScale ->
+                val view = render(snapshot, widthDp, heightDp, fontScale)
+                val expectedColumns = WeatherWidgetSizePolicy.medium(
+                    widthDp = widthDp,
+                    heightDp = heightDp,
+                    fontScale = fontScale,
+                    formattedTemperatureLength = "−123°F".length,
+                    currentConditionLabelLength = "Clear sky".length,
+                    apparentTemperatureLength = "124°F".length,
+                    headerTimestampTextLength = "Updated Oct 28 11:17".length
+                ).hourlyColumnCount
+                val textViews = findViews(view).filterIsInstance<TextView>()
+
+                assertEquals(fontScale.toString(), fontScale, view.resources.configuration.fontScale, 0f)
+                assertText(view, "73°F")
+                assertEquals(
+                    "hour labels remain present at ${widthDp}x${heightDp}dp, fontScale=$fontScale",
+                    REFERENCE_HOURS.take(expectedColumns),
+                    textViews.map { it.text.toString() }.filter { it in REFERENCE_HOURS }
+                )
+                assertEquals(
+                    "hourly temperatures remain present at ${widthDp}x${heightDp}dp, fontScale=$fontScale",
+                    listOf("−123°F", "123°F", "99°F", "88°F", "77°F").take(expectedColumns),
+                    textViews.map { it.text.toString() }
+                        .filter { it in listOf("−123°F", "123°F", "99°F", "88°F", "77°F") }
+                )
+                assertEquals(
+                    "all hourly probabilities remain present at ${widthDp}x${heightDp}dp, fontScale=$fontScale",
+                    listOf("—", "0%", "5%", "100%", "60%").take(expectedColumns),
+                    textViews.map { it.text.toString() }.filter { it in listOf("—", "0%", "5%", "100%", "60%") }
+                )
+                val hourlyIconDescriptions = findViews(view)
+                    .mapNotNull { it.contentDescription?.toString() }
+                    .filter { description -> REFERENCE_HOURS.any { description == "$it, Partly cloudy" } }
+                assertEquals(
+                    "hour icons remain present at ${widthDp}x${heightDp}dp, fontScale=$fontScale",
+                    REFERENCE_HOURS.take(expectedColumns).map { "$it, Partly cloudy" },
+                    hourlyIconDescriptions
+                )
+                assertLayoutFits(view, widthDp, heightDp)
+                assertTextInkFits(view, "${widthDp}x${heightDp}dp at fontScale=$fontScale")
+            }
         }
     }
 
@@ -418,9 +483,65 @@ class MediumWeatherWidgetTest {
                         "size=${probability.textSize}, bounds=${absoluteBounds(probability, root)})",
                     probability.paint.measureText(probability.text.toString()) <= width + 1f
                 )
-                assertTrue("precipitation probability retains readable text size", probability.textSize >= 7f * density)
+                assertTrue(
+                    "precipitation probability retains readable text size " +
+                        "(size=${probability.textSize}, min=${7f * density}, text=${probability.text}, " +
+                        "bounds=${absoluteBounds(probability, root)})",
+                    probability.textSize >= 7f * density
+                )
             }
         assertRenderedContentFitsWithoutOverlap(root)
+    }
+
+    private fun assertTextInkFits(root: View, sizeDescription: String) {
+        findViews(root).filterIsInstance<TextView>().filter { it.text.isNotBlank() }.forEach { text ->
+            val layout = text.layout
+            assertEquals("text remains on one measured layout line: ${text.text} ($sizeDescription)", 1, layout.lineCount)
+
+            val contentTop = text.compoundPaddingTop
+            val contentBottom = text.height - text.compoundPaddingBottom
+            val lineBottom = contentTop + layout.getLineBottom(0)
+            assertTrue(
+                "measured text line stays within its TextView: '${text.text}' ($sizeDescription) " +
+                    "(lineBottom=$lineBottom, contentBottom=$contentBottom, " +
+                    "compoundPadding=${text.compoundPaddingTop}/${text.compoundPaddingBottom}, " +
+                    "layoutLineBottom=${layout.getLineBottom(0)}, layoutBaseline=${layout.getLineBaseline(0)}, " +
+                    "includeFontPadding=${text.includeFontPadding}, size=${text.textSize}, " +
+                    "bounds=${absoluteBounds(text, root)}, parents=${viewAncestors(text)})",
+                lineBottom <= contentBottom
+            )
+
+            val baseline = text.baseline
+            val metrics = text.paint.fontMetricsInt
+            val metricTop = baseline + if (text.includeFontPadding) metrics.top else metrics.ascent
+            val metricBottom = baseline + if (text.includeFontPadding) metrics.bottom else metrics.descent
+            assertTrue(
+                "font metrics ink starts inside TextView content: '${text.text}' ($sizeDescription) " +
+                    "(top=$metricTop, contentTop=$contentTop, baseline=$baseline, " +
+                    "metrics=$metrics, includeFontPadding=${text.includeFontPadding})",
+                metricTop >= contentTop
+            )
+            assertTrue(
+                "font metrics ink ends inside TextView content: '${text.text}' ($sizeDescription) " +
+                    "(bottom=$metricBottom, contentBottom=$contentBottom, baseline=$baseline, " +
+                    "metrics=$metrics, includeFontPadding=${text.includeFontPadding})",
+                metricBottom <= contentBottom
+            )
+
+            val ink = Rect()
+            text.paint.getTextBounds(text.text, 0, text.text.length, ink)
+            assertTrue(
+                "actual glyph ink stays inside TextView: '${text.text}' ($sizeDescription) " +
+                    "(ink=$ink, baseline=$baseline, height=${text.height}, " +
+                    "compoundPadding=${text.compoundPaddingTop}/${text.compoundPaddingBottom})",
+                baseline + ink.bottom <= contentBottom
+            )
+            assertTrue(
+                "actual glyph ink stays below TextView top: '${text.text}' ($sizeDescription) " +
+                    "(ink=$ink, baseline=$baseline, contentTop=$contentTop)",
+                baseline + ink.top >= contentTop
+            )
+        }
     }
 
     private fun assertDividers(root: View, expectedCount: Int, expectedColor: Int) {
@@ -513,6 +634,17 @@ class MediumWeatherWidgetTest {
         }
         return Bounds(left, top, left + view.width, top + view.height)
     }
+
+    private fun viewAncestors(view: View): String = buildList {
+        var current: View? = view
+        while (current != null) {
+            add(
+                "${current.javaClass.simpleName}(${current.width}x${current.height}, " +
+                    "lp=${current.layoutParams?.width}x${current.layoutParams?.height})"
+            )
+            current = current.parent as? View
+        }
+    }.joinToString(" <- ")
 
     private fun findViews(root: View): List<View> = buildList {
         add(root)

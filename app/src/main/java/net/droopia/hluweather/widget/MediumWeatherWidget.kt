@@ -5,6 +5,9 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
+import android.util.TypedValue
+import android.view.View
+import android.widget.TextView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,15 +72,25 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
     val available = snapshot as? WeatherWidgetSnapshot.Available
     val weather = available?.weather
     val fontScale = context.resources.configuration.fontScale
+    val textLineHeightMultiplier = remember(context, fontScale) {
+        mediumTextViewLineHeightMultiplier(context, fontScale)
+    }
+    val formattedTemperatureLength = weather?.let { current ->
+        maxOf(
+            current.temperatureText.length,
+            current.hours.maxOfOrNull { it.temperatureText.length } ?: 0
+        )
+    } ?: DEFAULT_TEMPERATURE_LENGTH
     val headerText = available?.let { it.weather.mediumHeaderUpdateText(it.refresh) }
     val policy = WeatherWidgetSizePolicy.medium(
         widthDp = size.width.value,
         heightDp = size.height.value,
         fontScale = fontScale,
-        formattedTemperatureLength = weather?.temperatureText?.length ?: DEFAULT_TEMPERATURE_LENGTH,
+        formattedTemperatureLength = formattedTemperatureLength,
         currentConditionLabelLength = weather?.conditionLabel?.length ?: DEFAULT_CONDITION_LENGTH,
         apparentTemperatureLength = weather?.apparentTemperatureText?.length,
-        headerTimestampTextLength = headerText?.length ?: 0
+        headerTimestampTextLength = headerText?.length ?: 0,
+        textLineHeightMultiplier = textLineHeightMultiplier
     )
     val locationName = snapshot.mediumLocationNameOrNull()
     val displayLocationName = locationName?.let { name ->
@@ -253,6 +266,29 @@ private fun ellipsizeMediumText(
         widthDp.coerceAtLeast(0f) * density,
         TextUtils.TruncateAt.END
     ).toString()
+}
+
+/** Measures the actual single-line TextView line box, including Android's font padding. */
+private fun mediumTextViewLineHeightMultiplier(context: Context, fontScale: Float): Float {
+    val fontSizeSp = 12f
+    val density = context.resources.displayMetrics.density
+    val textView = TextView(context).apply {
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeSp)
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        includeFontPadding = true
+        maxLines = 1
+        text = "Ag"
+    }
+    textView.measure(
+        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+    )
+    textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
+    val textLayout = requireNotNull(textView.layout)
+    val lineHeightPx = textView.compoundPaddingTop + textLayout.getLineBottom(0) +
+        textView.compoundPaddingBottom
+    val scale = if (fontScale.isFinite() && fontScale > 0f) fontScale else 1f
+    return lineHeightPx / (fontSizeSp * scale * density)
 }
 
 private const val DEFAULT_TEMPERATURE_LENGTH = 4
