@@ -148,11 +148,13 @@ class MediumWeatherWidgetTest {
             assertText(view, "Clear sky")
             assertText(view, "Feels like 24°C")
             assertText(view, "Zaječar")
-            assertText(view, "Updated Oct 28 11:17")
+            assertText(view, "11:17")
+            assertFalse("medium header does not show an update label", hasVisibleTextContaining(view, "Updated"))
+            assertFalse("medium header does not show the fetch date", hasVisibleTextContaining(view, "Oct 28"))
             assertEquals("Last weather update Wed, Oct 28, 2026 • 11:17", findDescription(view, "Last weather update Wed, Oct 28, 2026 • 11:17"))
             assertCurrentTemperatureColor(view, dark = case.theme == ThemeMode.DARK || case.theme == ThemeMode.SYSTEM)
             assertHeaderMetadataDoesNotOverlap(view)
-            assertRefreshTarget(view)
+            assertNoMediumRefreshAction(view)
             assertDividers(
                 view,
                 expectedCount = case.columns,
@@ -161,6 +163,29 @@ class MediumWeatherWidgetTest {
                 ).outlineVariant.toArgb()
             )
             assertLayoutFits(view, case.widthDp, case.heightDp)
+        }
+    }
+
+    @Test
+    fun location_and_time_render_at_the_minimum_and_standard_production_sizes() {
+        listOf(260f to 110f, 320f to 144f).forEach { (widthDp, heightDp) ->
+            val view = render(availableSnapshot(), widthDp, heightDp)
+            val location = headerLocation(view, "Zaječar")
+
+            assertEquals("Zaječar", location.text.toString())
+            assertEquals("Weather for Zaječar", location.contentDescription)
+            assertText(view, "11:17")
+            assertEquals(
+                "Last weather update Wed, Oct 28, 2026 • 11:17",
+                findDescription(view, "Last weather update Wed, Oct 28, 2026 • 11:17")
+            )
+            assertFalse("date is not visible in the header", hasVisibleTextContaining(view, "Oct 28"))
+            assertFalse("update label is not visible in the header", hasVisibleTextContaining(view, "Updated"))
+            assertNoMediumRefreshAction(view)
+            assertTimestampFullyVisible(view, location)
+            assertHeaderMetadataDoesNotOverlap(view)
+            assertLayoutFits(view, widthDp, heightDp)
+            assertTextInkFits(view, "$widthDp×$heightDp dp at fontScale=1.0")
         }
     }
 
@@ -193,7 +218,7 @@ class MediumWeatherWidgetTest {
             assertText(view, "23°C")
             assertText(view, "Clear sky")
             assertText(view, "Zaječar")
-            assertRefreshTarget(view)
+            assertNoMediumRefreshAction(view)
             assertDividers(
                 view,
                 expectedCount = case.columns,
@@ -233,7 +258,7 @@ class MediumWeatherWidgetTest {
                     formattedTemperatureLength = "−123°F".length,
                     currentConditionLabelLength = "Clear sky".length,
                     apparentTemperatureLength = "124°F".length,
-                    headerTimestampTextLength = "Updated Oct 28 11:17".length
+                    headerTimestampTextLength = "11:17".length
                 ).hourlyColumnCount
                 val textViews = findViews(view).filterIsInstance<TextView>()
 
@@ -264,6 +289,7 @@ class MediumWeatherWidgetTest {
                     hourlyIconDescriptions
                 )
                 assertLayoutFits(view, widthDp, heightDp)
+                assertTimestampFullyVisible(view, headerLocation(view, "Zaječar"))
                 assertTextInkFits(view, "${widthDp}x${heightDp}dp at fontScale=$fontScale")
             }
         }
@@ -404,7 +430,7 @@ class MediumWeatherWidgetTest {
     }
 
     @Test
-    fun long_location_ellipsizes_without_hiding_medium_refresh_or_update_metadata() {
+    fun long_location_ellipsizes_and_keeps_its_full_name_and_fetch_timestamp_accessible() {
         val longName = "A very long location name that must leave room for controls"
         val view = render(
             availableSnapshot(locationName = longName),
@@ -412,13 +438,41 @@ class MediumWeatherWidgetTest {
             heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP
         )
         val location = findViews(view).filterIsInstance<TextView>()
-            .first { it.contentDescription == "Weather for $longName" }
+            .first { it.contentDescription?.toString()?.startsWith("Weather for $longName") == true }
 
         assertTrue("long location ends with an ellipsis", location.text.endsWith("…"))
-        assertTrue("update time remains visible when policy reserves its space", hasText(view, "Updated Oct 28 11:17"))
-        assertHeaderMetadataDoesNotOverlap(view, location)
-        assertRefreshTarget(view)
+        assertFalse("time is omitted when the location needs the full header", hasText(view, "11:17"))
+        assertTrue("full location stays accessible", location.contentDescription.toString().contains(longName))
+        assertTrue(
+            "full fetch date and time stay accessible when the visible time is omitted",
+            location.contentDescription.toString().contains("Last weather update Wed, Oct 28, 2026 • 11:17")
+        )
+        assertNoMediumRefreshAction(view)
         assertLayoutFits(view, WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP, WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP)
+    }
+
+    @Test
+    fun time_is_omitted_before_ellipsizing_a_location_that_fits_without_it() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val locationOnlyWidth = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP - 8f - 18f
+        val timeWidth = measureMediumTextWidthDp("11:17", 9f, 1f, context, mediumTypeface = false)
+        val locationWithTimeWidth = locationOnlyWidth - 4f - timeWidth
+        val longEnoughName = (1..80).asSequence()
+            .map { repetitions -> "Zaječar" + "x".repeat(repetitions) }
+            .first { name ->
+                measureMediumTextWidthDp(name, 14f, 1f, context, mediumTypeface = true) > locationWithTimeWidth
+            }
+        val nameWidth = measureMediumTextWidthDp(longEnoughName, 14f, 1f, context, mediumTypeface = true)
+        assertTrue("fixture fits without its time", nameWidth <= locationOnlyWidth)
+
+        val view = render(availableSnapshot(locationName = longEnoughName), 260f, 110f)
+        val location = headerLocation(view, longEnoughName)
+
+        assertEquals("location is not ellipsized when it fits by itself", longEnoughName, location.text.toString())
+        assertFalse("time yields before the full location is truncated", hasText(view, "11:17"))
+        assertTrue(location.contentDescription.toString().contains("Last weather update Wed, Oct 28, 2026 • 11:17"))
+        assertNoMediumRefreshAction(view)
+        assertLayoutFits(view, 260f, 110f)
     }
 
     @Test
@@ -478,7 +532,16 @@ class MediumWeatherWidgetTest {
         assertText(partial, "18°C")
         assertText(expired, "23°C")
         assertText(expired, "Clear sky")
-        assertText(expired, "Stale · Oct 28 11:17")
+        assertText(expired, "11:17")
+        assertFalse("medium header has no visible stale status word", hasVisibleTextContaining(expired, "Stale"))
+        // Non-text stale/updating visual-indicator assertions belong to the following 1.4 task.
+        assertTrue(
+            "stale status and fetch time remain accessible",
+            findViews(expired).any {
+                it.contentDescription?.toString() ==
+                    "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17"
+            }
+        )
         assertFalse("expired forecast contributes no hourly label", REFERENCE_HOURS.any { hasText(expired, it) })
         assertFalse("no future hours does not invent a probability", hasText(expired, "60%"))
         assertLayoutFits(partial, 400f, 160f)
@@ -515,7 +578,8 @@ class MediumWeatherWidgetTest {
                 .filter { it in REFERENCE_HOURS }
         )
         listOf("68°F", "64°F", "63°F", "61°F", "59°F", "—", "0%").forEach { assertText(view, it) }
-        assertText(view, "Stale · Oct 28 11:17")
+        assertText(view, "11:17")
+        assertFalse("failed refresh status is not rendered as header text", hasVisibleTextContaining(view, "Stale"))
         assertEquals(
             "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17",
             findDescription(view, "Stale weather. Last weather update Wed, Oct 28, 2026 • 11:17")
@@ -552,9 +616,11 @@ class MediumWeatherWidgetTest {
             assertText(view, "—")
             assertText(view, "100%")
             assertEquals("Rain probability unavailable", findDescription(view, "Rain probability unavailable"))
-            assertFalse(
-                "long update metadata yields at larger font scales",
-                findViews(view).any { it.contentDescription?.toString()?.startsWith("Last weather update") == true }
+            assertTrue(
+                "fetch date/time remains accessible at larger font scales",
+                findViews(view).any {
+                    it.contentDescription?.toString()?.contains("Last weather update Wed, Oct 28, 2026 • 11:17") == true
+                }
             )
             assertLayoutFits(
                 view,
@@ -677,22 +743,29 @@ class MediumWeatherWidgetTest {
             widthDp = widthDp,
             heightDp = heightDp,
             fontScale = root.resources.configuration.fontScale,
-            formattedTemperatureLength = 4
+            formattedTemperatureLength = 4,
+            textLineHeightMultiplier = mediumTextViewLineHeightMultiplier(
+                root.context,
+                root.resources.configuration.fontScale
+            )
         )
-        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
-        val refreshBounds = absoluteBounds(refresh, root)
         val expectedTopInsetPx = (policy.cardVerticalPaddingDp * density).roundToInt()
+        val headerContent = findViews(root).filterIsInstance<TextView>().first {
+            val description = it.contentDescription?.toString()
+            description?.startsWith("Weather for ") == true ||
+                description == "Open HluWeather to choose a location"
+        }
+        val headerBounds = absoluteBounds(headerContent, root)
         assertTrue(
             "medium header begins at its reduced vertical outer inset",
-            kotlin.math.abs(refreshBounds.top - expectedTopInsetPx) <= 1
+            headerBounds.top >= expectedTopInsetPx
         )
         assertTrue(
-            "medium header retains the policy's 48dp height inside the outer insets",
-            refreshBounds.bottom - refreshBounds.top >=
-                WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP * density - 1f
+            "header text fits within the measured header height",
+            headerBounds.bottom <= (policy.cardVerticalPaddingDp + policy.headerHeightDp) * density + 1f
         )
         val betweenHeaderAndBodyY = (
-            policy.cardVerticalPaddingDp + WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP +
+            policy.cardVerticalPaddingDp + policy.headerHeightDp +
                 policy.headerToBodyGapDp / 2f
             ) * density
         assertEquals(
@@ -853,26 +926,44 @@ class MediumWeatherWidgetTest {
         assertEquals("one subtle vertical divider per visible hour", expectedCount, dividers.size)
     }
 
-    private fun assertHeaderMetadataDoesNotOverlap(
-        root: View,
-        location: TextView = findViews(root).filterIsInstance<TextView>()
-            .first { it.contentDescription == "Weather for Zaječar" }
-    ) {
-        val update = findViews(root).filterIsInstance<TextView>()
-            .first { it.contentDescription?.toString()?.startsWith("Last weather update") == true }
-        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
-
-        assertTrue("location and update time do not overlap", absoluteBounds(location, root).right <= absoluteBounds(update, root).left)
-        assertTrue("update time does not overlap the refresh control", absoluteBounds(update, root).right <= absoluteBounds(refresh, root).left)
+    private fun assertHeaderMetadataDoesNotOverlap(root: View) {
+        val location = headerLocation(root, "Zaječar")
+        val update = findText(root, "11:17")
+        assertTrue(
+            "location and update time do not overlap",
+            absoluteBounds(location, root).right <= absoluteBounds(update, root).left
+        )
     }
 
-    private fun assertRefreshTarget(root: View) {
-        val density = root.resources.displayMetrics.density
-        val refresh = findViews(root).first { it.contentDescription == "Refresh weather" }
-        val bounds = absoluteBounds(refresh, root)
-        assertTrue("medium refresh target is at least 48 dp", refresh.width >= 48f * density - 1f)
-        assertTrue("medium refresh stays inside the right card edge", bounds.right <= root.width)
-        assertTrue("medium refresh remains in the header", bounds.top < 60f * density)
+    private fun assertTimestampFullyVisible(root: View, location: TextView) {
+        val timestamp = findText(root, "11:17")
+        val usableWidth = timestamp.width - timestamp.compoundPaddingLeft - timestamp.compoundPaddingRight
+        val measuredTextWidth = timestamp.paint.measureText(timestamp.text.toString())
+        assertEquals("timestamp is not end-ellipsized", 0, timestamp.layout.getEllipsisCount(0))
+        assertTrue(
+            "timestamp text fits inside its real TextView content width " +
+                "(measured=$measuredTextWidth, usable=$usableWidth, bounds=${absoluteBounds(timestamp, root)})",
+            measuredTextWidth <= usableWidth + 1f
+        )
+        val timestampTextStart = absoluteBounds(timestamp, root).left + timestamp.compoundPaddingLeft +
+            timestamp.layout.getLineLeft(0).roundToInt()
+        val locationEnd = absoluteBounds(location, root).right
+        assertTrue(
+            "timestamp slot includes its 4dp start padding " +
+                "(gap=${timestampTextStart - locationEnd}px)",
+            timestampTextStart - locationEnd >= 4f * root.resources.displayMetrics.density - 1f
+        )
+    }
+
+    private fun headerLocation(root: View, fullName: String): TextView = findViews(root)
+        .filterIsInstance<TextView>()
+        .first { it.contentDescription?.toString()?.startsWith("Weather for $fullName") == true }
+
+    private fun assertNoMediumRefreshAction(root: View) {
+        assertFalse(
+            "medium presentation has no manual refresh action",
+            findViews(root).any { it.contentDescription == "Refresh weather" }
+        )
     }
 
     private fun assertCurrentTemperatureColor(root: View, dark: Boolean) {
@@ -933,6 +1024,10 @@ class MediumWeatherWidgetTest {
     private fun hasText(root: View, expected: String): Boolean = findViews(root)
         .filterIsInstance<TextView>()
         .any { it.text.toString() == expected }
+
+    private fun hasVisibleTextContaining(root: View, expected: String): Boolean = findViews(root)
+        .filterIsInstance<TextView>()
+        .any { it.visibility == View.VISIBLE && it.text.toString().contains(expected) }
 
     private fun visibleProbabilities(root: View): List<String> = findViews(root)
         .filterIsInstance<TextView>()

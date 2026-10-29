@@ -100,7 +100,26 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
             current.hours.maxOfOrNull { it.temperatureText.length } ?: 0
         )
     } ?: DEFAULT_TEMPERATURE_LENGTH
-    val headerText = available?.let { it.weather.mediumHeaderUpdateText(it.refresh) }
+    val headerText = available?.weather?.lastWeatherUpdateLocalTimeText
+    val locationName = snapshot.mediumLocationNameOrNull()
+    val fullLocationTextWidthDp = locationName?.let { name ->
+        measureMediumTextWidthDp(
+            text = name,
+            fontSizeSp = LOCATION_FONT_SIZE_SP,
+            fontScale = fontScale,
+            context = context,
+            mediumTypeface = true
+        )
+    }
+    val headerTimeTextWidthDp = headerText?.let { text ->
+        measureMediumTextWidthDp(
+            text = text,
+            fontSizeSp = MEDIUM_HEADER_TIME_FONT_SIZE_SP,
+            fontScale = fontScale,
+            context = context,
+            mediumTypeface = false
+        )
+    }
     val policy = WeatherWidgetSizePolicy.medium(
         widthDp = size.width.value,
         heightDp = size.height.value,
@@ -109,28 +128,43 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         currentConditionLabelLength = weather?.conditionLabel?.length ?: DEFAULT_CONDITION_LENGTH,
         apparentTemperatureLength = weather?.apparentTemperatureText?.length,
         headerTimestampTextLength = headerText?.length ?: 0,
+        fullLocationTextWidthDp = fullLocationTextWidthDp,
+        headerTimeTextWidthDp = headerTimeTextWidthDp,
         textLineHeightMultiplier = textLineHeightMultiplier
     )
-    val locationName = snapshot.mediumLocationNameOrNull()
     val displayLocationName = locationName?.let { name ->
         ellipsizeMediumLocationName(name, policy.headerLocationTextWidthDp, context)
+    }
+    val updateDescription = available?.let { current ->
+        buildString {
+            if (current.weather.isStale || current.refresh.lastAttemptFailed) append("Stale weather. ")
+            append("Last weather update ${current.weather.lastWeatherUpdateText}")
+        }
+    }
+    val locationDescription = locationName?.let { name ->
+        buildString {
+            append("Weather for $name")
+            if (available != null && !policy.showHeaderTimestamp) {
+                updateDescription?.let {
+                    append(". ")
+                    append(it)
+                }
+            }
+        }
     }
 
     WeatherWidgetCard(
         snapshot = snapshot,
         locationDisplayName = displayLocationName,
+        locationContentDescription = locationDescription,
         headerUpdateText = headerText.takeIf { policy.showHeaderTimestamp },
         headerUpdateTextWidthDp = policy.headerTimestampTextWidthDp.takeIf { policy.showHeaderTimestamp },
+        headerHeightDp = policy.headerHeightDp,
+        showRefreshAction = false,
         verticalPaddingDp = policy.cardVerticalPaddingDp,
         horizontalPaddingDp = policy.cardHorizontalPaddingDp,
         drawCardSurface = false,
-        headerUpdateContentDescription = available?.let { current ->
-            val currentWeather = current.weather
-            buildString {
-                if (currentWeather.isStale || current.refresh.lastAttemptFailed) append("Stale weather. ")
-                append("Last weather update ${currentWeather.lastWeatherUpdateText}")
-            }
-        }
+        headerUpdateContentDescription = updateDescription
     ) { palette ->
         Column(
             modifier = GlanceModifier.fillMaxWidth().padding(top = policy.headerToBodyGapDp.dp)
@@ -259,20 +293,28 @@ private fun WeatherWidgetSnapshot.mediumLocationNameOrNull(): String? = when (th
     is WeatherWidgetSnapshot.Available -> weather.locationName
 }
 
-private fun WeatherWidgetState.mediumHeaderUpdateText(refresh: WidgetRefreshStatus): String = buildString {
-    append(
-        when {
-            isStale || refresh.lastAttemptFailed -> "Stale · "
-            refresh.isRefreshing -> "Updating · "
-            else -> "Updated "
-        }
-    )
-    append(lastWeatherUpdateCompactText)
-}
-
 /** Glance Text has no overflow setting; measure and end-ellipsize to the reserved header width. */
 private fun ellipsizeMediumLocationName(name: String, widthDp: Float, context: Context): String =
     ellipsizeMediumText(name, widthDp, LOCATION_FONT_SIZE_SP, context.resources.configuration.fontScale, context)
+
+internal fun measureMediumTextWidthDp(
+    text: String,
+    fontSizeSp: Float,
+    fontScale: Float,
+    context: Context,
+    mediumTypeface: Boolean
+): Float {
+    val density = context.resources.displayMetrics.density
+    val scale = fontScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = fontSizeSp * density * scale
+        typeface = Typeface.create(
+            if (mediumTypeface) "sans-serif-medium" else "sans-serif",
+            Typeface.NORMAL
+        )
+    }
+    return paint.measureText(text) / density
+}
 
 private fun ellipsizeMediumText(
     text: String,
@@ -295,7 +337,7 @@ private fun ellipsizeMediumText(
 }
 
 /** Measures the actual single-line TextView line box, including Android's font padding. */
-private fun mediumTextViewLineHeightMultiplier(context: Context, fontScale: Float): Float {
+internal fun mediumTextViewLineHeightMultiplier(context: Context, fontScale: Float): Float {
     val fontSizeSp = 12f
     val density = context.resources.displayMetrics.density
     val textView = TextView(context).apply {
@@ -322,4 +364,5 @@ private const val DEFAULT_CONDITION_LENGTH = 13
 private const val MEDIUM_CELL_PADDING_DP = 4f
 private const val MEDIUM_SECONDARY_GAP_DP = 2f
 private const val MEDIUM_DIVIDER_WIDTH_DP = 1f
+private const val MEDIUM_HEADER_TIME_FONT_SIZE_SP = 9f
 private const val LOCATION_FONT_SIZE_SP = 14f

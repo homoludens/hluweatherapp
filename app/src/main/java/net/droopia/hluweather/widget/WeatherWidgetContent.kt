@@ -56,6 +56,8 @@ import net.droopia.hluweather.ui.theme.HluColors
 import net.droopia.hluweather.ui.theme.LightHluColors
 import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
 
+internal const val WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+
 /** Palette resolved from the saved preference and system configuration without touching a window. */
 data class WeatherWidgetPalette internal constructor(
     val weatherColors: HluColors,
@@ -72,9 +74,12 @@ fun WeatherWidgetCard(
     snapshot: WeatherWidgetSnapshot,
     modifier: GlanceModifier = GlanceModifier,
     locationDisplayName: String? = null,
+    locationContentDescription: String? = null,
     headerUpdateText: String? = null,
     headerUpdateContentDescription: String? = null,
     headerUpdateTextWidthDp: Float? = null,
+    headerHeightDp: Float? = null,
+    showRefreshAction: Boolean = true,
     verticalPaddingDp: Float = 8f,
     horizontalPaddingDp: Float = 8f,
     drawCardSurface: Boolean = true,
@@ -118,15 +123,18 @@ fun WeatherWidgetCard(
             isRefreshing = isRefreshing,
             palette = palette,
             displayLocationName = locationDisplayName,
+            locationContentDescription = locationContentDescription,
             updateText = headerUpdateText,
             updateContentDescription = headerUpdateContentDescription,
-            updateTextWidthDp = headerUpdateTextWidthDp
+            updateTextWidthDp = headerUpdateTextWidthDp,
+            headerHeightDp = headerHeightDp,
+            showRefreshAction = showRefreshAction
         )
         content(palette)
     }
 }
 
-/** Location and refresh row shared by both widgets. The refresh target remains its own action. */
+/** Shared location header; the optional refresh target remains its own action. */
 @Composable
 fun WeatherWidgetHeader(
     locationName: String?,
@@ -134,14 +142,19 @@ fun WeatherWidgetHeader(
     palette: WeatherWidgetPalette,
     modifier: GlanceModifier = GlanceModifier,
     displayLocationName: String? = null,
+    locationContentDescription: String? = null,
     updateText: String? = null,
     updateContentDescription: String? = null,
-    updateTextWidthDp: Float? = null
+    updateTextWidthDp: Float? = null,
+    headerHeightDp: Float? = null,
+    showRefreshAction: Boolean = true
 ) {
     val context = LocalContext.current
     val label = displayLocationName ?: locationName ?: "Choose a location"
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(headerHeightDp?.let { GlanceModifier.height(it.dp) } ?: GlanceModifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
@@ -164,7 +177,8 @@ fun WeatherWidgetHeader(
                 modifier = GlanceModifier
                     .defaultWeight()
                     .fillMaxWidth(),
-                contentDescription = locationName?.let { "Weather for $it" }
+                contentDescription = locationContentDescription
+                    ?: locationName?.let { "Weather for $it" }
                     ?: "Open HluWeather to choose a location"
             )
         }
@@ -175,15 +189,12 @@ fun WeatherWidgetHeader(
                 color = palette.secondaryText,
                 fontSizeSp = HEADER_UPDATE_FONT_SIZE_SP,
                 modifier = GlanceModifier
-                    .then(
-                        updateTextWidthDp?.let { GlanceModifier.width(it.dp) }
-                            ?: GlanceModifier
-                    )
-                    .padding(horizontal = 4.dp),
+                    .padding(start = 4.dp)
+                    .then(updateTextWidthDp?.let { GlanceModifier.width(it.dp) } ?: GlanceModifier),
                 contentDescription = updateContentDescription ?: updateText
             )
         }
-        WeatherWidgetRefreshAction(palette, isRefreshing)
+        if (showRefreshAction) WeatherWidgetRefreshAction(palette, isRefreshing)
     }
 }
 
@@ -476,7 +487,7 @@ private fun WeatherWidgetAdaptiveText(
     val fontScale = context.resources.configuration.fontScale
         .takeIf { it.isFinite() && it > 0f } ?: 1f
     val lineBoxHeightDp = (fontSizeSp.coerceAtLeast(0.1f) * fontScale *
-        lineHeightMultiplier.coerceAtLeast(MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER))
+        lineHeightMultiplier.coerceAtLeast(WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER))
         .coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
     val remoteViews = RemoteViews(context.packageName, role.layoutId).apply {
         setTextViewText(R.id.weather_widget_adaptive_text, text)
@@ -541,8 +552,7 @@ private const val LOCATION_FONT_SIZE_SP = 14f
 private const val HEADER_UPDATE_FONT_SIZE_SP = 9f
 private const val EMPTY_STATE_FONT_SIZE_SP = 13f
 private const val STATUS_FONT_SIZE_SP = 10f
-private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
-private const val MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
 private const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
 
 private fun openMainWeatherAction(context: Context): Action = actionStartActivity(

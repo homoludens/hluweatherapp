@@ -36,7 +36,7 @@ data class MediumWeatherWidgetSize(
     val currentWeatherFraction: Float,
     val currentWeatherWidthDp: Float,
     val hourlyColumnWidthDp: Float,
-    val refreshTouchTargetDp: Int,
+    val headerHeightDp: Float,
     val showHeaderTimestamp: Boolean,
     val headerLocationTextWidthDp: Float,
     val headerTimestampTextWidthDp: Float,
@@ -102,7 +102,9 @@ object WeatherWidgetSizePolicy {
     private const val MEDIUM_MIN_HEADER_TO_BODY_GAP_DP = 2f
     private const val MEDIUM_HEADER_GAP_DP = 4f
     private const val MEDIUM_HEADER_TIMESTAMP_FONT_SP = 9f
-    private const val MEDIUM_MIN_LOCATION_TEXT_WIDTH_DP = 40f
+    private const val MEDIUM_LOCATION_FONT_SP = 14f
+    private const val MEDIUM_LOCATION_ICON_SIZE_DP = 18f
+    private const val MEDIUM_HEADER_TEXT_MIN_HEIGHT_DP = 10f
     private const val HOURLY_DROPLET_SIZE_DP = 8f
     private const val HOURLY_DROPLET_GAP_DP = 2f
     private const val AVERAGE_TEMPERATURE_GLYPH_WIDTH = 0.62f
@@ -223,6 +225,8 @@ object WeatherWidgetSizePolicy {
         currentConditionLabelLength: Int = 13,
         apparentTemperatureLength: Int? = null,
         headerTimestampTextLength: Int = 0,
+        fullLocationTextWidthDp: Float? = null,
+        headerTimeTextWidthDp: Float? = null,
         textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER
     ): MediumWeatherWidgetSize {
         val width = widthDp.nonNegative()
@@ -263,22 +267,30 @@ object WeatherWidgetSizePolicy {
             ).coerceAtLeast(0f)
         val hourlyColumnWidth = hourlyWidth / columnCount
         val hourlyTextWidth = (hourlyColumnWidth - MEDIUM_CELL_PADDING_DP * 2f).coerceAtLeast(0f)
-        val headerTimestampWidth = headerTimestampTextLength.coerceAtLeast(0) *
+        val headerTimestampWidth = headerTimeTextWidthDp?.nonNegative() ?: headerTimestampTextLength.coerceAtLeast(0) *
             AVERAGE_HEADER_GLYPH_WIDTH * MEDIUM_HEADER_TIMESTAMP_FONT_SP * scale
-        val headerLocationWidthWithTimestamp = (
-            width - MEDIUM_CARD_HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP -
-                MEDIUM_HEADER_GAP_DP * 2f - headerTimestampWidth
+        val headerTextAvailableWidth = (
+            width - MEDIUM_CARD_HORIZONTAL_PADDING_DP * 2f - MEDIUM_LOCATION_ICON_SIZE_DP
             ).coerceAtLeast(0f)
-        val showHeaderTimestamp = headerTimestampTextLength > 0 &&
-            headerLocationWidthWithTimestamp >= MEDIUM_MIN_LOCATION_TEXT_WIDTH_DP
+        val headerLocationWidthWithTimestamp = (
+            headerTextAvailableWidth - MEDIUM_HEADER_GAP_DP - headerTimestampWidth
+            ).coerceAtLeast(0f)
+        val headerLocationRequirement = fullLocationTextWidthDp?.nonNegative() ?: 0f
+        val showHeaderTimestamp = headerTimestampWidth > 0f &&
+            headerLocationRequirement <= headerLocationWidthWithTimestamp
         val headerLocationWidth = if (showHeaderTimestamp) {
             headerLocationWidthWithTimestamp
         } else {
-            (width - MEDIUM_CARD_HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP)
-                .coerceAtLeast(0f)
+            headerTextAvailableWidth
         }
+        val headerTextHeight = max(
+            MEDIUM_HEADER_TEXT_MIN_HEIGHT_DP,
+            MEDIUM_LOCATION_FONT_SP * scale *
+                textLineHeightMultiplier.coerceAtLeast(WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER)
+        )
+        val headerHeight = max(MEDIUM_LOCATION_ICON_SIZE_DP, headerTextHeight)
         val bodyHeight = (
-            height - cardVerticalPadding * 2f - HEADER_HEIGHT_DP - headerToBodyGap
+            height - cardVerticalPadding * 2f - headerHeight - headerToBodyGap
             ).coerceAtLeast(0f)
         val temperatureLength = formattedTemperatureLength.coerceAtLeast(1)
 
@@ -383,7 +395,7 @@ object WeatherWidgetSizePolicy {
             currentWeatherFraction = currentFraction,
             currentWeatherWidthDp = currentWidth,
             hourlyColumnWidthDp = hourlyColumnWidth,
-            refreshTouchTargetDp = REFRESH_TOUCH_TARGET_DP,
+            headerHeightDp = headerHeight,
             showHeaderTimestamp = showHeaderTimestamp,
             headerLocationTextWidthDp = headerLocationWidth,
             headerTimestampTextWidthDp = if (showHeaderTimestamp) headerTimestampWidth else 0f,

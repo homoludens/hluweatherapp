@@ -141,7 +141,6 @@ class WeatherWidgetSizePolicyTest {
             assertEquals("column count for $case", case.columns, policy.hourlyColumnCount)
             assertEquals("size class for $case", case.sizeClass, policy.sizeClass)
             assertTrue(policy.hourlyColumnCount in 3..5)
-            assertEquals(WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP, policy.refreshTouchTargetDp)
             assertEquals(0.33f, policy.currentWeatherFraction, EPSILON)
             assertTrue(policy.currentWeatherWidthDp < policy.hourlyColumnWidthDp * policy.hourlyColumnCount)
         }
@@ -209,34 +208,68 @@ class WeatherWidgetSizePolicyTest {
         assertEquals(4f, compact.cardHorizontalPaddingDp, EPSILON)
         assertEquals(2f, compact.cardVerticalPaddingDp, EPSILON)
         assertEquals(2f, compact.headerToBodyGapDp, EPSILON)
-        assertEquals(56f, compact.bodyHeightDp, EPSILON)
+        assertEquals(14f * WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER, compact.headerHeightDp, EPSILON)
+        assertEquals(85.8f, compact.bodyHeightDp, EPSILON)
         assertEquals(4f, normal.cardHorizontalPaddingDp, EPSILON)
         assertEquals(4f, normal.cardVerticalPaddingDp, EPSILON)
         assertEquals(4f, normal.headerToBodyGapDp, EPSILON)
-        assertEquals(84f, normal.bodyHeightDp, EPSILON)
+        assertEquals(14f * WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER, normal.headerHeightDp, EPSILON)
+        assertEquals(113.8f, normal.bodyHeightDp, EPSILON)
     }
 
     @Test
-    fun medium_policy_shows_compact_update_time_only_when_header_and_location_still_fit() {
-        val minimum = WeatherWidgetSizePolicy.medium(
+    fun medium_policy_omits_time_before_truncating_a_location_that_fits_without_it() {
+        val nameAndTimeFit = WeatherWidgetSizePolicy.medium(
             widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
             heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
             fontScale = 1f,
             formattedTemperatureLength = 4,
-            headerTimestampTextLength = 20
+            fullLocationTextWidthDp = 190f,
+            headerTimeTextWidthDp = 26f
         )
-        val largeFontMinimum = WeatherWidgetSizePolicy.medium(
+        val locationAloneFits = WeatherWidgetSizePolicy.medium(
             widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
             heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
-            fontScale = 2f,
+            fontScale = 1f,
             formattedTemperatureLength = 4,
-            headerTimestampTextLength = 20
+            fullLocationTextWidthDp = 210f,
+            headerTimeTextWidthDp = 26f
         )
 
-        assertTrue(minimum.showHeaderTimestamp)
-        assertTrue(minimum.headerLocationTextWidthDp >= 40f)
-        assertFalse(largeFontMinimum.showHeaderTimestamp)
-        assertTrue(largeFontMinimum.headerLocationTextWidthDp >= 40f)
+        assertTrue(nameAndTimeFit.showHeaderTimestamp)
+        assertTrue(nameAndTimeFit.headerLocationTextWidthDp >= 190f)
+        assertFalse(locationAloneFits.showHeaderTimestamp)
+        assertTrue(locationAloneFits.headerLocationTextWidthDp >= 210f)
+        assertEquals(0f, locationAloneFits.headerTimestampTextWidthDp, EPSILON)
+    }
+
+    @Test
+    fun medium_policy_header_height_matches_adaptive_text_minimum_at_normal_and_130_percent_scale() {
+        val lowMeasuredMultiplier = 1.2f
+        val cases = listOf(
+            Triple(260f, 110f, 1f),
+            Triple(320f, 144f, 1.3f)
+        )
+
+        cases.forEach { (widthDp, heightDp, fontScale) ->
+            val policy = WeatherWidgetSizePolicy.medium(
+                widthDp = widthDp,
+                heightDp = heightDp,
+                fontScale = fontScale,
+                formattedTemperatureLength = 4,
+                textLineHeightMultiplier = lowMeasuredMultiplier
+            )
+            val expectedHeaderHeight = maxOf(
+                18f,
+                14f * fontScale * WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
+            )
+            val expectedBodyHeight = heightDp - policy.cardVerticalPaddingDp * 2f -
+                expectedHeaderHeight - policy.headerToBodyGapDp
+
+            assertTrue("fixture exercises the sub-1.3 measured multiplier", lowMeasuredMultiplier < 1.3f)
+            assertEquals(expectedHeaderHeight, policy.headerHeightDp, EPSILON)
+            assertEquals(expectedBodyHeight, policy.bodyHeightDp, EPSILON)
+        }
     }
 
     private data class SmallCase(

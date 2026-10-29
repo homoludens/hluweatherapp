@@ -76,14 +76,17 @@ class RefreshWeatherActionTest {
     }
 
     @Test
-    fun translated_refresh_clicks_in_both_sizes_run_the_callback_without_opening_an_activity() {
+    fun small_refresh_action_remains_available_while_medium_has_no_manual_refresh_action() {
         val small = renderSmallActionWidget(widgetActionSnapshot(), 200f, 160f)
         val medium = renderMediumActionWidget(widgetActionSnapshot(), 320f, 144f)
 
         repeat(5) {
             clickDescription(small, "Refresh weather")
         }
-        clickDescription(medium, "Refresh weather")
+        assertTrue(
+            "medium widget has no refresh target",
+            findViews(medium).none { it.contentDescription == "Refresh weather" }
+        )
         shadowOf(android.os.Looper.getMainLooper()).idle()
 
         val requests = awaitManualRefreshWork()

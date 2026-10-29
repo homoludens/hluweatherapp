@@ -86,20 +86,22 @@ class WeatherWidgetSessionTest {
                 session.awaitText("23°C")
                 val request = f.widgets.resolveRequest()!!
                 val attempt = f.widgets.beginRefresh(request)
-                session.awaitText(if (medium) "Updating" else "Refreshing")
+                if (!medium) session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, attempt, ForecastLoad(f.forecast(f.first, 23.0), false))
-                session.awaitText(if (medium) "Updated" else "23°C", absent = if (medium) "Updating" else "Refreshing")
+                if (!medium) session.awaitText("23°C", absent = "Refreshing")
                 val failed = f.widgets.beginRefresh(request)
-                session.awaitText(if (medium) "Updating" else "Refreshing")
+                if (!medium) session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, failed, ForecastLoad(f.forecast(f.first, 23.0), true))
-                session.awaitText(if (medium) "Stale" else "Stale weather")
+                if (medium) session.awaitAccessibleStaleStatus(true) else session.awaitText("Stale weather")
                 val recovery = f.widgets.beginRefresh(request)
+                if (!medium) session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, recovery, ForecastLoad(f.forecast(f.first, 23.0), false))
-                session.awaitText(if (medium) "Updated" else "23°C", absent = "Stale")
+                if (medium) session.awaitAccessibleStaleStatus(false)
+                else session.awaitText("23°C", absent = "Stale")
                 val failure = f.widgets.beginRefresh(request)
-                session.awaitText(if (medium) "Updating" else "Refreshing")
+                if (!medium) session.awaitText("Refreshing")
                 f.widgets.finishRefresh(request, failure, null)
-                session.awaitText(if (medium) "Stale" else "Stale weather")
+                if (medium) session.awaitAccessibleStaleStatus(true) else session.awaitText("Stale weather")
                 f.settings.value = f.settings.value.copy(temperatureUnit = TemperatureUnit.FAHRENHEIT, themeMode = ThemeMode.DARK)
                 val dark = session.awaitText("73°F")
                 val temperature = texts(dark).first { it.text.toString() == "73°F" }
@@ -291,6 +293,19 @@ class WeatherWidgetSessionTest {
             val text = texts(view).map { it.text.toString() }
             text.any { it.contains(expected) } && (absent == null || text.none { it.contains(absent) })
         }
+
+        suspend fun awaitAccessibleStaleStatus(stale: Boolean): View = awaitView { view ->
+            val descriptions = buildList {
+                fun collect(current: View) {
+                    current.contentDescription?.toString()?.let { add(it) }
+                    if (current is ViewGroup) {
+                        for (index in 0 until current.childCount) collect(current.getChildAt(index))
+                    }
+                }
+                collect(view)
+            }
+            descriptions.any { it.contains("Stale weather") } == stale
+        }
     }
 
     private fun configuration(
@@ -318,8 +333,16 @@ class WeatherWidgetSessionTest {
         assertRenderedContentFitsWithoutOverlap(root)
 
         val density = root.resources.displayMetrics.density
-        val refresh = allViews(root).first { it.contentDescription == "Refresh weather" }
-        assertTrue("refresh target remains at least 48dp", refresh.width >= 48f * density - 1f)
+        val refresh = allViews(root).firstOrNull { it.contentDescription == "Refresh weather" }
+        if (medium) {
+            assertNull("medium widget has no manual refresh action", refresh)
+        } else {
+            assertNotNull("small widget keeps its refresh action", refresh)
+            assertTrue(
+                "small refresh target remains at least 48dp",
+                requireNotNull(refresh).width >= 48f * density - 1f
+            )
+        }
         val expectedIconSizeDp = if (medium) {
             WeatherWidgetSizePolicy.medium(
                 widthDp = size.width.value,
