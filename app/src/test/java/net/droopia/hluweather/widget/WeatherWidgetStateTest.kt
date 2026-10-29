@@ -106,10 +106,12 @@ class WeatherWidgetStateTest {
     }
 
     @Test
-    fun selects_future_hours_by_instant_sorts_them_and_caps_at_five_across_midnight() {
+    fun selects_future_hours_by_instant_sorts_them_and_caps_at_six_across_midnight() {
+        val seventhFutureHour = Instant.parse("2026-10-29T03:00:00Z")
         val forecast = forecast(
             fetchedAt = Instant.parse("2026-10-28T20:00:00Z"),
             hours = listOf(
+                hour(time = seventhFutureHour),
                 hour(time = Instant.parse("2026-10-29T02:00:00Z")),
                 hour(time = Instant.parse("2026-10-28T20:00:00Z")),
                 hour(time = Instant.parse("2026-10-29T01:00:00Z")),
@@ -132,11 +134,16 @@ class WeatherWidgetStateTest {
                 Instant.parse("2026-10-28T22:00:00Z"),
                 Instant.parse("2026-10-28T23:00:00Z"),
                 Instant.parse("2026-10-29T00:00:00Z"),
-                Instant.parse("2026-10-29T01:00:00Z")
+                Instant.parse("2026-10-29T01:00:00Z"),
+                Instant.parse("2026-10-29T02:00:00Z")
             ),
             state.hours.map { it.time }
         )
-        assertEquals(listOf("22:00", "23:00", "00:00", "01:00", "02:00"), state.hours.map { it.timeText })
+        assertEquals(
+            listOf("22:00", "23:00", "00:00", "01:00", "02:00", "03:00"),
+            state.hours.map { it.timeText }
+        )
+        assertFalse(state.hours.any { it.time == seventhFutureHour })
     }
 
     @Test
@@ -154,6 +161,7 @@ class WeatherWidgetStateTest {
 
         assertEquals("23:00", state.hours.single().timeText)
         assertEquals("Wed, Oct 28, 2026 • 22:17", state.lastWeatherUpdateText)
+        assertEquals("22:17", state.lastWeatherUpdateLocalTimeText)
         assertEquals("Oct 28 22:17", state.lastWeatherUpdateCompactText)
         assertEquals(fetchedAt, state.lastWeatherUpdate)
     }
@@ -163,6 +171,7 @@ class WeatherWidgetStateTest {
         val repeated = ForecastLoad(
             forecast(
                 timezone = "Europe/Belgrade",
+                fetchedAt = Instant.parse("2026-10-25T00:30:00Z"),
                 hours = listOf(
                     hour(time = Instant.parse("2026-10-25T01:30:00Z")),
                     hour(time = Instant.parse("2026-10-25T00:30:00Z")),
@@ -176,6 +185,7 @@ class WeatherWidgetStateTest {
         val skipped = ForecastLoad(
             forecast(
                 timezone = "Europe/Belgrade",
+                fetchedAt = Instant.parse("2026-03-29T00:30:00Z"),
                 hours = listOf(
                     hour(time = Instant.parse("2026-03-29T01:30:00Z")),
                     hour(time = Instant.parse("2026-03-29T00:30:00Z")),
@@ -192,11 +202,13 @@ class WeatherWidgetStateTest {
             repeated.hours.map { it.time }
         )
         assertEquals(listOf("02:30", "02:00", "02:30"), repeated.hours.map { it.timeText })
+        assertEquals("02:30", repeated.lastWeatherUpdateLocalTimeText)
         assertEquals(
             listOf(Instant.parse("2026-03-29T00:30:00Z"), Instant.parse("2026-03-29T01:00:00Z"), Instant.parse("2026-03-29T01:30:00Z")),
             skipped.hours.map { it.time }
         )
         assertEquals(listOf("01:30", "03:00", "03:30"), skipped.hours.map { it.timeText })
+        assertEquals("01:30", skipped.lastWeatherUpdateLocalTimeText)
     }
 
     @Test
@@ -217,13 +229,15 @@ class WeatherWidgetStateTest {
     }
 
     @Test
-    fun fewer_future_hours_are_not_repeated_and_expired_stale_cache_keeps_original_timestamp() {
+    fun partial_or_expired_stale_cache_keeps_fetch_time_instead_of_refresh_attempt_time() {
         val fetchedAt = Instant.parse("2026-10-28T10:17:00Z")
+        // This later time represents a refresh attempt; it must not replace the cached fetch time.
+        val refreshAttemptAt = Instant.parse("2026-10-28T20:00:00Z")
         val hours = listOf(
             hour(time = Instant.parse("2026-10-28T21:00:00Z")),
             hour(time = Instant.parse("2026-10-28T23:00:00Z"))
         )
-        val clock = fixedClock(Instant.parse("2026-10-28T20:00:00Z"))
+        val clock = fixedClock(refreshAttemptAt)
         val partial = ForecastLoad(forecast(fetchedAt = fetchedAt, hours = hours), isStale = true)
             .toWeatherWidgetState(settings = PersistedSettings(), clock = clock)
         val expired = ForecastLoad(
@@ -238,11 +252,14 @@ class WeatherWidgetStateTest {
         assertEquals(listOf("22:00", "00:00"), partial.hours.map { it.timeText })
         assertEquals(fetchedAt, partial.lastWeatherUpdate)
         assertEquals("Wed, Oct 28, 2026 • 11:17", partial.lastWeatherUpdateText)
+        assertEquals("11:17", partial.lastWeatherUpdateLocalTimeText)
         assertEquals("Oct 28 11:17", partial.lastWeatherUpdateCompactText)
+        assertFalse("21:00" == partial.lastWeatherUpdateLocalTimeText)
         assertTrue(partial.isStale)
         assertTrue(expired.hours.isEmpty())
         assertEquals("22°C", expired.temperatureText)
         assertEquals(fetchedAt, expired.lastWeatherUpdate)
+        assertEquals("11:17", expired.lastWeatherUpdateLocalTimeText)
         assertTrue(expired.isStale)
     }
 

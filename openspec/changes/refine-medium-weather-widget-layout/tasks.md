@@ -1,0 +1,25 @@
+## 1. Medium presentation and weather state
+
+- [x] 1.1 [low] Extend the widget forecast adapter to retain up to six future hours and expose the forecast-location-local fetch time without replacing the full accessible timestamp; verify `WeatherWidgetStateTest` covers chronological ordering, expired/partial hours, midnight/DST, missing probability, and fetch time versus refresh-attempt time.
+  - Verification: `:app:testGoogleDebugUnitTest --tests 'net.droopia.hluweather.widget.WeatherWidgetStateTest'` passed (9 tests); the out-of-order seventh future hour is explicitly excluded. Implemented and verified with `openai/gpt-6-luna#max`.
+- [ ] 1.2 [low] Make the medium surface fully transparent and reduce only its outer insets, including a medium-only transparent initial layout and transparent picker layout/fallback image; verify rendered available, no-weather, and no-location states in both themes, resource alpha, retained internal gaps, and unchanged small-widget backgrounds and previews.
+- [ ] 1.3 [low] Replace the medium header's date, update label, and refresh button with location-prioritized time-only metadata; verify production renders at 260×110 and 320×144 dp show full `Zaječar` and `11:17`, long names truncate gracefully, full location/date/time descriptions remain accessible, medium card/location taps open the app, and the small refresh control remains available.
+- [ ] 1.4 [low] Preserve non-text, non-clickable stale/failure and in-progress indicators with meaningful accessible descriptions, including when the timestamp is hidden; verify cached weather and its actual timestamp survive failure, simultaneous stale/updating is distinguishable, empty states remain actionable, automatic updates remain cache-first, and no medium refresh action or extra weather request is introduced.
+
+## 2. Responsive hourly layout
+
+- [ ] 2.1 [high] Implement the medium width/height/font-aware candidate selection for up to six real future hours while preserving current-weather and internal spacing priorities; verify policy and production RemoteViews tests show six complete columns at 400×160 dp for the specified normal-scale data, choose the greatest fitting count, fall back for long signed temperatures and larger fonts, and never overlap, clip, scroll, or invent hours.
+- [ ] 2.2 [low] Center hourly time labels in their actual columns using the appropriate adaptive-text role; verify translated medium renders measure centered labels across compact, normal, and six-column layouts without changing their chronology or accessibility descriptions.
+- [ ] 2.3 [high] Increase probability text targets and bounded native auto-size/line boxes while preserving host-only font-scale reapplication; verify actual rendered `100%`, `0%`, and unavailable text is at least 9sp at 260×110 and 11sp at 320×144 dp at normal scale, retains the droplet/accent, and fits glyph ink and bounds when the same cached RemoteViews are reapplied at 100% → 130% → 100% in both themes without recomposition or network access.
+
+## 3. Examples and specification integration
+
+- [ ] 3.1 [low] Update deterministic medium production-rendered examples and launcher-preview assets for the new layout while preserving the small examples; verify `WeatherWidgetReferenceExamplesTest` passes with intentionally updated references, including a six-hour fixture and no live weather requests.
+- [ ] 3.2 [low] Reconcile the conflicting in-progress `home-screen-weather-widgets` and `widget-weather-updates` requirements with this change, or create full modified deltas against their published main specs if they have since been synced; verify the resulting specs agree on medium transparency, time-only header, column count, status and refresh actions while retaining small-widget and cache guarantees, and preserve unrelated task states and evidence without syncing or archiving either change.
+
+## 4. Integration verification
+
+- [ ] 4.1 [low] Run focused widget/state/session/registration tests, then the unfiltered Google-debug unit suite and `ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:assembleGoogleDebug`; verify all required runs succeed, or record failures and unrelated pre-existing blockers without claiming a pass; do not build or sign a release.
+- [ ] 4.2 [low] Verify an installed Google-debug medium widget on a modern Android launcher with representative light/dark wallpapers, normal and enlarged fonts, resizing, available/empty/stale states, location/card taps, and the small widget's refresh action; verify API 28 too when available, record device/launcher and observed results, and leave this task unchecked with unavailable runtime checks explicitly marked not run.
+
+The two high-complexity tasks (2 of 11) are limited to the multi-constraint responsive fit algorithm and the cached-host font-reapplication behavior. All task implementation and associated verification must use the model/variant assigned to its tag in `AGENTS.md`; the tags do not authorize delegation or model substitution.
