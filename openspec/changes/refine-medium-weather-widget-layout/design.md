@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` for the motivation and `specs/medium-widget-presentation/spec.md` for the observable contract. The existing widgets use shared Glance card/header components and a pure size policy. The medium layout currently reserves 48 dp for a refresh button, displays a date-and-time string, uses a tinted surface, and caps its responsive layout and state adapter at five hours. Hourly text is embedded in auto-sizing native `TextView` slots so already-cached views can refit when the launcher changes font scale without restarting the app.
+See `proposal.md` for the motivation and `specs/medium-widget-presentation/spec.md` for the observable contract. The widgets use shared Glance card/header components and a pure size policy. Before this change the medium layout reserved 48 dp for a refresh button, displayed a date-and-time string, and used a tinted surface. Its existing responsive layout displays up to five hours; the completed state-adapter task can retain six without requiring a sixth display column. Hourly text is embedded in auto-sizing native `TextView` slots so already-cached views can refit when the launcher changes font scale without restarting the app.
 
 The prior `add-home-screen-weather-widgets` change is still in progress. Its spec deltas are not yet published as main specs and include several requirements this follow-up intentionally changes. Its refresh/recovery work and its outstanding verification are independent of this presentation change.
 
@@ -16,6 +16,7 @@ The prior `add-home-screen-weather-widgets` change is still in progress. Its spe
 **Non-Goals:**
 
 - Changing weather fetching, refresh/recovery scheduling, provider selection, location tracking, or the small widget's behavior.
+- Adding more hourly columns or a new extra-hour fitting algorithm; the user withdrew that part of the request on 2026-10-30.
 - Adding a background, scrim, wallpaper sampling, manual medium refresh action elsewhere, new settings, or a new permission.
 - Guaranteeing foreground contrast against every possible wallpaper or controlling backgrounds painted by a launcher outside app-owned views.
 
@@ -37,13 +38,13 @@ For stale/failed or in-progress states, use compact, non-clickable, visually dis
 
 **Alternative:** hide status or encode it only by changing the time's color. Rejected because it would conceal stale weather or be inaccessible; keeping the old status text would defeat the time-only header.
 
-### Select the widest readable hourly layout
+### Center and enlarge the existing hourly layout
 
-Raise the presentation adapter's chronological future-hour cap from five to six, keeping the existing filtering, instant ordering, time-zone conversion, missing-value semantics, and network-free rendering. Extend the medium responsive sizes and `WeatherWidgetSizePolicy.medium` to consider counts up to six, evaluating candidates against available width/height, scaled text, actual forecast availability, current-weather space, the droplet, and preserved inner gaps. Select the greatest candidate that fits; fall back rather than squeeze text or hide a required hourly field. The current-weather width need not remain exactly one third if a smaller block still fits its icon, temperature, and optional secondary content. Tests must demonstrate six columns at the specified 400×160 dp example and graceful fallback for extremes and larger fonts.
+Retain the existing responsive three-, four-, and five-column selection without adding a sixth display column or a new fitting algorithm. The adapter may retain six future hours as completed in task 1.1, but the existing medium layout displays at most five. Preserve filtering, instant ordering, time-zone conversion, missing-value semantics, and network-free rendering.
 
 Use the existing centered native-text layout for hourly times. Increase the precipitation target and its native auto-size role's maximum as needed; do not change shared small-widget text roles accidentally. Size the actual line boxes using measured Android text metrics, including font padding, and verify the rendered `TextView` size, not just a policy target. Preserve the existing host-only reapply overflow guard and readable physical minimum; do not bypass autosizing or globally cap system font scale. The spec's 9sp and 11sp minima apply to actual probability text in its named normal-scale scenarios.
 
-**Alternative:** blindly add a column or only increase an XML text maximum. Rejected because the adapter currently supplies five hours and native auto-sizing, narrow widths, and line heights can still shrink or clip the visible text.
+**Alternative:** only increase an XML text maximum. Rejected because native auto-sizing, narrow widths, and line heights can still shrink or clip the visible text.
 
 ### Reconcile the unfinished widget specification
 
@@ -56,7 +57,7 @@ If those capabilities have already been published by implementation time, instea
 ## Risks / Trade-offs
 
 - [Transparency can reduce foreground contrast on arbitrary wallpapers] → Preserve theme-appropriate colors and test representative light and dark wallpapers; do not claim universal contrast or add an unrequested scrim.
-- [More columns and larger probabilities compete for space] → Measure complete text/icon rows, prioritize readable output, and reduce column count for longer temperatures or larger fonts.
+- [Larger probabilities compete for space in the existing columns] → Measure complete text/icon rows, retain the existing responsive behavior, and prioritize readable output at supported font scales.
 - [The launcher reapplies cached views without app recomposition] → Retain native auto-sizing and exercise the same translated views at 100% → 130% → 100%, including glyph ink and bounds.
 - [Removing the button may obscure refresh or failure state] → Keep distinct non-text status glyphs, accessible descriptions, cached weather, and automatic work; verify the small widget's refresh action separately.
 - [The earlier change is still unfinished and its spec conflicts] → Reconcile only the affected requirements and preserve its open tasks and recorded verification history.

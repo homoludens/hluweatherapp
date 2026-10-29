@@ -50,20 +50,6 @@ Each displayed hourly column SHALL center its time label over that column's weat
 - **THEN** the visible probability text is at least 9sp and fits its assigned space
 - **AND** zero is displayed as `0%` while unavailable data is displayed and announced as unavailable
 
-### Requirement: Fit an additional upcoming hour when practical
-
-The medium widget SHALL try to show one additional chronological future hour compared with the previous three-, four-, or five-column layouts, up to six hours. It SHALL choose the greatest supported count that fits the available dimensions, current weather, text, and system font scaling without overlap, clipping, or horizontal scrolling; it SHALL fall back to fewer columns when necessary. Only actual forecast hours later than the current instant SHALL be shown, in chronological order and the forecast location's time zone, without repeating or inventing data.
-
-#### Scenario: Six hours on a wide widget
-- **WHEN** a 400×160 dp medium widget at normal font scale has current weather `23°C` and six future hours with temperatures `20°C`, `18°C`, `17°C`, `16°C`, `15°C`, and `14°C`, including a `100%` probability
-- **THEN** it displays six chronological hourly columns with their time, icon, temperature, and probability
-- **AND** the current weather and all six columns fit without overlap or clipped text
-
-#### Scenario: Constrained or incomplete forecast
-- **WHEN** a widget is too small for the next column, uses a larger system font, or has fewer available future hours
-- **THEN** it shows only the available columns that fit and keeps current weather visible
-- **AND** it never reuses an expired hour or fabricates an hourly value
-
 ### Requirement: Reduced outer spacing without compressed data
 
 The medium widget SHALL reduce the space between its outer bounds and its content relative to the previous medium presentation while preserving the spacing within and between weather data elements. Its content SHALL stay inside the widget bounds at supported sizes. The existing small widget layout SHALL not be compressed by this change.

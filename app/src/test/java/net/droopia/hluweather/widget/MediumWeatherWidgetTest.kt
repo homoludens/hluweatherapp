@@ -22,6 +22,7 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.composeForPreview
 import androidx.glance.appwidget.provideContent
 import androidx.test.core.app.ApplicationProvider
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
@@ -164,6 +165,98 @@ class MediumWeatherWidgetTest {
                 ).outlineVariant.toArgb()
             )
             assertLayoutFits(view, case.widthDp, case.heightDp)
+        }
+    }
+
+    @Test
+    fun translated_hour_labels_are_centered_in_their_actual_columns_across_responsive_branches() {
+        val branches = listOf(
+            MediumCase(260f, 110f, columns = 3, theme = ThemeMode.LIGHT),
+            MediumCase(320f, 144f, columns = 4, theme = ThemeMode.LIGHT),
+            MediumCase(400f, 160f, columns = 5, theme = ThemeMode.LIGHT)
+        )
+
+        listOf(1f, 1.3f).forEach { fontScale ->
+            branches.forEach { branch ->
+                val widthDp = branch.widthDp
+                val view = render(
+                    availableSnapshot(),
+                    widthDp = widthDp,
+                    heightDp = branch.heightDp,
+                    fontScale = fontScale
+                )
+                val policy = WeatherWidgetSizePolicy.medium(
+                    widthDp = widthDp,
+                    heightDp = branch.heightDp,
+                    fontScale = fontScale,
+                    formattedTemperatureLength = 4
+                )
+                if (fontScale == 1f) {
+                    assertEquals("existing responsive branch for $branch", branch.columns, policy.hourlyColumnCount)
+                }
+                val expectedTimes = REFERENCE_HOURS.take(policy.hourlyColumnCount)
+                val timeViews = findViews(view).filterIsInstance<TextView>()
+                    .filter { it.text.toString() in REFERENCE_HOURS }
+
+                assertEquals(
+                    "hour chronology is unchanged for $branch at fontScale=$fontScale",
+                    expectedTimes,
+                    timeViews.map { it.text.toString() }
+                )
+                assertEquals(
+                    "hour icon descriptions retain chronological order for $branch at fontScale=$fontScale",
+                    expectedTimes.map { "$it, Partly cloudy" },
+                    findViews(view).mapNotNull { it.contentDescription?.toString() }
+                        .filter { it.endsWith(", Partly cloudy") }
+                )
+
+                val density = view.resources.displayMetrics.density
+                val dividers = hourlyDividers(view, policy.hourlyColumnCount)
+                // The last column has no following divider, so use the translated width between
+                // the first two dividers to recover its actual right edge.
+                val firstColumnWidth = (
+                    absoluteBounds(dividers[1], view).left - absoluteBounds(dividers[0], view).right
+                    ).toFloat()
+                val lastColumnRight = absoluteBounds(dividers.last(), view).right + firstColumnWidth
+
+                timeViews.forEachIndexed { index, timeView ->
+                    val time = expectedTimes[index]
+                    assertEquals(
+                        "hour label accessibility description remains unchanged for $time",
+                        time,
+                        timeView.contentDescription?.toString()
+                    )
+
+                    val columnLeft = absoluteBounds(dividers[index], view).right.toFloat()
+                    val columnRight = dividers.getOrNull(index + 1)
+                        ?.let { absoluteBounds(it, view).left.toFloat() }
+                        ?: lastColumnRight
+                    val columnCenter = (columnLeft + columnRight) / 2f
+                    val textBounds = absoluteBounds(timeView, view)
+                    val lineCenter = textBounds.left + timeView.compoundPaddingLeft +
+                        (timeView.layout.getLineLeft(0) + timeView.layout.getLineRight(0)) / 2f
+                    val ink = visibleTextInkBounds(timeView, view)
+                    val inkCenter = (ink.left + ink.right) / 2f
+
+                    assertTrue(
+                        "translated '$time' text line is centered in its actual hourly column " +
+                            "for $branch at fontScale=$fontScale " +
+                            "(lineCenter=$lineCenter, columnCenter=$columnCenter, " +
+                            "column=$columnLeft..$columnRight)",
+                        abs(lineCenter - columnCenter) <= density
+                    )
+                    assertTrue(
+                        "rendered '$time' glyphs are centered in their actual hourly column " +
+                            "for $branch at fontScale=$fontScale " +
+                            "(inkCenter=$inkCenter, columnCenter=$columnCenter, " +
+                            "column=$columnLeft..$columnRight, ink=$ink)",
+                        abs(inkCenter - columnCenter) <= 3f * density
+                    )
+                }
+
+                assertLayoutFits(view, widthDp, branch.heightDp)
+                assertTextInkFits(view, "${policy.hourlyColumnCount} columns at fontScale=$fontScale")
+            }
         }
     }
 
@@ -1173,6 +1266,18 @@ class MediumWeatherWidgetTest {
                 backgroundColor == expectedColor
         }
         assertEquals("one subtle vertical divider per visible hour", expectedCount, dividers.size)
+    }
+
+    private fun hourlyDividers(root: View, expectedCount: Int): List<View> {
+        val density = root.resources.displayMetrics.density
+        val expectedColor = hluMaterialColorScheme(darkTheme = false).outlineVariant.toArgb()
+        val dividers = findViews(root).filter { view ->
+            view.width <= 2f * density && view.height >= 30f * density &&
+                (view.background as? ColorDrawable)?.color == expectedColor
+        }.sortedBy { absoluteBounds(it, root).left }
+
+        assertEquals("one divider precedes each translated hourly column", expectedCount, dividers.size)
+        return dividers
     }
 
     private fun assertHeaderMetadataDoesNotOverlap(root: View) {

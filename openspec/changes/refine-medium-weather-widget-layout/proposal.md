@@ -6,7 +6,7 @@ The medium weather widget currently truncates location names too aggressively, u
 
 - Give the location more header space; show only the forecast's local update time where the update label, date, and refresh button currently appear. Remove the medium widget's refresh button; retain automatic updates and the small widget's refresh control.
 - Center each upcoming-hour label and increase the readability of hourly precipitation probabilities.
-- Try to display one more upcoming hour, up to six, when the available space and text fit allow it; use fewer columns rather than clip or make the information unreadable.
+- Retain the existing responsive three-to-five-hour layout; additional-hour fitting is out of scope at the user's request.
 - Reduce the medium widget's outer padding while keeping the existing internal spacing between data elements.
 - Remove the medium widget's app-drawn white or dark surface so the launcher wallpaper is visible through it, including the medium-specific initial and picker previews.
 - Preserve truthful stale/refresh status, cached-weather semantics, app-opening interactions, accessibility, and fit across supported widget and system font sizes. The small widget is otherwise unchanged.

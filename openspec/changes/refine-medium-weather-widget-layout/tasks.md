@@ -11,13 +11,14 @@
 
 ## 2. Responsive hourly layout
 
-- [ ] 2.1 [high] Implement the medium width/height/font-aware candidate selection for up to six real future hours while preserving current-weather and internal spacing priorities; verify policy and production RemoteViews tests show six complete columns at 400×160 dp for the specified normal-scale data, choose the greatest fitting count, fall back for long signed temperatures and larger fonts, and never overlap, clip, scroll, or invent hours.
-- [ ] 2.2 [low] Center hourly time labels in their actual columns using the appropriate adaptive-text role; verify translated medium renders measure centered labels across compact, normal, and six-column layouts without changing their chronology or accessibility descriptions.
+- 2.1 [high] **Skipped by user on 2026-10-30:** Additional-hour fitting, including six- and five-hour fitting, was removed from scope. Retain the existing responsive hourly-column behavior; no completion is claimed.
+- [x] 2.2 [low] Center hourly time labels in their actual columns using the appropriate adaptive-text role; verify translated medium renders measure centered labels across compact, normal, and existing wide layouts without changing their chronology or accessibility descriptions.
+  - Verification: `MediumWeatherWidgetTest` and `WeatherWidgetContentTest` passed (25 tests). Translated label and glyph centers, chronological descriptions, and bounds were checked across existing three-, four-, and five-column branches at 100% and 130% font scale. Implemented and verified with `openai/gpt-6-luna#max`.
 - [ ] 2.3 [high] Increase probability text targets and bounded native auto-size/line boxes while preserving host-only font-scale reapplication; verify actual rendered `100%`, `0%`, and unavailable text is at least 9sp at 260×110 and 11sp at 320×144 dp at normal scale, retains the droplet/accent, and fits glyph ink and bounds when the same cached RemoteViews are reapplied at 100% → 130% → 100% in both themes without recomposition or network access.
 
 ## 3. Examples and specification integration
 
-- [ ] 3.1 [low] Update deterministic medium production-rendered examples and launcher-preview assets for the new layout while preserving the small examples; verify `WeatherWidgetReferenceExamplesTest` passes with intentionally updated references, including a six-hour fixture and no live weather requests.
+- [ ] 3.1 [low] Update deterministic medium production-rendered examples and launcher-preview assets for the new layout while preserving the small examples; verify `WeatherWidgetReferenceExamplesTest` passes with intentionally updated references, including the existing five-hour fixture and no live weather requests.
 - [ ] 3.2 [low] Reconcile the conflicting in-progress `home-screen-weather-widgets` and `widget-weather-updates` requirements with this change, or create full modified deltas against their published main specs if they have since been synced; verify the resulting specs agree on medium transparency, time-only header, column count, status and refresh actions while retaining small-widget and cache guarantees, and preserve unrelated task states and evidence without syncing or archiving either change.
 
 ## 4. Integration verification
@@ -25,4 +26,4 @@
 - [ ] 4.1 [low] Run focused widget/state/session/registration tests, then the unfiltered Google-debug unit suite and `ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ./gradlew :app:assembleGoogleDebug`; verify all required runs succeed, or record failures and unrelated pre-existing blockers without claiming a pass; do not build or sign a release.
 - [ ] 4.2 [low] Verify an installed Google-debug medium widget on a modern Android launcher with representative light/dark wallpapers, normal and enlarged fonts, resizing, available/empty/stale states, location/card taps, and the small widget's refresh action; verify API 28 too when available, record device/launcher and observed results, and leave this task unchecked with unavailable runtime checks explicitly marked not run.
 
-The two high-complexity tasks (2 of 11) are limited to the multi-constraint responsive fit algorithm and the cached-host font-reapplication behavior. All task implementation and associated verification must use the model/variant assigned to its tag in `AGENTS.md`; the tags do not authorize delegation or model substitution.
+The remaining high-complexity task concerns cached-host font reapplication. The user explicitly authorized Terra for high-complexity tasks, Luna for low-complexity tasks, and Sol as a fallback; use a fresh subagent for each task, sequentially.

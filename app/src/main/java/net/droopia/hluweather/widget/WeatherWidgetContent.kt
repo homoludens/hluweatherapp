@@ -393,7 +393,7 @@ fun WeatherWidgetHourlyCell(
     ) {
         WeatherWidgetAdaptiveText(
             text = hour.timeText,
-            role = WeatherWidgetAdaptiveTextRole.COMPACT_REGULAR,
+            role = WeatherWidgetAdaptiveTextRole.COMPACT_REGULAR_CENTER,
             color = palette.secondaryText,
             fontSizeSp = timeFontSizeSp.coerceAtLeast(1f),
             lineHeightMultiplier = textLineHeightMultiplier,
