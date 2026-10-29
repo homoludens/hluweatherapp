@@ -1,6 +1,6 @@
 # Widget reference previews
 
-These PNGs are offline Robolectric renders of the widgets' production Glance layouts. The test starts with normalized `WeatherForecast` fixtures, loads them through the cache-only `WeatherWidgetRepository` path with a fixed clock, translates the production small/medium Glance content to Android `RemoteViews`, and captures the rendered views. It does not use a Compose mockup, live service, network, or credentials. Assertions check the shared condition labels and exact shared weather-icon vectors/tints, including night icons in the dark Trieste card and all five night-hour icons in the medium card while its current clear-weather icon stays in daytime mode.
+These PNGs are offline Robolectric renders of the widgets' production Glance layouts, **not device screenshots**. The test starts with normalized `WeatherForecast` fixtures, loads them through the cache-only `WeatherWidgetRepository` path with a fixed clock, translates the production small/medium Glance content to Android `RemoteViews`, and captures the rendered views. It does not use a Compose mockup, live service, network, or credentials. Assertions check the shared condition labels and exact shared weather-icon vectors/tints, including night icons in the dark Trieste card and all five night-hour icons in the medium card while its current clear-weather icon stays in daytime mode. The examples reflect the host-adaptive native text introduced in `eefc396`.
 
 | Preview | Contents |
 | --- | --- |
@@ -19,4 +19,6 @@ ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk \
   --rerun-tasks
 ```
 
-The renderer creates only the three named PNGs when they are absent; if an artifact already exists, the test checks that its bytes match the deterministic render rather than overwriting it.
+The renderer creates only the three named PNGs when they are absent; if an artifact already exists, the test checks that its bytes match the render rather than overwriting it. The test uses Robolectric 4.16.1 with SDK 28 native graphics and the project's Java 21 toolchain. Intentional production layout or text changes can change the images, and native graphics or toolchain differences may also affect bytes; investigate a mismatch rather than treating it as a pass.
+
+To review an intentional update, point `WEATHER_WIDGET_EXAMPLES_DIR` at a new empty directory instead, render in independent runs, compare the resulting bytes, and inspect the three images and fixture assertions. Only then replace the three tracked examples and rerun the command above against the checked-in directory. Never remove the byte assertion to accept a mismatch.
