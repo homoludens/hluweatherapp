@@ -1,0 +1,125 @@
+Task 6.5 — API 35 launcher QA, 2026-10-29, Sol fallback
+Selected diagnostic output; unrelated provider/package/log lines omitted.
+Screenshots in this directory are actual adb screencap captures, not Robolectric renders.
+
+DEVICE / TOOLS
+AVD: hluweather-task6-5-api35 (existing task-only Pixel 2 profile)
+SDK adb: /home/homoludens/Android/Sdk/platform-tools/adb
+Android Debug Bridge version 1.0.41
+Version 37.0.1-15733141
+Isolated adb server: -P 5057; device: -s emulator-5562
+Emulator PATH placed SDK platform-tools before /home/homoludens/bin.
+getprop ro.build.fingerprint:
+google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+getprop ro.build.version.sdk: 35
+wm size: Physical size: 1080x1920
+wm density: Physical density: 420
+am get-started-user-state 0: RUNNING_UNLOCKED
+Pixel Launcher: com.google.android.apps.nexuslauncher
+versionCode=907 minSdk=35 targetSdk=35
+versionName=15
+Launcher grid: 5 columns, 5 rows
+cellWidthPx: 168.0px (64.0dp)
+cellHeightPx: 221.0px (84.190475dp)
+cellLayoutBorderSpacePx Horizontal: 32.0px (12.190476dp)
+cellLayoutBorderSpacePx Vertical: 42.0px (16.0dp)
+
+APK IDENTITY BEFORE REINSTALL
+Local: app/build/outputs/apk/google/debug/app-google-debug.apk
+Previously pulled: /tmp/opencode/task65-installed.apk
+pm path net.droopia.hluweather:
+package:/data/app/~~CJUc9m48lOUWjhcVEGqNyg==/net.droopia.hluweather-wxtuPngSoQPgq3ZBP7xZiw==/base.apk
+sha256sum on each of those three files:
+77405d803e53d3650e63d1da95fd68ee29f2c92d307ea6de4e4d64bb499c865f
+dumpsys package net.droopia.hluweather:
+versionCode=38 minSdk=28 targetSdk=36
+versionName=3.5.1
+splits=[base]
+
+PACKAGED MEDIUM XML (aapt dump xmltree)
+A: android:minWidth(0x0101013f)=(type 0x5)0x10401
+A: android:minHeight(0x01010140)=(type 0x5)0x6e01
+A: android:minResizeWidth(0x01010395)=(type 0x5)0x10401
+A: android:minResizeHeight(0x01010396)=(type 0x5)0x6e01
+A: android:targetCellWidth(0x01010634)=(type 0x10)0x4
+A: android:targetCellHeight(0x01010635)=(type 0x10)0x2
+
+ANDROID PROVIDER METADATA BEFORE REINSTALL (dumpsys appwidget)
+[34] provider ProviderId{user:0, app:10209, cmp:ComponentInfo{net.droopia.hluweather/net.droopia.hluweather.widget.MediumWeatherWidgetReceiver}}
+min=(66561x36865)   minResize=(66561x36865) updatePeriodMillis=0 resizeMode=3 widgetCategory=1 autoAdvanceViewId=-1 initialLayout=#7f0a0492 initialKeyguardLayout=#0   zombie=false
+
+ACTION
+/home/homoludens/Android/Sdk/platform-tools/adb -P 5057 -s emulator-5562 install -r app/build/outputs/apk/google/debug/app-google-debug.apk
+Performing Streamed Install
+Success
+No uninstall, app-data clear, launcher-data clear, APK rebuild or source change.
+
+ANDROID PROVIDER METADATA AFTER REINSTALL AND AGAIN AFTER REBOOT
+[34] provider ProviderId{user:0, app:10209, cmp:ComponentInfo{net.droopia.hluweather/net.droopia.hluweather.widget.MediumWeatherWidgetReceiver}}
+min=(66561x28161)   minResize=(66561x28161) updatePeriodMillis=0 resizeMode=3 widgetCategory=1 autoAdvanceViewId=-1 initialLayout=#7f0a0492 initialKeyguardLayout=#0   zombie=false
+These are TypedValue complex dimension data: 66561=0x10401 (260dp),
+36865=0x9001 (144dp), 28161=0x6e01 (110dp), not pixel dimensions.
+
+ACTUAL PICKER (UIAutomator + api35-picker.png)
+HluWeatherApp widget, 2 wide by 2 high Current conditions in a compact home-screen card.
+2 × 2
+HluWeatherApp widget, 4 wide by 2 high Current conditions and upcoming hourly forecasts.
+4 × 2
+Both visible widget names: HluWeatherApp
+Medium Add action placed directly; no configuration Activity.
+
+LAUNCHER MODEL AFTER NEW PLACEMENT (selected fields from dumpsys activity com.google.android.apps.nexuslauncher)
+SmallWeatherWidgetReceiver: id=5 screen=0 cell(0,1) span(2,2) minSpan(2,2) appWidgetId=3
+MediumWeatherWidgetReceiver: id=8 screen=0 cell(0,3) span(4,2) minSpan(4,2) appWidgetId=8
+UIAutomator host bounds: small [56,326][424,810]; new medium [56,852][824,1336]
+New medium host = 768×484 pixels, actual four columns and two rows.
+
+RESIZE
+Existing MediumWeatherWidgetReceiver appWidgetId=4 started at span(4,3).
+Bottom handle drag: (440,813) to (440,550) -> host [56,63][824,547], three hourly columns.
+Right handle drag: (828,300) to (1027,300) -> host [56,63][1024,547], four hourly columns.
+Committed launcher model after dismissing resize frame:
+MediumWeatherWidgetReceiver: id=6 screen=1 cell(0,0) span(5,2) minSpan(4,2) appWidgetId=4
+MediumWeatherWidgetReceiver: id=8 screen=0 cell(0,3) span(4,2) minSpan(4,2) appWidgetId=8
+The older appWidgetId=6 instance on screen=2 remained 4×3; it was not resized.
+See api35-medium-two-rows.png and api35-medium-wide.png.
+
+REFRESH SNAPSHOT FINDING (device log times)
+Weather obtained through existing app location search/save and normal Open-Meteo repository.
+10-29 03:29:05.246  2813  2945 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=69e38158-4755-49d5-8027-49666a28aa20, tags={ net.droopia.hluweather.widget.WeatherWidgetWorker } ]
+10-29 03:29:39.004  2813  2998 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=003ae7ed-241d-4d1a-96b8-15d84f3247cc, tags={ net.droopia.hluweather.widget.WeatherWidgetWorker } ]
+WorkManager diagnostics: the former is widget.weather.selection_refresh SUCCEEDED;
+the latter is widget.weather.manual_refresh SUCCEEDED.
+At 03:30 the two visible cards still said No weather available / Refreshing:
+api35-refresh-snapshot-lag.png. Later renders recovered weather, with some still
+showing an old Updating status. Prompt update/loading clearance is NOT a pass.
+No production refresh-source fix was attempted in this task.
+
+OFFLINE / THEME / UNITS / REBOOT
+svc wifi disable; svc data disable (both initially enabled).
+Changed Dark and Fahrenheit using existing app Settings UI, then tapped widget refresh.
+Later visible render: dark cards, 49°F, feels like 47°F, stale status,
+last weather update Thu, Oct 29, 2026 • 03:32.
+Foreground after offline refresh:
+topResumedActivity=ActivityRecord{59d7682 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t12}
+Rebooted this AVD offline, with no data clear. All four widget IDs survived,
+the new medium stayed 4×2, and the cached 03:32 timestamp remained unchanged.
+See api35-offline-reboot.png. Wi-Fi and mobile data were subsequently restored.
+
+FONT SCALE
+settings put system font_scale 1.3
+At 130% the medium precipitation text was visibly clipped at the bottom;
+apparent-temperature text ellipsized. See api35-font-130-clipping.png.
+Location ellipsis and refresh remained visible; small icon/temperature visible.
+settings put system font_scale 1.0 (restored).
+
+UNVERIFIED / LIMITS
+API 28: no local image/device/platform; no download.
+No TalkBack audio interaction, Track Me/passive GPS fix, System-theme switching,
+exact 260×110dp minimum, five-hour/400dp branch, repeated-tap coalescing,
+or last-widget work cancellation verified.
+Removal drag attempts entered resize mode; no QA instance was removed.
+Location-header action opened the weather screen; card-background action after
+resize/removal gestures needs a manual retest.
+Fresh fallback AVD hluweather-task65-sol-clean-api35 was created locally but
+never booted or used as evidence. No physical device or unrelated adb server touched.
