@@ -1,0 +1,127 @@
+Task 6.5 — API 35 configuration-fix runtime reverification, 2026-10-29
+Sol fallback; selected diagnostic fields/log entries. Device times use +0100.
+All referenced PNGs are raw SDK adb screencaps, not Robolectric renders.
+
+IDENTITY / SAFE INSTALL
+APK: app/build/outputs/apk/google/debug/app-google-debug.apk
+Package net.droopia.hluweather, version 3.5.1 / code 38
+Local and installed base SHA-256:
+e26a4048b60c8f535f53fe60a32ee287d70510347a5c6c8c2e5ced2d0ee2e948
+Installed base path:
+/data/app/~~dB7sOywv9RRsb6Yu3wYdFw==/net.droopia.hluweather-1Q8X32TkCGy18eNd3ykIaw==/base.apk
+AVD hluweather-task6-5-api35; Pixel 2 profile; Google APIs API 35
+1080x1920, density 420, Pixel Launcher 15 / 907, 5x5 grid.
+SDK platform-tools first on emulator PATH; ANDROID_ADB_SERVER_PORT=5057.
+All adb calls used /home/homoludens/Android/Sdk/platform-tools/adb -P 5057 -s emulator-5562.
+Waited for boot and RUNNING_UNLOCKED; install -r returned Success.
+No uninstall, data clear, new permissions, fixture injection, provider-stack
+replacement, production-code edit, build or unit-suite rerun.
+Initial and restored settings: font_scale=1.0, system night=No, app Light/Celsius,
+Wi-Fi and mobile data enabled. Existing Zajecar saved location/data retained.
+
+NORMAL LIVE FONT CYCLE — PASS
+App PID 2778, unchanged throughout the cycle.
+10:33:07.792 WeatherWidgetWorker started after ordinary refresh tap.
+10:33:07.979 small ID 3 SessionWorker started:
+8c91cf38-4781-4f88-b6ab-2493d71160a8
+10:33:08.715 normal medium ID 8 SessionWorker started:
+1bac245b-f847-4704-abb1-a15a13cbe95c
+10:33:12.817 WeatherWidgetWorker 7b222167-1fd3-4c84-a992-200173a9caf7 SUCCESS.
+10:33:24 baseline 100% capture; then settings put system font_scale 1.3.
+10:33:31 130% capture; then settings put system font_scale 1.0.
+10:33:38 restored 100% capture.
+All three states were delivered in the same live sessions, not after restarting them.
+No refresh/app entry/process recreation between the scale changes.
+10:33:54.097 small ID 3 session closed.
+10:33:54.728 medium ID 8 session closed.
+100% medium: current 15°C, Cloudy, apparent 12°C; update timestamp 10:33.
+11:00/12:00/13:00 columns: 15/16/16°C, 8/0/0%.
+130%: time/icon/temperature/blue probability stayed complete; apparent temperature
+and header timestamp were omitted before overflow, and restored at 100%.
+130% medium probability bounds: [358,1178][384,1206], [501,1178][527,1206],
+[644,1178][670,1206]; complete percentage glyphs visible in raw screenshot.
+Small location ellipsis, current icon/temperature and refresh remained visible.
+Refresh bounds [677,873][803,999] = 126x126 pixels = 48x48dp.
+
+RESIZED LIVE FONT CYCLE — PASS
+Resized existing medium ID 4 from 5x2 back to 4x2 BEFORE the measured cycle.
+Let those setup sessions expire naturally, then seeded fresh live sessions with
+the ordinary top-widget refresh target at (740,148).
+10:45:27.179 WeatherWidgetWorker started.
+10:45:27.477 small session 38603cf7-8aaf-463a-8ce7-a2b7c61a0ad9 started.
+10:45:27.545 medium ID 10 session e488ec80-8935-4691-bf69-12b0bea51c53 started.
+10:45:27.665 resized medium ID 4 session a09cdf94-dc8b-4d31-81e1-c944beea3d36 started.
+10:45:30.056 WeatherWidgetWorker 01303f28-d0b9-4805-9c69-64068e43a2a0 SUCCESS.
+10:45:33 baseline 100% capture, then font_scale=1.3.
+10:45:40 130% capture, then font_scale=1.0.
+10:45:47 restored 100% capture.
+No session replacement or refresh between scale changes.
+10:46:13.417 medium ID 10 session closed.
+10:46:14.886 medium ID 4 session closed.
+Both page-1 hosts stayed [56,63][824,547] and [56,589][824,1073] (768x484 pixels),
+actual two-row placements with full hourly rows/probability glyphs at both scales.
+Launcher-page identity was checked from host bounds before accepting captures.
+Earlier setup attempts with expired sessions, a missed out-of-bounds refresh tap,
+or a different launcher page were excluded, not reported as active-session failures.
+
+THEME CONFIGURATION / PRECEDENCE — PASS FOR TESTED STATES
+Wi-Fi/mobile data disabled. Existing app Settings UI selected System.
+Main Activity was not foreground during the system appearance changes.
+10:48:16 System/light capture; cmd uimode night yes.
+10:48:23 System/dark capture: both cards navy with light text and matching icons.
+cmd uimode night no; 10:48:30 System/light return capture.
+Sessions were active for the dark change; natural expiry occurred around the
+light-return action, so the entire round trip is not claimed as one session.
+10:50:35 explicit app Light / system Dark capture: cards stay light.
+10:50:58 explicit app Dark / system Light capture: cards stay navy.
+Weather timestamp remained 10:47 throughout; no successful forecast fetch needed.
+Restored app Light, system night No and connectivity afterward.
+
+CRITICAL REGRESSION CHECKS
+10:52:35 ordinary refresh tap; fresh weather timestamp 10:52 displayed with no
+stuck loading, launcher foreground. Weather came through the existing repository.
+10:52:50 blank card-background tap (500,1280), outside header/weather fields,
+opened main weather after the app had been left on Settings:
+topResumedActivity=ActivityRecord{e2c8d51 u0 net.droopia.hluweather/.MainActivity t30}
+Location-header action independently opened main weather.
+10:53:40 actual picker: 2 × 2 current-weather and 4 × 2 hourly entries/descriptions.
+No new widget added in this run. Existing small ID 3 remains 2x2; medium IDs 4,
+8, 10 remain 4x2; old ID 6 remains its intentionally unresized historical 4x3.
+Medium provider min=(66561x28161), minResize=(66561x28161), target cells 4x2.
+These are complex dimension encodings for 260x110dp, not pixel dimensions.
+
+SEPARATE CACHED_EMPTY CASE — FAILED, NOT AN ACTIVE-SESSION REGRESSION
+Idle control after an actual MainActivity record existed:
+10:55:26 font_scale=1.3, prior UID state 15 (LAST_ACTIVITY).
+New sessions were delivered and the row policy recomputed; 130% glyphs fitted.
+Do not claim all idle states fail.
+
+Controlled process-death reproduction, no force-stop/data clear:
+10:57:49 am kill net.droopia.hluweather (only this background app).
+10:57:50 ordinary widget refresh woke the app; new PID 5757, no MainActivity launch.
+10:57:52.364 WeatherWidgetWorker started.
+10:57:52.469-760 five SessionWorkers started; normal 100% render fitted.
+10:57:56.447 WeatherWidgetWorker 85a08ad9-4c09-4c46-8d2c-a96be3d7aaa1 SUCCESS.
+10:58:38.963 small ID 3 session closed.
+10:58:41.471 final medium ID 8 session closed; all five sessions had ended.
+Waited naturally; am get-uid-state 10209 -> 19 (CACHED_EMPTY).
+10:59:02 settings put system font_scale 1.3; no refresh/app action afterward.
+10:59:10 and 10:59:19 screenshots: old medium row geometry with visibly clipped
+3%, 0%, 0% glyph bottoms. Full UI semantics are still present, not proof of visual fit.
+Probability bounds remained [349,1180][393,1209], [492,1180][536,1209],
+[635,1180][679,1209], rather than the recomputed active 130% policy above.
+UID after change still 19 (CACHED_EMPTY); no new SessionWorker/renderer in logs.
+StateFlow delivery fixes live compositions, but this widget-only cached process
+did not re-render the configuration during the observed 17-second window.
+Precise Android callback-deferral internals were not instrumented; no production
+diagnostic/backdoor was added. Original configuration/rendering task needs follow-up.
+Font scale restored to 1.0 at 10:59:22.
+
+UNVERIFIED / TASK STATE
+API 28 unavailable locally, no download. No TalkBack audio, Track Me/passive GPS,
+exact 260x110dp/small minima, 400dp/five-hour size, other density/display scales,
+strict overlapping-tap coalescing, or last-widget cancellation runtime verification.
+No new-APK reboot repeat; previous offline reboot evidence is explicitly historical.
+All five QA instances/data preserved; only this task AVD stopped at the end.
+6.5 remains unchecked for the reproducible CACHED_EMPTY finding, not the live font fix.
+6.3 untouched: separately recorded 622/623 full suite, 124/124 widget tests; not green.
