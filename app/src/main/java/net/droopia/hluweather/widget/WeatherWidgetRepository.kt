@@ -134,9 +134,10 @@ class WeatherWidgetRepository(
         val selection = loadResolutionSnapshot()
         val request = selection.resolveRequest()
             ?: return WeatherWidgetSnapshot.NoLocation(selection.settings)
-        val refresh = refreshMetadata.read(request.identity, clock::now)
         val cached = weatherRepository.getLastCachedForecast(request.provider, request.location)
             ?.takeIf { request.matchesIdentity(it.forecast) }
+        // Read status after the cache: a refresh may start or finish while cache I/O is suspended.
+        val refresh = refreshMetadata.read(request.identity, clock::now)
 
         // Selection may change while storage is being read. Never label an obsolete result as current.
         val latest = loadResolutionSnapshot()
@@ -150,17 +151,23 @@ class WeatherWidgetRepository(
         }
         if (cached == null) return WeatherWidgetSnapshot.NoWeather(selection.settings, request, refresh)
 
+        // A foreground fetch can recover an older completed failure. Derive the effective status
+        // without touching the token or an active/interrupted attempt in durable metadata.
+        val effectiveRefresh = if (!cached.isStale && refresh.lastAttemptFailed && !refresh.isRefreshing &&
+            refresh.endedAt?.let { cached.forecast.fetchedAt > it } == true
+        ) refresh.copy(lastAttemptFailed = false) else refresh
+
         return WeatherWidgetSnapshot.Available(
             settings = selection.settings,
             request = request,
             weather = cached.copy(isStale = cached.isStale ||
-                (refresh.lastAttemptFailed && refresh.endedAt?.let { cached.forecast.fetchedAt <= it } == true)
+                (effectiveRefresh.lastAttemptFailed && effectiveRefresh.endedAt?.let { cached.forecast.fetchedAt <= it } == true)
             ).toWeatherWidgetState(
                 settings = selection.settings,
                 locationName = request.locationName,
                 clock = clock
             ),
-            refresh = refresh
+            refresh = effectiveRefresh
         )
     }
 

@@ -71,6 +71,58 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WeatherWidgetSessionTest {
     @Test
+    fun foreground_cache_recovers_completed_failure_in_both_live_sessions_without_requests() = runBlocking {
+        for (medium in listOf(false, true)) {
+            val f = Fixture()
+            f.put(f.first, 23.0)
+            val widget = TestWidget(f.widgets, f.widgets.loadCachedState(), medium,
+                MutableStateFlow(WidgetRenderConfiguration.from(f.context.resources.configuration)))
+            val session = RecordingSession(widget, f.context, medium, widget.size)
+            val job = launch(Dispatchers.Default) { session.runSession(f.context) }
+            try {
+                session.awaitText("23°C")
+                f.now += 5.minutes
+                val request = f.widgets.resolveRequest()!!
+                val failed = f.widgets.beginRefresh(request)
+                f.widgets.finishRefresh(request, failed, null)
+                if (medium) session.awaitAccessibleDescription("the last update failed", true)
+                else session.awaitText("Stale weather")
+
+                // A cache entry at the failure time is not a recovery.
+                f.put(f.first, 24.0)
+                val equal = session.awaitText("24°C")
+                if (medium) assertTrue(allViews(equal).any { it.contentDescription?.toString()?.contains("the last update failed") == true })
+                else assertTrue(texts(equal).any { it.text.toString().contains("Stale weather") })
+
+                f.now += 1.minutes
+                f.put(f.first, 25.0)
+                val recovered = session.awaitView { view ->
+                    texts(view).any { it.text.toString() == "25°C" } &&
+                        allViews(view).none { it.contentDescription?.toString()?.contains("the last update failed") == true } &&
+                        texts(view).none { it.text.toString().contains("Stale") || it.text.toString().contains("failed") }
+                }
+                if (medium) {
+                    assertTrue(texts(recovered).any { it.text.toString() == "12:06" })
+                    assertTrue(allViews(recovered).any { it.contentDescription?.toString() == "Last weather update Wed, Oct 28, 2026 • 12:06" })
+                }
+
+                f.now += 1.minutes
+                val newerAttempt = f.widgets.beginRefresh(request)
+                f.widgets.finishRefresh(request, failed, null)
+                if (medium) session.awaitAccessibleDescription("Weather update in progress", true)
+                else session.awaitText("Refreshing")
+                f.widgets.finishRefresh(request, newerAttempt, null)
+                if (medium) session.awaitAccessibleDescription("the last update failed", true)
+                else session.awaitText("Stale weather")
+                assertEquals(1, widget.calls)
+                assertEquals(0, f.networkCalls)
+            } finally {
+                job.cancelAndJoin()
+            }
+        }
+    }
+
+    @Test
     fun same_sessions_translate_cache_status_and_settings_changes_without_network() = runBlocking {
         for (medium in listOf(false, true)) {
             val f = Fixture()

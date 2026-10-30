@@ -45,6 +45,36 @@ class WeatherWidgetReconciliationTest {
     private val second = WeatherLocation("second", "Second", 44.0, 21.0, 20)
 
     @Test
+    fun foreground_recovery_observation_settles_without_enqueue_or_feedback() = runTest {
+        val f = Fixture(this)
+        f.put(first)
+        f.start()
+        val snapshots = mutableListOf<WeatherWidgetSnapshot>()
+        backgroundScope.launch { f.widgets.observeSnapshots().collect { snapshots += it } }
+        runCurrent()
+        val request = f.widgets.resolveRequest()!!
+        val attempt = f.widgets.beginRefresh(request)
+        f.widgets.finishRefresh(request, attempt, null)
+        runCurrent()
+        assertTrue((snapshots.last() as WeatherWidgetSnapshot.Available).refresh.lastAttemptFailed)
+        advanceTimeBy(1_000)
+        f.put(first, 25.0)
+        runCurrent()
+        val recovered = snapshots.last() as WeatherWidgetSnapshot.Available
+        assertFalse(recovered.refresh.lastAttemptFailed)
+        assertFalse(recovered.weather.isStale)
+        assertEquals(f.clock.now(), recovered.weather.lastWeatherUpdate)
+        val count = snapshots.size
+        val renders = f.renders.size
+        f.data.edit { it[stringPreferencesKey("unrelated")] = "changed" }
+        runCurrent()
+        assertEquals(count, snapshots.size)
+        assertEquals(renders, f.renders.size)
+        assertEquals(0, f.enqueues)
+        assertTrue(f.calls.isEmpty())
+    }
+
+    @Test
     fun cache_presentation_status_lru_and_unrelated_writes_do_not_fetch_or_loop() = runTest {
         val f = Fixture(this)
         f.put(first)

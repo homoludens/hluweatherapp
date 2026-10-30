@@ -137,6 +137,8 @@ Provider, canonical location, temperature-unit, theme, and newly cached app-weat
 #### Scenario: New forecast from the foreground app
 - **WHEN** the app successfully stores newer weather for the widget's selected location and provider
 - **THEN** installed widgets render that weather without issuing another provider request just because the cache changed
+- **AND** a fresh matching forecast fetched strictly after a completed failed refresh supersedes that failure in widget status, without clearing an active or newer failure
+- **AND** stale, equal-time, older, mismatched, or missing cached weather does not supersede the failure
 
 #### Scenario: Presentation-only or unrelated setting change
 - **WHEN** temperature units or theme change, or an unrelated setting such as notification preferences changes
