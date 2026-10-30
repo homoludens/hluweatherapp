@@ -61,7 +61,7 @@ In Track Me mode widgets SHALL use the latest valid current location already obt
 
 ### Requirement: Honest empty and unavailable states
 
-When no usable location or matching weather exists, widgets SHALL show a compact actionable state instead of fabricated weather or an empty card. With no location they SHALL prompt the user to select one in the app. With a location but no forecast they SHALL identify the location and offer opening the app or refreshing. An initial weather request SHALL be asynchronous to rendering.
+When no usable location or matching weather exists, widgets SHALL show a compact actionable state instead of fabricated weather or an empty card. With no location they SHALL prompt the user to select one in the app. With a location but no forecast they SHALL identify the location and provide an app-opening action; the small widget's existing manual refresh control SHALL remain available as its retry action, while the medium widget SHALL have no manual refresh control. An initial weather request SHALL be asynchronous to rendering.
 
 #### Scenario: Fresh install without locations
 - **WHEN** a user adds a widget before selecting any location
@@ -93,9 +93,9 @@ Installed widgets SHALL share a single periodic weather-refresh schedule with a 
 - **THEN** cached weather remains visible with its real update time where space permits and is marked stale at the next rendering opportunity once it exceeds the freshness window
 - **AND** widgets do not compensate with frequent polling or GPS requests
 
-### Requirement: Manual refresh preserves the displayed forecast
+### Requirement: Small-widget manual refresh preserves the displayed forecast
 
-The refresh control SHALL request a new forecast through the existing repository and update every installed weather widget after completion. Existing valid weather SHALL remain visible during refresh. A subtle refreshing state SHALL indicate an in-progress request, repeated taps SHALL be coalesced, and the refreshing state SHALL clear on completion or failure without becoming permanent after interruption.
+The small widget's refresh control SHALL request a new forecast through the existing repository and update every installed weather widget after completion. Existing valid weather SHALL remain visible during refresh. A subtle refreshing state SHALL indicate an in-progress request, repeated taps SHALL be coalesced, and the refreshing state SHALL clear on completion or failure without becoming permanent after interruption. The medium widget SHALL continue to receive automatic and relevant-change updates but SHALL NOT expose a manual refresh control.
 
 #### Scenario: Successful refresh
 - **WHEN** the user taps refresh while cached weather is displayed
@@ -112,16 +112,18 @@ The refresh control SHALL request a new forecast through the existing repository
 
 ### Requirement: Refresh failure retains last valid matching data
 
-A refresh failure SHALL retain the last valid forecast for the same provider and location, preserve its original weather timestamp, end loading, and show a subtle stale or failure indication. A repository result marked stale SHALL NOT be presented as a successful fresh update. Without a matching valid forecast the widget SHALL remain in an unavailable state with a retry action. Cancellation SHALL NOT discard the last valid forecast.
+A refresh failure SHALL retain the last valid forecast for the same provider and location, preserve its original weather timestamp, end loading, and show a subtle stale or failure indication. A repository result marked stale SHALL NOT be presented as a successful fresh update. The medium widget's stale, failed, or in-progress status SHALL use accessible non-text status glyphs rather than a header label or refresh control; its status SHALL remain distinguishable without relying on color alone. Without a matching valid forecast the widget SHALL remain in an actionable unavailable state: the medium widget SHALL offer its app-opening action, and the small widget SHALL retain its manual refresh retry action. Cancellation SHALL NOT discard the last valid forecast.
 
 #### Scenario: Repository falls back to cache
 - **WHEN** a refresh returns an older cached forecast marked stale because the provider request failed
 - **THEN** that forecast remains visible as stale with its actual last-weather-update time
 - **AND** the widget does not advance the weather timestamp to the refresh attempt time
+- **AND** the medium widget communicates stale/failure status accessibly without adding header status text or a refresh control
 
 #### Scenario: Request fails without cache
 - **WHEN** the refresh fails and no matching weather has been stored
 - **THEN** the widget shows an actionable unavailable state rather than temperatures from a previous selection
+- **AND** the medium widget provides its app-opening action without a refresh control, while the small widget retains its refresh retry action
 
 ### Requirement: Relevant changes update without refresh loops
 
