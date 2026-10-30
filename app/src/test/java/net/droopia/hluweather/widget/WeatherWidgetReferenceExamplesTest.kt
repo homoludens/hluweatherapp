@@ -124,6 +124,12 @@ class WeatherWidgetReferenceExamplesTest {
         assertText(mediumView.root, "23°C")
         assertText(mediumView.root, "Clear sky")
         assertText(mediumView.root, "Feels like 24°C")
+        assertText(mediumView.root, "21:17")
+        assertTrue("medium reference has no visible date/update label", findViews(mediumView.root)
+            .filterIsInstance<TextView>()
+            .none { it.text.contains("Updated", ignoreCase = true) || it.text.contains("Oct") })
+        assertEquals("medium reference background remains transparent", 0,
+            mediumView.bitmap.getPixel(0, 0) ushr 24)
         assertEquals(
             listOf("22:00", "23:00", "00:00", "01:00", "02:00"),
             findViews(mediumView.root).filterIsInstance<TextView>().map { it.text.toString() }

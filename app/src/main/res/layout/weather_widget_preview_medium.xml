@@ -10,7 +10,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="40dp"
+        android:layout_height="24dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -29,16 +29,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="4dp"
-            android:text="@string/weather_widget_preview_updated"
+            android:text="@string/weather_widget_preview_update_time"
             android:textColor="#FF68758A"
             android:textSize="9sp" />
-
-        <ImageView
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:contentDescription="@string/weather_widget_preview_refresh"
-            android:padding="8dp"
-            android:src="@drawable/weather_widget_preview_refresh" />
     </LinearLayout>
 
     <LinearLayout
@@ -110,11 +103,12 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
                 android:text="@string/weather_widget_preview_hour_22"
                 android:textColor="#FF68758A"
-                android:textSize="9sp" />
+                android:textSize="8sp" />
 
             <ImageView
                 android:layout_width="18dp"
@@ -144,7 +138,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/weather_widget_preview_probability_0"
                     android:textColor="#FF5367E8"
-                    android:textSize="8sp" />
+                    android:textSize="10sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -162,11 +156,12 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
                 android:text="@string/weather_widget_preview_hour_23"
                 android:textColor="#FF68758A"
-                android:textSize="9sp" />
+                android:textSize="8sp" />
 
             <ImageView
                 android:layout_width="18dp"
@@ -196,7 +191,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/weather_widget_preview_probability_0"
                     android:textColor="#FF5367E8"
-                    android:textSize="8sp" />
+                    android:textSize="10sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -214,11 +209,12 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
                 android:text="@string/weather_widget_preview_hour_00"
                 android:textColor="#FF68758A"
-                android:textSize="9sp" />
+                android:textSize="8sp" />
 
             <ImageView
                 android:layout_width="18dp"
@@ -248,7 +244,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/weather_widget_preview_probability_10"
                     android:textColor="#FF5367E8"
-                    android:textSize="8sp" />
+                    android:textSize="10sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -266,11 +262,12 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
                 android:text="@string/weather_widget_preview_hour_01"
                 android:textColor="#FF68758A"
-                android:textSize="9sp" />
+                android:textSize="8sp" />
 
             <ImageView
                 android:layout_width="18dp"
@@ -300,7 +297,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/weather_widget_preview_probability_20"
                     android:textColor="#FF5367E8"
-                    android:textSize="8sp" />
+                    android:textSize="10sp" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

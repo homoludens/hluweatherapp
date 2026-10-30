@@ -13,7 +13,7 @@
     <string name="weather_widget_preview_temperature">23°</string>
     <string name="weather_widget_preview_condition">Clear sky</string>
     <string name="weather_widget_preview_feels_like">Feels like 24°</string>
-    <string name="weather_widget_preview_updated">Updated 11:17</string>
+    <string name="weather_widget_preview_update_time">21:17</string>
     <string name="weather_widget_preview_refresh">Refresh</string>
     <string name="weather_widget_preview_hour_22">22:00</string>
     <string name="weather_widget_preview_hour_23">23:00</string>

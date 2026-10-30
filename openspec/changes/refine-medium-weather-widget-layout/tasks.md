@@ -19,7 +19,8 @@
 
 ## 3. Examples and specification integration
 
-- [ ] 3.1 [low] Update deterministic medium production-rendered examples and launcher-preview assets for the new layout while preserving the small examples; verify `WeatherWidgetReferenceExamplesTest` passes with intentionally updated references, including the existing five-hour fixture and no live weather requests.
+- [x] 3.1 [low] Update deterministic medium production-rendered examples and launcher-preview assets for the new layout while preserving the small examples; verify `WeatherWidgetReferenceExamplesTest` passes with intentionally updated references, including the existing five-hour fixture and no live weather requests.
+  - Verification: Google-debug reference and registration tests passed (6 tests) with `WEATHER_WIDGET_EXAMPLES_DIR` set to the checked-in examples, comparing all three PNGs. The small images were unchanged; rendered medium picker fit, transparency, and content were checked at 100% and 130% font scales. No device/launcher check was performed. Implemented and verified with `openai/gpt-6-luna#max`.
 - [ ] 3.2 [low] Reconcile the conflicting in-progress `home-screen-weather-widgets` and `widget-weather-updates` requirements with this change, or create full modified deltas against their published main specs if they have since been synced; verify the resulting specs agree on medium transparency, time-only header, column count, status and refresh actions while retaining small-widget and cache guarantees, and preserve unrelated task states and evidence without syncing or archiving either change.
 
 ## 4. Integration verification
