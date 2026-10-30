@@ -1,5 +1,7 @@
 # HluWeatherApp
 
+[Website](https://homoludens.github.io/hluweatherapp/) · [Privacy policy](https://homoludens.github.io/hluweatherapp/privacy/)
+
 An Android weather app with hourly and daily forecasts, map-based weather switcher, trip weather along a route, multiple weather providers (https://open-meteo.com, https://met.no), and light/dark themes.
 
 The main motivation for this app is easy access to dew point forecasts, which are hard to find in most apps, if they exist at all.
