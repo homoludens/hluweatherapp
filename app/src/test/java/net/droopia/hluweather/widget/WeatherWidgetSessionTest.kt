@@ -205,9 +205,9 @@ class WeatherWidgetSessionTest {
                 assertEquals(hluMaterialColorScheme(true).onSurface.toArgb(), temperature.currentTextColor)
                 val renamed = f.first.copy(name = "Renamed")
                 f.locations.value = listOf(renamed, f.second)
-                session.awaitText("Renamed")
+                if (medium) session.awaitText("Renamed")
                 f.active.value = ActiveLocation.Saved(f.second)
-                session.awaitText("Second", absent = "73°F")
+                session.awaitText(if (medium) "Second" else "No weather available", absent = "73°F")
                 f.put(f.second, 10.0)
                 session.awaitText("50°F")
                 f.settings.value = f.settings.value.copy(provider = WeatherProvider.MET_NO)
@@ -485,15 +485,7 @@ class WeatherWidgetSessionTest {
 
         val density = root.resources.displayMetrics.density
         val refresh = allViews(root).firstOrNull { it.contentDescription == "Refresh weather" }
-        if (medium) {
-            assertNull("medium widget has no manual refresh action", refresh)
-        } else {
-            assertNotNull("small widget keeps its refresh action", refresh)
-            assertTrue(
-                "small refresh target remains at least 48dp",
-                requireNotNull(refresh).width >= 48f * density - 1f
-            )
-        }
+        assertNull("widgets have no manual refresh action", refresh)
         val expectedIconSizeDp = if (medium) {
             WeatherWidgetSizePolicy.medium(
                 widthDp = size.width.value,

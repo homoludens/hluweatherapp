@@ -1,10 +1,6 @@
 package net.droopia.hluweather.widget
 
 import android.content.Context
-import android.graphics.Paint
-import android.graphics.Typeface
-import android.text.TextPaint
-import android.text.TextUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,9 +14,11 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
-import androidx.glance.layout.fillMaxWidth
-import androidx.glance.layout.padding
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.height
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.time.Instant
 import net.droopia.hluweather.HluWeatherApplication
@@ -89,6 +87,8 @@ internal val SMALL_WEATHER_WIDGET_RESPONSIVE_SIZES = setOf(
     // host to select a variant, so include tall layouts without requiring a wider widget.
     DpSize(110.dp, 128.dp),
     DpSize(110.dp, 160.dp),
+    DpSize(120.dp, 160.dp),
+    DpSize(140.dp, 160.dp),
     DpSize(160.dp, 128.dp),
     DpSize(160.dp, 160.dp),
     DpSize(200.dp, 160.dp),
@@ -139,37 +139,31 @@ internal fun SmallWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         apparentTemperatureLength = weather?.apparentTemperatureText?.length,
         hasStatus = snapshot.hasSmallStatus()
     )
-    val locationName = snapshot.locationNameOrNull()
-    val displayLocationName = locationName?.let { name ->
-        ellipsizeLocationName(name, policy.locationWidthDp, context)
-    }
-
     WeatherWidgetCard(
         snapshot = snapshot,
-        locationDisplayName = displayLocationName
+        drawCardSurface = false,
+        showHeader = false
     ) { palette ->
-        Column(modifier = GlanceModifier.fillMaxWidth().padding(top = 4.dp)) {
+        Column(
+            modifier = GlanceModifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             when (snapshot) {
                 is WeatherWidgetSnapshot.Available -> {
-                    WeatherWidgetCurrentWeather(
+                    SmallWeatherWidgetCurrentWeather(
                         weather = snapshot.weather,
                         palette = palette,
-                        iconSizeDp = policy.iconSizeDp,
-                        temperatureFontSizeSp = policy.temperatureFontSizeSp,
-                        conditionFontSizeSp = policy.conditionFontSizeSp,
-                        apparentTemperatureFontSizeSp = policy.apparentTemperatureFontSizeSp,
-                        showCondition = policy.showCondition,
-                        showApparentTemperature = policy.showApparentTemperature,
-                        modifier = GlanceModifier.fillMaxWidth()
+                        size = policy
                     )
                     if (policy.showStatus) {
+                        Spacer(GlanceModifier.height(2.dp))
                         WeatherWidgetStatus(snapshot, palette, compact = true)
                     }
                 }
 
                 is WeatherWidgetSnapshot.NoLocation,
                 is WeatherWidgetSnapshot.NoWeather -> {
-                    WeatherWidgetEmptyContent(snapshot, palette)
+                    WeatherWidgetEmptyContent(snapshot, palette, showLocationName = false)
                     if (snapshot is WeatherWidgetSnapshot.NoWeather && snapshot.hasSmallStatus()) {
                         WeatherWidgetStatus(snapshot, palette, compact = true)
                     }
@@ -179,33 +173,10 @@ internal fun SmallWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
     }
 }
 
-private fun WeatherWidgetSnapshot.locationNameOrNull(): String? = when (this) {
-    is WeatherWidgetSnapshot.NoLocation -> null
-    is WeatherWidgetSnapshot.NoWeather -> request.locationName
-    is WeatherWidgetSnapshot.Available -> weather.locationName
-}
-
 private fun WeatherWidgetSnapshot.hasSmallStatus(): Boolean = when (this) {
     is WeatherWidgetSnapshot.NoLocation -> false
     is WeatherWidgetSnapshot.NoWeather -> refresh.isRefreshing || refresh.lastAttemptFailed
     is WeatherWidgetSnapshot.Available -> weather.isStale || refresh.isRefreshing || refresh.lastAttemptFailed
 }
 
-/** Glance Text has a max-line limit but no overflow setting; pre-ellipsize to the reserved width. */
-private fun ellipsizeLocationName(name: String, widthDp: Float, context: Context): String {
-    val density = context.resources.displayMetrics.density
-    val fontScale = context.resources.configuration.fontScale
-    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = LOCATION_FONT_SIZE_SP * density * fontScale
-        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-    }
-    return TextUtils.ellipsize(
-        name,
-        paint,
-        widthDp.coerceAtLeast(0f) * density,
-        TextUtils.TruncateAt.END
-    ).toString()
-}
-
 private const val DEFAULT_TEMPERATURE_LENGTH = 4
-private const val LOCATION_FONT_SIZE_SP = 14f

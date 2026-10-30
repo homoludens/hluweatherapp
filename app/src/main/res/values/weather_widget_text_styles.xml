@@ -16,16 +16,28 @@
         <item name="android:textStyle">bold</item>
     </style>
 
+    <style name="WeatherWidgetAdaptiveText.LargePrimary" parent="WeatherWidgetAdaptiveText.Primary">
+        <item name="android:autoSizeMaxTextSize">80sp</item>
+    </style>
+
     <style name="WeatherWidgetAdaptiveText.Medium" parent="WeatherWidgetAdaptiveTextBase">
         <item name="android:autoSizeMinTextSize">7dp</item>
         <item name="android:autoSizeMaxTextSize">14sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 
+    <style name="WeatherWidgetAdaptiveText.LargeMedium" parent="WeatherWidgetAdaptiveText.Medium">
+        <item name="android:autoSizeMaxTextSize">24sp</item>
+    </style>
+
     <style name="WeatherWidgetAdaptiveText.Regular" parent="WeatherWidgetAdaptiveTextBase">
         <item name="android:autoSizeMinTextSize">7dp</item>
         <item name="android:autoSizeMaxTextSize">14sp</item>
         <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetAdaptiveText.LargeRegular" parent="WeatherWidgetAdaptiveText.Regular">
+        <item name="android:autoSizeMaxTextSize">24sp</item>
     </style>
 
     <style name="WeatherWidgetAdaptiveText.CompactMedium" parent="WeatherWidgetAdaptiveTextBase">

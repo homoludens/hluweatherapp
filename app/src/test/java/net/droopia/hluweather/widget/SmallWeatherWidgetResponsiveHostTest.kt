@@ -77,7 +77,7 @@ class SmallWeatherWidgetResponsiveHostTest {
             themeMode = ThemeMode.LIGHT
         ))
         assertEquals(TemperatureUnit.CELSIUS, app.settingsRepository.settings.first().temperatureUnit)
-        val name = "Zajecar, a very long location name for ellipsis"
+        val name = "Zajecar, a very long location name"
         val location = WeatherLocation("responsive-host", name, 43.9, 20.3)
         app.locationRepository.add(location)
         app.locationRepository.selectSaved(location.id)
@@ -120,9 +120,9 @@ class SmallWeatherWidgetResponsiveHostTest {
             // Resize the same host and the same multi-sized RemoteViews, not a new preview.
             val resized = host(app, remote, 140.19f, 184.38f, 0f)
             resize(resized, 110f, 110f)
-            assertWeather(resized, name, "15°C", condition = false, feels = null)
-            resize(resized, 110f, 128f)
             assertWeather(resized, name, "15°C", condition = true, feels = null)
+            resize(resized, 110f, 128f)
+            assertWeather(resized, name, "15°C", condition = true, feels = "Feels like 13°C")
             resize(resized, 160f, 160f)
             assertWeather(resized, name, "15°C", condition = true, feels = "Feels like 13°C")
             resize(resized, 140.19f, 184.38f)
@@ -153,15 +153,15 @@ class SmallWeatherWidgetResponsiveHostTest {
             assertSame(originalContent, cachedHost.getChildAt(0))
             assertWeather(cachedHost, name, "15°C", true, "Feels like 13°C")
 
-            // Active-session reconfiguration can reduce rows for a genuinely short host.
+            // Active-session reconfiguration keeps the weather visible at a larger font scale.
             app.onConfigurationChanged(largeConfig)
             val activeLarge = session.awaitRemote { candidate ->
                 val compact = host(largeContext, candidate, 160f, 128f, 0f)
-                hasText(compact, "15°C") && !hasText(compact, "Cloudy")
+                hasText(compact, "15°C") && hasText(compact, "Cloudy")
             }
-            assertWeather(host(largeContext, activeLarge, 160f, 128f, 0f), name, "15°C", false, null)
-            assertWeather(host(largeContext, activeLarge, 110f, 110f, 0f), name, "15°C", false, null)
-            assertWeather(host(largeContext, activeLarge, 110f, 128f, 0f), name, "15°C", true, null)
+            assertWeather(host(largeContext, activeLarge, 160f, 128f, 0f), name, "15°C", true, null)
+            assertWeather(host(largeContext, activeLarge, 110f, 110f, 0f), name, "15°C", true, null)
+            assertWeather(host(largeContext, activeLarge, 110f, 128f, 0f), name, "15°C", true, "Feels like 13°C")
             assertWeather(host(largeContext, activeLarge, 140.19f, 184.38f, 8f), name, "15°C", true, "Feels like 13°C")
 
             // Loading and stale/failure statuses must survive the selected normal host variant.
@@ -174,7 +174,7 @@ class SmallWeatherWidgetResponsiveHostTest {
             assertWeather(exactlyTall, name, "15°C", true, "Feels like 13°C")
             assertText(exactlyTall, "Refreshing")
             val compactLoading = host(largeContext, loading, 160f, 128f, 0f)
-            assertWeather(compactLoading, name, "15°C", false, null)
+            assertWeather(compactLoading, name, "15°C", true, null)
             app.weatherWidgetRepository.finishRefresh(request, attempt, null)
             val stale = session.awaitRemote { hasText(host(largeContext, it, 140.19f, 184.38f, 8f), "Stale weather") }
             val staleHost = host(largeContext, stale, 140.19f, 184.38f, 8f)
@@ -189,7 +189,7 @@ class SmallWeatherWidgetResponsiveHostTest {
             assertWeather(failureHost, name, "15°C", true, "Feels like 13°C")
             assertText(failureHost, "Update failed")
 
-            // Signed Fahrenheit, dark theme and long name use the same selected production variant.
+            // Signed Fahrenheit and dark theme use the same selected production variant.
             val recovery = app.weatherWidgetRepository.beginRefresh(request)
             app.weatherWidgetRepository.finishRefresh(request, recovery, ForecastLoad(future, false))
             cache.put(key, forecast.copy(
@@ -311,19 +311,12 @@ class SmallWeatherWidgetResponsiveHostTest {
         val apparent = texts(host).firstOrNull { it.text.toString().startsWith("Feels like") }
         assertEquals("apparent-temperature priority", feels, apparent?.text?.toString())
         assertFalse("small widget has no hourly strip", hasText(host, "99%"))
-        assertLocationAndRefresh(host, name)
+        assertFalse("small widget does not display the location", texts(host).any { it.text.contains(name) })
+        assertFalse("small widget has no location header", views(host).any { it.contentDescription == "Weather for $name" })
+        assertFalse("small widget has no refresh action", views(host).any { it.contentDescription == "Refresh weather" })
         val card = if (host is AppWidgetHostView) host.getChildAt(0) else host
         assertRenderedContentFitsWithoutOverlap(card)
         assertTextInkFits(host)
-    }
-
-    private fun assertLocationAndRefresh(host: View, name: String) {
-        val location = texts(host).first { it.contentDescription == "Weather for $name" }
-        val refresh = views(host).first { it.contentDescription == "Refresh weather" }
-        assertTrue("long location is ellipsized", location.text.endsWith("…"))
-        assertTrue("refresh remains a 48 dp target", refresh.width >= 48f * host.resources.displayMetrics.density - 1f)
-        assertTrue("refresh remains 48 dp tall", refresh.height >= 48f * host.resources.displayMetrics.density - 1f)
-        assertTrue("location must not overlap refresh", bounds(location, host).right <= bounds(refresh, host).left)
     }
 
     private fun assertTextInkFits(root: View) {
@@ -351,15 +344,4 @@ class SmallWeatherWidgetResponsiveHostTest {
         if (root is ViewGroup) for (i in 0 until root.childCount) addAll(views(root.getChildAt(i)))
     }
 
-    private fun bounds(view: View, root: View): Rect {
-        var x = view.left
-        var y = view.top
-        var parent = view.parent
-        while (parent is View && parent !== root) {
-            x += parent.left
-            y += parent.top
-            parent = parent.parent
-        }
-        return Rect(x, y, x + view.width, y + view.height)
-    }
 }

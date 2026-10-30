@@ -42,7 +42,6 @@ import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.data.model.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,29 +69,23 @@ class SmallWeatherWidgetTest {
     }
 
     @Test
-    fun small_production_card_keeps_its_opaque_shared_surface() {
+    fun small_production_card_has_a_transparent_background() {
         val view = render(availableSnapshot(), widthDp = 200f, heightDp = 160f)
-        val surface = findViews(view).filterIsInstance<ImageView>().firstOrNull {
-            it.drawable is android.graphics.drawable.GradientDrawable &&
-                it.width >= view.width - 1 && it.height >= view.height - 1
-        }
-        assertNotNull("small widget keeps its full-card surface image", surface)
-
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
-        assertEquals("small card remains opaque behind its content", 255, bitmap.getPixel(2, view.height / 2) ushr 24)
+        assertEquals("small widget is transparent behind its content", 0, bitmap.getPixel(2, view.height / 2) ushr 24)
     }
 
     @Test
     fun translated_production_layout_preserves_small_weather_priorities_at_minimum_compact_and_normal_sizes() {
         val cases = listOf(
-            LayoutCase(110f, 110f, 1f, ThemeMode.LIGHT, expectedCondition = false, expectedFeelsLike = false),
-            LayoutCase(110f, 128f, 1f, ThemeMode.LIGHT, expectedCondition = true, expectedFeelsLike = false),
-            LayoutCase(110f, 160f, 1f, ThemeMode.LIGHT, expectedCondition = true, expectedFeelsLike = true),
-            LayoutCase(110f, 160f, 1.3f, ThemeMode.DARK, expectedCondition = true, expectedFeelsLike = true),
-            LayoutCase(160f, 128f, 1f, ThemeMode.SYSTEM, expectedCondition = true, expectedFeelsLike = false, systemDark = true),
-            LayoutCase(160f, 128f, 1.3f, ThemeMode.LIGHT, expectedCondition = false, expectedFeelsLike = false),
-            LayoutCase(200f, 160f, 1f, ThemeMode.DARK, expectedCondition = true, expectedFeelsLike = true)
+            LayoutCase(110f, 110f, 1f, ThemeMode.LIGHT),
+            LayoutCase(110f, 128f, 1f, ThemeMode.LIGHT),
+            LayoutCase(110f, 160f, 1f, ThemeMode.LIGHT),
+            LayoutCase(110f, 160f, 1.3f, ThemeMode.DARK),
+            LayoutCase(160f, 128f, 1f, ThemeMode.SYSTEM, systemDark = true),
+            LayoutCase(160f, 128f, 1.3f, ThemeMode.LIGHT),
+            LayoutCase(200f, 160f, 1f, ThemeMode.DARK)
         )
 
         cases.forEach { case ->
@@ -104,13 +97,14 @@ class SmallWeatherWidgetTest {
                 case.systemDark
             )
 
-            if (case.widthDp > 110f) assertText(view, "Zaječar")
-            else assertTrue("narrow layout keeps an accessible location label", hasDescription(view, "Weather for Zaječar"))
+            val policy = WeatherWidgetSizePolicy.small(case.widthDp, case.heightDp, case.fontScale, 4, 4)
+            assertFalse(hasText(view, "Zaječar"))
+            assertFalse(hasDescription(view, "Weather for Zaječar"))
             assertText(view, "23°C")
-            assertEquals(case.expectedCondition, hasText(view, "Clear sky"))
-            assertEquals(case.expectedFeelsLike, hasText(view, "Feels like 24°C"))
+            assertEquals(policy.showCondition, hasText(view, "Clear sky"))
+            assertEquals(policy.showApparentTemperature, hasText(view, "Feels like 24°C"))
             assertTrue("weather icon remains visible for $case", hasWeatherBitmap(view))
-            assertRefreshTarget(view, case.widthDp)
+            assertFalse(hasDescription(view, "Refresh weather"))
             assertPrimaryContentFits(view, case.widthDp, case.heightDp)
             assertFalse("small widget never shows hourly content", hasText(view, "22:00"))
             assertFalse("small widget never shows precipitation columns", hasText(view, "60%"))
@@ -132,25 +126,25 @@ class SmallWeatherWidgetTest {
     }
 
     @Test
-    fun long_location_is_end_ellipsized_and_keeps_its_full_accessible_name_and_refresh_target() {
-        val longName = "A very long location name that must never cover the refresh button"
-        val view = render(
+    fun location_and_refresh_are_absent_for_available_and_missing_weather() {
+        val longName = "A very long location name"
+        val available = render(
             availableSnapshot(locationName = longName),
             widthDp = 110f,
             heightDp = 110f
         )
-        val location = findViews(view).filterIsInstance<TextView>()
-            .first { it.contentDescription == "Weather for $longName" }
-
-        assertTrue("visible location should end with an ellipsis", location.text.endsWith("…"))
-        assertEquals("Weather for $longName", location.contentDescription)
-        assertRefreshTarget(view, widthDp = 110f)
-        val refresh = findViews(view).first { it.contentDescription == "Refresh weather" }
-        assertTrue(
-            "ellipsized location does not enter the refresh target",
-            absoluteBounds(location, view).right <= absoluteBounds(refresh, view).left
+        val noWeather = render(
+            WeatherWidgetSnapshot.NoWeather(PersistedSettings(), request(longName), WidgetRefreshStatus()),
+            widthDp = 110f,
+            heightDp = 110f
         )
-        assertPrimaryContentFits(view, widthDp = 110f, heightDp = 110f)
+        listOf(available, noWeather).forEach { view ->
+            assertFalse(hasDescription(view, "Weather for $longName"))
+            assertFalse(hasDescription(view, "Refresh weather"))
+            assertFalse(findViews(view).filterIsInstance<TextView>().any { it.text.contains(longName) })
+        }
+        assertText(noWeather, "No weather available")
+        assertPrimaryContentFits(available, widthDp = 110f, heightDp = 110f)
     }
 
     @Test
@@ -186,7 +180,7 @@ class SmallWeatherWidgetTest {
 
             assertText(view, temperature)
             assertPrimaryContentFits(view, widthDp = 110f, heightDp = 110f)
-            assertRefreshTarget(view, widthDp = 110f)
+            assertFalse(hasDescription(view, "Refresh weather"))
         }
     }
 
@@ -323,19 +317,6 @@ class SmallWeatherWidgetTest {
         assertRenderedContentFitsWithoutOverlap(root)
     }
 
-    private fun assertRefreshTarget(root: View, widthDp: Float) {
-        val density = root.resources.displayMetrics.density
-        val refresh = findViews(root).firstOrNull { it.contentDescription == "Refresh weather" }
-        assertNotNull("refresh action must remain visible and independent", refresh)
-        val refreshTarget = requireNotNull(refresh)
-        assertTrue("refresh target remains separate from the card", refreshTarget !== root)
-        assertTrue("refresh target keeps its 48 dp width", refreshTarget.width >= 48f * density - 1f)
-        val bounds = absoluteBounds(refreshTarget, root)
-        assertTrue("refresh stays inside the right edge", bounds.right <= root.width)
-        assertTrue("refresh remains at the top-right", bounds.left >= root.width - 56f * density)
-        assertTrue("card root is sized to the tested launcher width", root.width <= widthDp * density + 1f)
-    }
-
     private fun hasWeatherBitmap(root: View): Boolean = findViews(root)
         .filterIsInstance<ImageView>()
         .any { it.drawable is BitmapDrawable }
@@ -450,8 +431,6 @@ class SmallWeatherWidgetTest {
         val heightDp: Float,
         val fontScale: Float,
         val theme: ThemeMode,
-        val expectedCondition: Boolean,
-        val expectedFeelsLike: Boolean,
         val systemDark: Boolean = false
     )
 

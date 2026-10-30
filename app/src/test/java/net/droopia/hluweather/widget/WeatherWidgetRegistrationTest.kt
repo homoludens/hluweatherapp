@@ -103,7 +103,7 @@ class WeatherWidgetRegistrationTest {
     }
 
     @Test
-    fun medium_picker_preview_is_transparent_and_small_preview_keeps_its_surface() {
+    fun picker_previews_and_initial_layouts_are_transparent() {
         val small = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_small.xml"))
         val medium = parse(sourceFile("app/src/main/res/layout/weather_widget_preview_medium.xml"))
         val smallInitial = parse(sourceFile("app/src/main/res/layout/weather_widget_initial_state.xml"))
@@ -123,14 +123,8 @@ class WeatherWidgetRegistrationTest {
                 WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP.dp
             ) in MEDIUM_WEATHER_WIDGET_RESPONSIVE_SIZES
         )
-        assertEquals(
-            "@drawable/weather_widget_card_surface",
-            small.documentElement.androidAttribute("background")
-        )
-        assertEquals(
-            "@drawable/weather_widget_card_surface",
-            smallInitial.documentElement.androidAttribute("background")
-        )
+        assertFalse("small initial layout has no card background", smallInitial.documentElement.hasAttributeNS(ANDROID_NS, "background"))
+        assertFalse("small picker layout has no card background", small.documentElement.hasAttributeNS(ANDROID_NS, "background"))
         assertFalse("medium initial layout has no card background", mediumInitial.documentElement.hasAttributeNS(ANDROID_NS, "background"))
         assertFalse("medium picker layout does not draw a card background", medium.documentElement.hasAttributeNS(ANDROID_NS, "background"))
         assertEquals("4dp", medium.documentElement.androidAttribute("paddingStart"))
@@ -206,10 +200,17 @@ class WeatherWidgetRegistrationTest {
                 assertEquals(hourlyCenters[index], markCenter, 0.1f)
             }
         }
-        assertTrue("small fallback image keeps its shared card surface", parse(
+        val smallFallbackItems = parse(
             sourceFile("app/src/main/res/drawable/weather_widget_preview_small_image.xml")
-        ).getElementsByTagName("item").asElements().any {
-            it.androidAttribute("drawable") == "@drawable/weather_widget_card_surface"
+        ).getElementsByTagName("item").asElements()
+        assertFalse("small fallback image has no card surface or refresh", smallFallbackItems.any {
+            it.androidAttribute("drawable") in setOf("@drawable/weather_widget_card_surface", "@drawable/weather_widget_preview_refresh")
+        })
+        assertFalse(small.getElementsByTagName("TextView").asElements().any {
+            it.androidAttribute("text") == "@string/weather_widget_preview_location"
+        })
+        assertFalse(small.getElementsByTagName("ImageView").asElements().any {
+            it.androidAttribute("src") == "@drawable/weather_widget_preview_refresh"
         })
     }
 
@@ -230,7 +231,7 @@ class WeatherWidgetRegistrationTest {
         assertTrue(findViews(medium).filterIsInstance<TextView>().any {
             it.text == context.getString(R.string.weather_widget_preview_hour_00)
         })
-        assertTrue(smallInitial.background != null)
+        assertTrue("small initial layout has no card background", smallInitial.background == null)
         assertTrue("medium initial layout has no card background", mediumInitial.background == null)
         assertPixelAlpha(mediumInitial, widthDp = 260, heightDp = 110, xDp = 2, yDp = 55)
         assertEquals(0, drawDrawablePixelAlpha(
@@ -242,8 +243,8 @@ class WeatherWidgetRegistrationTest {
         ))
         assertNotNull(context.getDrawable(R.drawable.weather_widget_preview_small_image))
         assertNotNull(context.getDrawable(R.drawable.weather_widget_preview_medium_image))
-        assertTrue("small picker layout keeps its root surface", small.background != null)
-        assertTrue("small picker keeps its refresh control", findViews(small).any { view ->
+        assertTrue("small picker layout has no root surface", small.background == null)
+        assertFalse("small picker has no refresh control", findViews(small).any { view ->
             (view as? android.widget.ImageView)?.drawable != null &&
                 view.contentDescription == context.getString(R.string.weather_widget_preview_refresh)
         })
@@ -255,16 +256,6 @@ class WeatherWidgetRegistrationTest {
         assertRenderedMediumPreview(fontScale = 1f)
         assertRenderedMediumPreview(fontScale = 1.3f)
 
-        val baseContext = ApplicationProvider.getApplicationContext<Context>()
-        val small = LayoutInflater.from(baseContext)
-            .inflate(R.layout.weather_widget_preview_small, null)
-        val density = baseContext.resources.displayMetrics.density
-        measureAndLayout(small, widthPx = (200 * density).toInt(), heightPx = (160 * density).toInt())
-        val smallBitmap = draw(small)
-        assertEquals(255, smallBitmap.getPixel((100 * density).toInt(), (80 * density).toInt()) ushr 24)
-        assertTrue(findViews(small).filterIsInstance<ImageView>().any {
-            it.contentDescription == baseContext.getString(R.string.weather_widget_preview_refresh)
-        })
     }
 
     private fun assertProvider(

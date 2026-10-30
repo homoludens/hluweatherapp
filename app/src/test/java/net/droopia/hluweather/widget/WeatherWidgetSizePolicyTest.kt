@@ -8,7 +8,7 @@ import org.junit.Test
 class WeatherWidgetSizePolicyTest {
 
     @Test
-    fun small_policy_keeps_primary_content_and_refresh_inside_supported_minimums() {
+    fun small_policy_keeps_primary_content_inside_supported_minimums() {
         val cases = listOf(
             SmallCase(110f, 110f, 1f, "22°C".length),
             SmallCase(110f, 110f, 2f, "−123°F".length),
@@ -26,10 +26,9 @@ class WeatherWidgetSizePolicyTest {
                 formattedTemperatureLength = case.temperatureLength
             )
 
-            assertTrue("location width for $case", policy.locationWidthDp > 0f)
-            assertEquals(WeatherWidgetSizePolicy.REFRESH_TOUCH_TARGET_DP, policy.refreshTouchTargetDp)
             assertTrue("primary width for $case", policy.primaryContentWidthDp <= policy.primaryContentAvailableWidthDp + EPSILON)
             assertTrue("primary height for $case", policy.primaryContentHeightDp <= policy.primaryContentAvailableHeightDp + EPSILON)
+            assertEquals(case.heightDp - 18f, policy.primaryContentAvailableHeightDp, EPSILON)
         }
     }
 
@@ -37,7 +36,7 @@ class WeatherWidgetSizePolicyTest {
     fun small_policy_uses_secondary_content_only_after_primary_and_hides_feels_before_condition() {
         val minimumHeight = WeatherWidgetSizePolicy.small(
             widthDp = 200f,
-            heightDp = 120f,
+            heightDp = 95f,
             fontScale = 1f,
             formattedTemperatureLength = "23°C".length,
             apparentTemperatureLength = "24°C".length
@@ -58,7 +57,7 @@ class WeatherWidgetSizePolicyTest {
         )
         val shorterThanMinimum = WeatherWidgetSizePolicy.small(
             widthDp = WeatherWidgetSizePolicy.SMALL_MIN_WIDTH_DP,
-            heightDp = 100f,
+            heightDp = 45f,
             fontScale = 1f,
             formattedTemperatureLength = "23°C".length,
             apparentTemperatureLength = "24°C".length
@@ -66,12 +65,83 @@ class WeatherWidgetSizePolicyTest {
 
         assertTrue(minimumHeight.showCondition)
         assertFalse(minimumHeight.showApparentTemperature)
-        assertFalse(supportedMinimum.showCondition)
+        assertTrue(supportedMinimum.showCondition)
         assertFalse(supportedMinimum.showApparentTemperature)
         assertTrue(normalHeight.showCondition)
         assertTrue(normalHeight.showApparentTemperature)
         assertFalse(shorterThanMinimum.showCondition)
         assertFalse(shorterThanMinimum.showApparentTemperature)
+    }
+
+    @Test
+    fun small_policy_uses_the_freed_header_space_for_larger_text_and_status() {
+        val minimum = WeatherWidgetSizePolicy.small(110f, 110f, 1f, 4, 4, hasStatus = true)
+        val typical = WeatherWidgetSizePolicy.small(160f, 160f, 1f, 4, 4, hasStatus = true)
+
+        assertTrue(minimum.temperatureFontSizeSp > 32f)
+        assertTrue(typical.temperatureFontSizeSp > 40f)
+        assertTrue(typical.conditionFontSizeSp > 12f)
+        assertTrue(typical.apparentTemperatureFontSizeSp > 11f)
+        assertTrue(minimum.showStatus)
+        assertTrue(typical.showStatus)
+
+        listOf(minimum, typical).forEach { policy ->
+            val lineHeight = WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
+            val occupiedHeight = policy.primaryContentHeightDp +
+                (if (policy.showCondition) (policy.conditionFontSizeSp * lineHeight - policy.iconSizeDp).coerceAtLeast(0f) else 0f) +
+                (if (policy.showApparentTemperature) 2f + policy.apparentTemperatureFontSizeSp * lineHeight else 0f) +
+                (if (policy.showStatus) 2f + 10f * lineHeight else 0f)
+            assertTrue(occupiedHeight <= policy.primaryContentAvailableHeightDp + EPSILON)
+        }
+    }
+
+    @Test
+    fun small_policy_reserves_status_space_when_the_widget_is_short() {
+        val policy = WeatherWidgetSizePolicy.small(160f, 128f, 1.3f, 4, 4, hasStatus = true)
+
+        assertTrue(policy.showStatus)
+        assertTrue(policy.showCondition)
+        assertFalse(policy.showApparentTemperature)
+        assertTrue(policy.primaryContentHeightDp + 2f + 10f * 1.3f * WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER <=
+            policy.primaryContentAvailableHeightDp + EPSILON)
+    }
+
+    @Test
+    fun small_policy_uses_extra_width_in_narrow_two_by_two_hosts() {
+        val narrow = WeatherWidgetSizePolicy.small(110f, 160f, 1f, 4)
+        val medium = WeatherWidgetSizePolicy.small(120f, 160f, 1f, 4)
+        val wider = WeatherWidgetSizePolicy.small(140f, 160f, 1f, 4)
+
+        assertTrue(medium.temperatureFontSizeSp > narrow.temperatureFontSizeSp)
+        assertTrue(wider.temperatureFontSizeSp > medium.temperatureFontSizeSp)
+    }
+
+    @Test
+    fun small_policy_fits_all_shown_rows_for_font_scales_and_temperature_lengths() {
+        val cases = listOf(
+            SmallCase(110f, 110f, 1f, 4),
+            SmallCase(110f, 110f, 2f, 6),
+            SmallCase(120f, 160f, 1.3f, 6),
+            SmallCase(140f, 160f, 1f, 4),
+            SmallCase(160f, 128f, 1.3f, 4),
+            SmallCase(200f, 160f, 2f, 6)
+        )
+
+        cases.forEach { case ->
+            listOf(false, true).forEach { hasStatus ->
+                val policy = WeatherWidgetSizePolicy.small(
+                    case.widthDp, case.heightDp, case.fontScale, case.temperatureLength,
+                    apparentTemperatureLength = case.temperatureLength, hasStatus = hasStatus
+                )
+                fun lineHeight(size: Float) = (size * case.fontScale *
+                    WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER).coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
+                val occupiedHeight = policy.primaryContentHeightDp +
+                    (if (policy.showCondition) (lineHeight(policy.conditionFontSizeSp) - policy.iconSizeDp).coerceAtLeast(0f) else 0f) +
+                    (if (policy.showApparentTemperature) 2f + lineHeight(policy.apparentTemperatureFontSizeSp) else 0f) +
+                    (if (policy.showStatus) 2f + lineHeight(10f) else 0f)
+                assertTrue("shown rows fit for $case, status=$hasStatus", occupiedHeight <= policy.primaryContentAvailableHeightDp + EPSILON)
+            }
+        }
     }
 
     @Test

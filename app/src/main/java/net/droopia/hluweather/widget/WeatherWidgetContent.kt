@@ -86,7 +86,7 @@ internal data class WeatherWidgetStatusDescriptions(
         }
 }
 
-/** The same card and header are used by both widget sizes; content remains size-specific. */
+/** Shared widget container; each size chooses whether to show the header and surface. */
 @Composable
 fun WeatherWidgetCard(
     snapshot: WeatherWidgetSnapshot,
@@ -101,6 +101,7 @@ fun WeatherWidgetCard(
     verticalPaddingDp: Float = 8f,
     horizontalPaddingDp: Float = 8f,
     drawCardSurface: Boolean = true,
+    showHeader: Boolean = true,
     content: @Composable (WeatherWidgetPalette) -> Unit
 ) {
     val context = LocalContext.current
@@ -136,18 +137,20 @@ fun WeatherWidgetCard(
             .clickable(openMainWeatherAction(context))
             .padding(horizontal = horizontalPaddingDp.dp, vertical = verticalPaddingDp.dp)
     ) {
-        WeatherWidgetHeader(
-            locationName = locationName,
-            isRefreshing = isRefreshing,
-            palette = palette,
-            displayLocationName = locationDisplayName,
-            locationContentDescription = locationContentDescription,
-            updateText = headerUpdateText,
-            updateContentDescription = headerUpdateContentDescription,
-            updateTextWidthDp = headerUpdateTextWidthDp,
-            headerHeightDp = headerHeightDp,
-            showRefreshAction = showRefreshAction
-        )
+        if (showHeader) {
+            WeatherWidgetHeader(
+                locationName = locationName,
+                isRefreshing = isRefreshing,
+                palette = palette,
+                displayLocationName = locationDisplayName,
+                locationContentDescription = locationContentDescription,
+                updateText = headerUpdateText,
+                updateContentDescription = headerUpdateContentDescription,
+                updateTextWidthDp = headerUpdateTextWidthDp,
+                headerHeightDp = headerHeightDp,
+                showRefreshAction = showRefreshAction
+            )
+        }
         content(palette)
     }
 }
@@ -261,7 +264,7 @@ fun WeatherWidgetWeatherIcon(
     )
 }
 
-/** Current-weather block shared by small and medium layouts; callers supply responsive sizes. */
+/** Current-weather block for the standard widget layout; callers supply responsive sizes. */
 @Composable
 fun WeatherWidgetCurrentWeather(
     weather: WeatherWidgetState,
@@ -337,6 +340,58 @@ fun WeatherWidgetCurrentWeather(
                 fontSizeSp = apparentTemperatureFontSizeSp.coerceAtLeast(1f),
                 lineHeightMultiplier = textLineHeightMultiplier,
                 modifier = GlanceModifier.fillMaxWidth().padding(top = secondaryItemGapDp.dp),
+                contentDescription = weather.apparentTemperatureContentDescription
+                    ?.let { "Feels like $it" }
+                    ?: "Feels like ${weather.apparentTemperatureText}"
+            )
+        }
+    }
+}
+
+/** The small widget gives the temperature its own line to use the 2x2 width. */
+@Composable
+internal fun SmallWeatherWidgetCurrentWeather(
+    weather: WeatherWidgetState,
+    palette: WeatherWidgetPalette,
+    size: SmallWeatherWidgetSize
+) {
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
+        WeatherWidgetAdaptiveText(
+            text = weather.temperatureText,
+            role = WeatherWidgetAdaptiveTextRole.LARGE_PRIMARY,
+            color = palette.mainText,
+            fontSizeSp = size.temperatureFontSizeSp.coerceAtLeast(1f),
+            modifier = GlanceModifier.fillMaxWidth(),
+            contentDescription = weather.temperatureContentDescription
+        )
+        Spacer(GlanceModifier.height(2.dp))
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            WeatherWidgetWeatherIcon(
+                condition = weather.condition,
+                isDay = weather.isDay,
+                palette = palette,
+                sizeDp = size.iconSizeDp
+            )
+            if (size.showCondition) {
+                Spacer(GlanceModifier.width(4.dp))
+                WeatherWidgetAdaptiveText(
+                    text = weather.conditionLabel,
+                    role = WeatherWidgetAdaptiveTextRole.LARGE_MEDIUM,
+                    color = palette.mainText,
+                    fontSizeSp = size.conditionFontSizeSp,
+                    modifier = GlanceModifier.defaultWeight(),
+                    contentDescription = weather.conditionLabel
+                )
+            }
+        }
+        if (size.showApparentTemperature && weather.apparentTemperatureText != null) {
+            Spacer(GlanceModifier.height(2.dp))
+            WeatherWidgetAdaptiveText(
+                text = "Feels like ${weather.apparentTemperatureText}",
+                role = WeatherWidgetAdaptiveTextRole.LARGE_REGULAR,
+                color = palette.secondaryText,
+                fontSizeSp = size.apparentTemperatureFontSizeSp,
+                modifier = GlanceModifier.fillMaxWidth(),
                 contentDescription = weather.apparentTemperatureContentDescription
                     ?.let { "Feels like $it" }
                     ?: "Feels like ${weather.apparentTemperatureText}"
@@ -447,11 +502,16 @@ fun WeatherWidgetHourlyCell(
 fun WeatherWidgetEmptyContent(
     snapshot: WeatherWidgetSnapshot,
     palette: WeatherWidgetPalette,
-    modifier: GlanceModifier = GlanceModifier
+    modifier: GlanceModifier = GlanceModifier,
+    showLocationName: Boolean = true
 ) {
     val text = when (snapshot) {
         is WeatherWidgetSnapshot.NoLocation -> "Open HluWeather to choose a location"
-        is WeatherWidgetSnapshot.NoWeather -> "No weather available for ${snapshot.request.locationName}"
+        is WeatherWidgetSnapshot.NoWeather -> if (showLocationName) {
+            "No weather available for ${snapshot.request.locationName}"
+        } else {
+            "No weather available"
+        }
         is WeatherWidgetSnapshot.Available -> return
     }
     Text(
@@ -577,9 +637,12 @@ private fun WeatherWidgetAdaptiveText(
 
 private enum class WeatherWidgetAdaptiveTextRole(val layoutId: Int) {
     PRIMARY(R.layout.weather_widget_adaptive_text_primary),
+    LARGE_PRIMARY(R.layout.weather_widget_adaptive_text_large_primary),
     MEDIUM(R.layout.weather_widget_adaptive_text_medium),
+    LARGE_MEDIUM(R.layout.weather_widget_adaptive_text_large_medium),
     MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_medium_center),
     REGULAR(R.layout.weather_widget_adaptive_text_regular),
+    LARGE_REGULAR(R.layout.weather_widget_adaptive_text_large_regular),
     COMPACT_MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_compact_medium_center),
     COMPACT_REGULAR(R.layout.weather_widget_adaptive_text_compact_regular),
     COMPACT_REGULAR_CENTER(R.layout.weather_widget_adaptive_text_compact_regular_center),

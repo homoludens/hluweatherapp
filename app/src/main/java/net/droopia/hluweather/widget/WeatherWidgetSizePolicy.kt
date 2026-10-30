@@ -14,8 +14,6 @@ enum class WeatherWidgetSizeClass {
 /** Small-widget presentation choices, independent of Glance and Android resources. */
 data class SmallWeatherWidgetSize(
     val sizeClass: WeatherWidgetSizeClass,
-    val locationWidthDp: Float,
-    val refreshTouchTargetDp: Int,
     val iconSizeDp: Float,
     val temperatureFontSizeSp: Float,
     val primaryContentWidthDp: Float,
@@ -84,16 +82,13 @@ object WeatherWidgetSizePolicy {
     const val MEDIUM_MIN_HEIGHT_DP = 110f
     const val MEDIUM_STANDARD_HEIGHT_DP = 144f
 
-    const val REFRESH_TOUCH_TARGET_DP = 48
-
     private const val SMALL_HORIZONTAL_PADDING_DP = 8f
+    // Allow for independent RemoteViews rounding of the stacked rows and text boxes.
+    private const val SMALL_LAYOUT_SAFETY_DP = 2f
     private const val VERTICAL_PADDING_DP = 8f
-    private const val HEADER_HEIGHT_DP = REFRESH_TOUCH_TARGET_DP.toFloat()
-    private const val HEADER_TO_BODY_GAP_DP = 4f
     private const val PRIMARY_ROW_GAP_DP = 4f
     private const val SECONDARY_ROW_GAP_DP = 2f
     private const val ICON_TO_TEMPERATURE_GAP_DP = 4f
-    private const val LOCATION_ICON_SIZE_DP = 18f
     private const val MEDIUM_DIVIDER_WIDTH_DP = 1f
     private const val MEDIUM_CELL_PADDING_DP = 4f
     private const val MEDIUM_CARD_HORIZONTAL_PADDING_DP = 4f
@@ -130,81 +125,68 @@ object WeatherWidgetSizePolicy {
         val scale = fontScale.positiveOrOne()
         val sizeClass = smallSizeClass(width, height)
         val innerWidth = (width - SMALL_HORIZONTAL_PADDING_DP * 2f).coerceAtLeast(0f)
-        val locationWidth = (
-            width - SMALL_HORIZONTAL_PADDING_DP * 2f - REFRESH_TOUCH_TARGET_DP - LOCATION_ICON_SIZE_DP
-            ).coerceAtLeast(0f)
-        val bodyHeight = (
-            height - VERTICAL_PADDING_DP * 2f - HEADER_HEIGHT_DP - HEADER_TO_BODY_GAP_DP
-            ).coerceAtLeast(0f)
+        val bodyHeight = (height - VERTICAL_PADDING_DP * 2f - SMALL_LAYOUT_SAFETY_DP).coerceAtLeast(0f)
 
         val iconTarget = when (sizeClass) {
-            WeatherWidgetSizeClass.MINIMUM -> 28f
-            WeatherWidgetSizeClass.COMPACT -> 34f
-            WeatherWidgetSizeClass.NORMAL -> 40f
-            WeatherWidgetSizeClass.WIDE -> 44f
+            WeatherWidgetSizeClass.MINIMUM -> 32f
+            WeatherWidgetSizeClass.COMPACT -> 40f
+            WeatherWidgetSizeClass.NORMAL -> 48f
+            WeatherWidgetSizeClass.WIDE -> 56f
         }
         val temperatureTarget = when (sizeClass) {
-            WeatherWidgetSizeClass.MINIMUM -> 24f
-            WeatherWidgetSizeClass.COMPACT -> 28f
-            WeatherWidgetSizeClass.NORMAL -> 32f
-            WeatherWidgetSizeClass.WIDE -> 34f
+            WeatherWidgetSizeClass.MINIMUM -> 44f
+            WeatherWidgetSizeClass.COMPACT -> 48f
+            WeatherWidgetSizeClass.NORMAL -> 56f
+            WeatherWidgetSizeClass.WIDE -> 64f
         }
-        val iconSize = minOf(iconTarget, bodyHeight, max(20f, innerWidth * 0.28f))
+        val iconSize = minOf(iconTarget, innerWidth * 0.27f, (bodyHeight - SECONDARY_ROW_GAP_DP).coerceAtLeast(0f) / 2f)
+        val statusHeight = adaptiveLineHeight(
+            SMALL_STATUS_FONT_SP,
+            scale,
+            WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
+        )
+        val statusSpace = SECONDARY_ROW_GAP_DP + statusHeight
+        val reserveStatus = hasStatus && bodyHeight >= iconSize + SECONDARY_ROW_GAP_DP +
+            MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP + statusSpace
         val temperatureLength = formattedTemperatureLength.coerceAtLeast(1)
-        val temperatureAvailableWidth = (
-            innerWidth - iconSize - ICON_TO_TEMPERATURE_GAP_DP
-            ).coerceAtLeast(0f)
-        val temperatureWidthLimit = temperatureAvailableWidth /
+        val temperatureWidthLimit = innerWidth /
             (temperatureLength * AVERAGE_TEMPERATURE_GLYPH_WIDTH * scale)
-        val temperatureHeightLimit = bodyHeight / (DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER * scale)
+        val temperatureHeightLimit = (bodyHeight - iconSize - SECONDARY_ROW_GAP_DP -
+            (if (reserveStatus) statusSpace else 0f)).coerceAtLeast(0f) /
+            (WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER * scale)
         val temperatureFontSize = minOf(temperatureTarget, temperatureWidthLimit, temperatureHeightLimit)
             .coerceAtLeast(0f)
-        val temperatureHeight = lineHeight(temperatureFontSize, scale, DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER)
-        val primaryHeight = max(iconSize, temperatureHeight)
-        val secondaryHeight = (
-            height - VERTICAL_PADDING_DP * 2f - HEADER_HEIGHT_DP - HEADER_TO_BODY_GAP_DP -
-                primaryHeight - PRIMARY_ROW_GAP_DP
-            ).coerceAtLeast(0f)
+        val temperatureHeight = adaptiveLineHeight(temperatureFontSize, scale, WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER)
+        val primaryHeight = temperatureHeight + SECONDARY_ROW_GAP_DP + iconSize
+        val secondaryHeight = (bodyHeight - primaryHeight).coerceAtLeast(0f)
 
-        val conditionFontSize = 12f
-        val conditionHeight = lineHeight(conditionFontSize, scale, DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER)
-        val showCondition = secondaryHeight >= conditionHeight
+        val conditionFontSize = if (sizeClass == WeatherWidgetSizeClass.MINIMUM) 16f else 18f
+        val conditionHeight = adaptiveLineHeight(conditionFontSize, scale, WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER)
+        val conditionExtraHeight = (conditionHeight - iconSize).coerceAtLeast(0f)
+        val showStatus = hasStatus && secondaryHeight + 0.001f >= statusSpace
+        val reservedStatusHeight = if (showStatus) statusSpace else 0f
+        val showCondition = secondaryHeight + 0.001f >= conditionExtraHeight + reservedStatusHeight
         val apparentFontSize = apparentTemperatureLength
             ?.let { length ->
                 val estimatedLabelLength = length.coerceAtLeast(1) + FEELS_LIKE_LABEL_CHARACTERS
                 min(
-                    11f,
+                    16f,
                     innerWidth / (estimatedLabelLength * AVERAGE_LABEL_GLYPH_WIDTH * scale)
                 )
             }
             ?.coerceAtLeast(0f)
             ?: 0f
         val apparentFitsWidth = apparentTemperatureLength != null && apparentFontSize >= MIN_SECONDARY_FONT_SP
-        val apparentHeight = lineHeight(apparentFontSize, scale, DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER)
+        val apparentHeight = adaptiveLineHeight(apparentFontSize, scale, WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER)
+        val shownConditionExtraHeight = if (showCondition) conditionExtraHeight else 0f
         val showApparentTemperature = showCondition && apparentFitsWidth &&
-            secondaryHeight >= conditionHeight + SECONDARY_ROW_GAP_DP + apparentHeight
-        val shownSecondaryHeight = when {
-            showApparentTemperature -> conditionHeight + SECONDARY_ROW_GAP_DP + apparentHeight
-            showCondition -> conditionHeight
-            else -> 0f
-        }
-        val statusHeight = lineHeight(
-            SMALL_STATUS_FONT_SP,
-            scale,
-            DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER
-        )
-        val statusGap = if (shownSecondaryHeight > 0f) SECONDARY_ROW_GAP_DP else 0f
-        val showStatus = hasStatus &&
-            secondaryHeight + PRIMARY_ROW_GAP_DP >= shownSecondaryHeight + statusGap + statusHeight
+            secondaryHeight >= shownConditionExtraHeight + SECONDARY_ROW_GAP_DP + apparentHeight + reservedStatusHeight
 
         return SmallWeatherWidgetSize(
             sizeClass = sizeClass,
-            locationWidthDp = locationWidth,
-            refreshTouchTargetDp = REFRESH_TOUCH_TARGET_DP,
             iconSizeDp = iconSize,
             temperatureFontSizeSp = temperatureFontSize,
-            primaryContentWidthDp = iconSize + ICON_TO_TEMPERATURE_GAP_DP +
-                temperatureLength * AVERAGE_TEMPERATURE_GLYPH_WIDTH * temperatureFontSize * scale,
+            primaryContentWidthDp = max(iconSize, temperatureLength * AVERAGE_TEMPERATURE_GLYPH_WIDTH * temperatureFontSize * scale),
             primaryContentAvailableWidthDp = innerWidth,
             primaryContentHeightDp = primaryHeight,
             primaryContentAvailableHeightDp = bodyHeight,

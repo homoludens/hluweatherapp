@@ -35,7 +35,6 @@ import net.droopia.hluweather.ui.settings.SettingsUiState
 import java.lang.reflect.Proxy
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -76,42 +75,20 @@ class RefreshWeatherActionTest {
     }
 
     @Test
-    fun small_refresh_action_remains_available_while_medium_has_no_manual_refresh_action() {
+    fun neither_widget_has_a_manual_refresh_action() {
         val small = renderSmallActionWidget(widgetActionSnapshot(), 200f, 160f)
         val medium = renderMediumActionWidget(widgetActionSnapshot(), 320f, 144f)
 
-        repeat(5) {
-            clickDescription(small, "Refresh weather")
+        listOf(small, medium).forEach { view ->
+            assertTrue(findViews(view).none { it.contentDescription == "Refresh weather" })
         }
-        assertTrue(
-            "medium widget has no refresh target",
-            findViews(medium).none { it.contentDescription == "Refresh weather" }
-        )
         shadowOf(android.os.Looper.getMainLooper()).idle()
-
-        val requests = awaitManualRefreshWork()
-
-        assertEquals(1, requests.size)
-        assertFalse(requests.single().state.isFinished)
+        assertTrue(workManager.getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME).get().isEmpty())
         assertNull(shadowOf(application).peekNextStartedActivity())
     }
 
-    private fun awaitManualRefreshWork(): List<androidx.work.WorkInfo> {
-        repeat(200) {
-            shadowOf(android.os.Looper.getMainLooper()).idle()
-            val requests = workManager
-                .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
-                .get()
-            if (requests.isNotEmpty()) return requests
-            Thread.sleep(10)
-        }
-        return workManager
-            .getWorkInfosForUniqueWork(WeatherWidgetUpdater.MANUAL_REFRESH_WORK_NAME)
-            .get()
-    }
-
     @Test
-    fun cold_translated_card_and_location_clicks_in_both_sizes_start_main_activity_with_widget_task_flags() {
+    fun cold_translated_cards_and_medium_location_start_main_activity_with_widget_task_flags() {
         assertNull(shadowOf(application).peekNextStartedActivity())
 
         val small = renderSmallActionWidget(widgetActionSnapshot(), 200f, 160f)
@@ -122,9 +99,9 @@ class RefreshWeatherActionTest {
             assertTrue("the translated card background is clickable", card.performClick())
             assertMainWeatherIntent(requireNotNull(shadowOf(application).getNextStartedActivity()))
 
-            clickDescription(remoteView, "Weather for Sample town")
-            assertMainWeatherIntent(requireNotNull(shadowOf(application).getNextStartedActivity()))
         }
+        clickDescription(medium, "Weather for Sample town")
+        assertMainWeatherIntent(requireNotNull(shadowOf(application).getNextStartedActivity()))
 
         assertNull(shadowOf(application).peekNextStartedActivity())
     }
