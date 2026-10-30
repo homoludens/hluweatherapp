@@ -1,6 +1,8 @@
 package net.droopia.hluweather.widget
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,6 +20,8 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
 import net.droopia.hluweather.data.cache.ForecastCache
 import net.droopia.hluweather.data.cache.ForecastCacheKey
 import net.droopia.hluweather.data.cache.ForecastCacheStore
@@ -52,6 +56,104 @@ class WeatherWidgetStateRepositoryTest {
 
     @get:Rule
     val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun future_cache_and_submillisecond_failure_order_are_not_proof_of_recovery() = runTest {
+        val failureTime = Instant.parse("2026-10-28T12:00:00.000900Z")
+        var now = failureTime
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val file = temporaryFolder.newFile("precision-recovery.preferences_pb")
+            val metadata = DataStoreWidgetRefreshMetadataStore(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
+            val weather = FakeWeatherRepository(null)
+            val repository = widgetRepository(locations = listOf(SAVED_LOCATION), active = ActiveLocation.Saved(SAVED_LOCATION),
+                weatherRepository = weather, clock = object : Clock { override fun now() = now }, metadata = metadata)
+            val request = repository.resolveRequest()!!
+            val attempt = repository.beginRefresh(request)
+            repository.finishRefresh(request, attempt, null)
+            val recordedEnd = metadata.read(request.identity) { now }.endedAt!!
+            assertEquals(Instant.parse("2026-10-28T12:00:00Z"), recordedEnd)
+
+            now += 1.minutes
+            for (time in listOf(recordedEnd + 100.nanoseconds, failureTime + 1.nanoseconds, now + 1.nanoseconds, now + 1.hours)) {
+                weather.cachedForecast = ForecastLoad(forecast(fetchedAt = time))
+                val state = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+                assertTrue("timestamp $time cannot establish recovery", state.refresh.lastAttemptFailed)
+                assertEquals(time, state.weather.lastWeatherUpdate)
+                assertEquals(recordedEnd, state.refresh.endedAt)
+            }
+            // Same-millisecond observations remain ambiguous even when they were actually later.
+            val justAfter = recordedEnd + 1.milliseconds
+            now = justAfter - 1.nanoseconds
+            weather.cachedForecast = ForecastLoad(forecast(fetchedAt = justAfter))
+            assertTrue((repository.loadCachedState() as WeatherWidgetSnapshot.Available).refresh.lastAttemptFailed)
+            now = justAfter
+            val boundary = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+            assertFalse(boundary.refresh.lastAttemptFailed)
+            assertEquals(justAfter, boundary.weather.lastWeatherUpdate)
+            assertFalse(boundary.weather.isStale)
+            assertTrue(metadata.read(request.identity) { now }.lastAttemptFailed)
+            now += 1.minutes
+            val newAttempt = repository.beginRefresh(request)
+            repository.finishRefresh(request, attempt, null)
+            assertTrue((repository.loadCachedState() as WeatherWidgetSnapshot.Available).refresh.isRefreshing)
+            repository.finishRefresh(request, newAttempt, null)
+            val newlyFailed = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+            assertTrue(newlyFailed.refresh.lastAttemptFailed)
+            assertTrue(newlyFailed.weather.isStale)
+            assertEquals(justAfter, newlyFailed.weather.lastWeatherUpdate)
+            assertEquals(0, weather.liveCalls)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
+
+    @Test
+    fun clock_rollback_during_failed_attempt_cannot_establish_recovery() = runTest {
+        var now = Instant.parse("2026-10-28T12:00:00Z")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val file = temporaryFolder.newFile("rollback-recovery.preferences_pb")
+            val metadata = DataStoreWidgetRefreshMetadataStore(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
+            val weather = FakeWeatherRepository(null)
+            val repository = widgetRepository(locations = listOf(SAVED_LOCATION), active = ActiveLocation.Saved(SAVED_LOCATION),
+                weatherRepository = weather, clock = object : Clock { override fun now() = now }, metadata = metadata)
+            val request = repository.resolveRequest()!!
+            val attempt = repository.beginRefresh(request)
+            now -= 2.minutes
+            repository.finishRefresh(request, attempt, null)
+            now += 1.minutes
+            weather.cachedForecast = ForecastLoad(forecast(fetchedAt = now))
+            val snapshot = repository.loadCachedState() as WeatherWidgetSnapshot.Available
+            assertTrue(snapshot.refresh.lastAttemptFailed)
+            assertEquals(now, snapshot.weather.lastWeatherUpdate)
+            assertTrue(snapshot.refresh.endedAt!! < snapshot.refresh.startedAt!!)
+            assertTrue(metadata.read(request.identity) { now }.lastAttemptFailed)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
+
+    @Test
+    fun malformed_cached_fetch_timestamp_preserves_failure_without_network() = runTest {
+        val now = Instant.parse("2026-10-28T12:00:00Z")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val file = temporaryFolder.newFile("malformed-recovery.preferences_pb")
+            val data = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+            val metadata = DataStoreWidgetRefreshMetadataStore(data)
+            val cache = ForecastCache(data)
+            val weather = CachingWeatherRepository(emptyMap(), cache, now = { now })
+            val repository = widgetRepository(locations = listOf(SAVED_LOCATION), active = ActiveLocation.Saved(SAVED_LOCATION),
+                weatherRepository = weather, clock = fixedClock(now), metadata = metadata)
+            val request = repository.resolveRequest()!!
+            val attempt = repository.beginRefresh(request)
+            repository.finishRefresh(request, attempt, null)
+            cache.put(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:${SAVED_LOCATION.id}"), forecast(fetchedAt = now))
+            val key = stringPreferencesKey("weather.forecast_cache")
+            data.edit { it[key] = requireNotNull(it[key]).replace(now.toString(), "not-an-instant") }
+            val snapshot = repository.loadCachedState() as WeatherWidgetSnapshot.NoWeather
+            assertTrue(snapshot.refresh.lastAttemptFailed)
+            assertEquals(now, snapshot.refresh.endedAt)
+            assertTrue(metadata.read(request.identity) { now }.lastAttemptFailed)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
 
     @Test
     fun stale_result_ends_loading_preserves_timestamp_and_does_not_leak_to_another_identity() = runTest {

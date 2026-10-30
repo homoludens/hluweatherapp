@@ -152,9 +152,14 @@ class WeatherWidgetRepository(
         if (cached == null) return WeatherWidgetSnapshot.NoWeather(selection.settings, request, refresh)
 
         // A foreground fetch can recover an older completed failure. Derive the effective status
-        // without touching the token or an active/interrupted attempt in durable metadata.
+        // without touching the token or an active/interrupted attempt in durable metadata. End times
+        // are stored at millisecond precision, so the same millisecond cannot prove ordering.
         val effectiveRefresh = if (!cached.isStale && refresh.lastAttemptFailed && !refresh.isRefreshing &&
-            refresh.endedAt?.let { cached.forecast.fetchedAt > it } == true
+            refresh.endedAt?.let { end ->
+                refresh.startedAt?.let { start -> end >= start } == true &&
+                    cached.forecast.fetchedAt.toEpochMilliseconds() > end.toEpochMilliseconds() &&
+                    cached.forecast.fetchedAt <= clock.now()
+            } == true
         ) refresh.copy(lastAttemptFailed = false) else refresh
 
         return WeatherWidgetSnapshot.Available(

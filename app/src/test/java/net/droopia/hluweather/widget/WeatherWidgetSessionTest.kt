@@ -88,6 +88,17 @@ class WeatherWidgetSessionTest {
                 if (medium) session.awaitAccessibleDescription("the last update failed", true)
                 else session.awaitText("Stale weather")
 
+                // A future-dated foreground cache must not hide the completed failure.
+                val future = f.forecast(f.first, 26.0).copy(fetchedAt = f.now + 1.hours)
+                f.cache.put(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:${f.first.id}"), future)
+                val skewed = session.awaitText("26°C")
+                if (medium) {
+                    assertTrue(allViews(skewed).any { it.contentDescription?.toString()?.contains("Weather update failed") == true })
+                    assertTrue(texts(skewed).any { it.text.toString() == "13:05" })
+                } else {
+                    assertTrue(texts(skewed).any { it.text.toString().contains("Update failed") })
+                }
+
                 // A cache entry at the failure time is not a recovery.
                 f.put(f.first, 24.0)
                 val equal = session.awaitText("24°C")
