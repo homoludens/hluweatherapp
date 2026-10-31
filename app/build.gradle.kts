@@ -30,8 +30,8 @@ android {
         applicationId = "net.droopia.hluweather"
         minSdk = 28
         targetSdk = 36
-        versionCode = 39
-        versionName = "3.6.0"
+        versionCode = 40
+        versionName = "3.6.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -51,6 +51,10 @@ android {
     productFlavors {
         create("google") {
             dimension = "distribution"
+            // MapLibre does not ship native libraries for 32-bit x86.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            }
         }
         create("fdroid") {
             dimension = "distribution"
