@@ -1,5 +1,6 @@
 package net.droopia.hluweather.navigation
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.junit.Assert.assertEquals
@@ -96,6 +98,28 @@ class HluNavHostTest {
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+    }
+
+    @Test
+    fun privacy_policy_is_accessible_from_weather_settings() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(9)
+        composeRule.onNodeWithText("About").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_privacy_policy").performClick()
+
+        val intent = requireNotNull(shadowOf(composeRule.activity).nextStartedActivity)
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals("https://homoludens.github.io/hluweatherapp/privacy/", intent.dataString)
     }
 
     @Test

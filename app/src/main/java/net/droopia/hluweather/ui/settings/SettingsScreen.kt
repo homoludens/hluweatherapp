@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -79,6 +80,8 @@ import net.droopia.hluweather.R
 import kotlinx.datetime.LocalTime
 import android.content.res.Configuration
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
+
+private const val PRIVACY_POLICY_URL = "https://homoludens.github.io/hluweatherapp/privacy/"
 
 @Composable
 fun SettingsScreen(
@@ -107,6 +110,8 @@ fun SettingsScreen(
     onOpenNotificationSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val uriHandler = LocalUriHandler.current
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -370,6 +375,24 @@ fun SettingsScreen(
                     selected = state.placeSearchProvider == PlaceSearchProvider.OPEN_METEO,
                     tag = "settings_place_search_open_meteo",
                     onClick = { onPlaceSearchProviderChange(PlaceSearchProvider.OPEN_METEO) }
+                )
+            }
+        }
+
+        item {
+            SettingsCard {
+                SectionHeader(
+                    icon = Icons.Outlined.Info,
+                    title = "About",
+                    subtitle = "Information about HluWeatherApp"
+                )
+                HorizontalDivider()
+                ClickableSettingsRow(
+                    icon = Icons.Outlined.Info,
+                    title = "Privacy policy",
+                    subtitle = "Read the privacy policy in your browser",
+                    tag = "settings_privacy_policy",
+                    onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) }
                 )
             }
         }

@@ -2,6 +2,7 @@ package net.droopia.hluweather.ui.settings
 
 import android.app.TimePickerDialog
 import android.content.DialogInterface
+import android.content.Intent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
@@ -37,6 +38,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlertDialog
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -415,6 +417,23 @@ class SettingsScreenTest {
         composeRule.onNodeWithContentDescription("Back").performClick()
 
         assertEquals(1, backClicks)
+    }
+
+    @Test
+    fun about_privacy_policy_opens_the_published_page() {
+        renderSettings()
+
+        scrollTo(9)
+        composeRule.onNodeWithText("About").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_privacy_policy")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            .performClick()
+
+        val intent = requireNotNull(shadowOf(composeRule.activity).nextStartedActivity)
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals("https://homoludens.github.io/hluweatherapp/privacy/", intent.dataString)
     }
 
     private fun renderSettings(
