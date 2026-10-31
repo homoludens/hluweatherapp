@@ -3,12 +3,44 @@
 
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 import unittest
 from urllib.parse import unquote, urlsplit
 
 
 SITE = Path(__file__).resolve().parents[1] / "docs"
 PAGES = (SITE / "index.html", SITE / "privacy" / "index.html")
+THEME = SITE.parent / "app/src/main/java/net/droopia/hluweather/ui/theme"
+
+
+def css_palette(css, dark=False):
+    prefix = r"@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*" if dark else ""
+    match = re.search(prefix + r":root\s*\{([^}]*)\}", css)
+    if match is None:
+        raise ValueError("Missing light or dark CSS palette")
+    declarations = match.group(1)
+    colors = dict(re.findall(r"(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;", declarations))
+    return declarations, {name: value.lower() for name, value in colors.items()}
+
+
+def app_palette(source, name):
+    match = re.search(rf"\bval {name}\s*=\s*\w+\((.*?)\n\)", source, re.DOTALL)
+    if match is None:
+        raise ValueError(f"Missing app palette {name}")
+    return {
+        name: f"#{value.lower()}"
+        for name, value in re.findall(r"(\w+)\s*=\s*Color\(0xFF([0-9a-fA-F]{6})\)", match.group(1))
+    }
+
+
+def contrast_ratio(first, second):
+    def luminance(color):
+        channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return sum(c * weight for c, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
+    light, dark = sorted((luminance(first), luminance(second)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
 
 
 class Page(HTMLParser):
@@ -24,6 +56,8 @@ class Page(HTMLParser):
         self.has_language = False
         self.has_viewport = False
         self.has_title = False
+        self.color_scheme = None
+        self.theme_colors = []
         self.feed(path.read_text(encoding="utf-8"))
         self.close()
 
@@ -35,6 +69,10 @@ class Page(HTMLParser):
             self.has_language = bool(attrs.get("lang"))
         if tag == "meta" and attrs.get("name") == "viewport":
             self.has_viewport = True
+        if tag == "meta" and attrs.get("name") == "color-scheme":
+            self.color_scheme = attrs.get("content")
+        if tag == "meta" and attrs.get("name") == "theme-color":
+            self.theme_colors.append((attrs.get("media"), attrs.get("content")))
         if tag == "title":
             self.has_title = True
         if tag == "h1":
@@ -86,6 +124,46 @@ class WebsiteTest(unittest.TestCase):
                     if parts.fragment and target.suffix == ".html":
                         target_page = self.pages.get(target) or Page(target)
                         self.assertIn(unquote(parts.fragment), target_page.ids)
+
+    def test_system_theme_uses_app_palettes_on_both_pages(self):
+        css = (SITE / "assets/site.css").read_text(encoding="utf-8")
+        material_source = (THEME / "Theme.kt").read_text(encoding="utf-8")
+        hlu_source = (THEME / "Color.kt").read_text(encoding="utf-8")
+        for mode in ("light", "dark"):
+            with self.subTest(mode=mode):
+                declarations, colors = css_palette(css, dark=mode == "dark")
+                material = app_palette(material_source, f"{mode.title()}Colors")
+                hlu = app_palette(hlu_source, f"{mode.title()}HluColors")
+                self.assertRegex(declarations, rf"color-scheme:\s*{mode}\s*;")
+                for css_name, app_color in {
+                    "--background": material["background"],
+                    "--surface": hlu["weatherCard"],
+                    "--surface-variant": material["surfaceVariant"],
+                    "--text": material["onBackground"],
+                    "--muted": material["onSurfaceVariant"],
+                    "--primary": material["primary"],
+                    "--on-primary": material["onPrimary"],
+                    "--border": material["outlineVariant"],
+                    "--accent": hlu["navSelectedText"] if mode == "light" else material["primary"],
+                }.items():
+                    self.assertEqual(app_color, colors[css_name], css_name)
+                for path, page in self.pages.items():
+                    with self.subTest(page=path):
+                        self.assertEqual("light dark", page.color_scheme)
+                        self.assertIn((f"(prefers-color-scheme: {mode})", colors["--background"]), page.theme_colors)
+
+    def test_theme_text_contrast(self):
+        css = (SITE / "assets/site.css").read_text(encoding="utf-8")
+        for mode in ("light", "dark"):
+            _, colors = css_palette(css, dark=mode == "dark")
+            pairs = [
+                (foreground, background)
+                for foreground in ("--text", "--muted", "--accent")
+                for background in ("--background", "--surface", "--surface-variant")
+            ] + [("--on-primary", "--primary"), ("--on-primary", "--primary-hover")]
+            for foreground, background in pairs:
+                with self.subTest(mode=mode, foreground=foreground, background=background):
+                    self.assertGreaterEqual(contrast_ratio(colors[foreground], colors[background]), 4.5)
 
     def test_policy_describes_services_contact_and_controls(self):
         policy = PAGES[1].read_text(encoding="utf-8")
