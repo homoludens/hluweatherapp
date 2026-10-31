@@ -11,3 +11,4 @@ captures/
 *.apk
 *.aab
 *.apk.idsig
+docs/certs/
