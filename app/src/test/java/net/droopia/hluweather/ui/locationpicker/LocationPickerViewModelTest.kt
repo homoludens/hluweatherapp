@@ -226,7 +226,7 @@ class LocationPickerViewModelTest {
 
         viewModel.onPermissionResult(granted = false)
 
-        assertEquals(GpsStatus.PermissionRequired, viewModel.state.value.gpsStatus)
+        assertEquals(GpsStatus.PermissionDenied, viewModel.state.value.gpsStatus)
     }
 
     @Test
@@ -241,6 +241,88 @@ class LocationPickerViewModelTest {
         assertEquals(1, gps.calls)
         assertEquals(point, viewModel.state.value.point)
         assertEquals(GpsStatus.Success, viewModel.state.value.gpsStatus)
+    }
+
+    @Test
+    fun first_location_requests_permission_and_saves_the_granted_fix() = runTest {
+        val repository = FakeLocationRepository()
+        val point = GeoPoint(45.6495, 13.7768)
+        val gps = object : DeviceLocationSource {
+            var calls = 0
+            override suspend fun currentLocation(): GpsResult =
+                if (calls++ == 0) GpsResult.PermissionRequired else GpsResult.Success(point, 2)
+        }
+        val viewModel = picker(repository = repository, gps = gps, locateFirstLocation = true)
+        advanceUntilIdle()
+        assertEquals(GpsStatus.PermissionRequired, viewModel.state.value.gpsStatus)
+        assertTrue(repository.added.isEmpty())
+
+        viewModel.onPermissionResult(true)
+        advanceUntilIdle()
+
+        assertEquals(point.latitude, repository.added.single().latitude, 0.0)
+        assertEquals(point.longitude, repository.added.single().longitude, 0.0)
+        assertEquals(2, repository.added.single().altitude)
+        assertEquals(LocationPickerEvent.Saved, viewModel.completion.value)
+    }
+
+    @Test
+    fun denied_first_location_can_be_selected_and_saved_manually() = runTest {
+        val repository = FakeLocationRepository()
+        val viewModel = picker(repository = repository, gps = FakeDeviceLocationSource(GpsResult.PermissionRequired), locateFirstLocation = true)
+        advanceUntilIdle()
+        viewModel.onPermissionResult(false)
+        val point = GeoPoint(45.6495, 13.7768)
+        viewModel.onCameraIdle(point)
+        viewModel.onNameChanged("Manual")
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals("Manual", repository.added.single().name)
+        assertEquals(point.latitude, repository.added.single().latitude, 0.0)
+    }
+
+    @Test
+    fun existing_locations_do_not_start_automatic_gps() = runTest {
+        val gps = RecordingDeviceLocationSource(GpsResult.Unavailable)
+        picker(repository = FakeLocationRepository(listOf(existingLocation)), gps = gps, locateFirstLocation = true)
+        advanceUntilIdle()
+        assertEquals(0, gps.calls)
+    }
+
+    @Test
+    fun first_location_with_permission_already_granted_is_saved() = runTest {
+        val repository = FakeLocationRepository()
+        picker(repository = repository, gps = FakeDeviceLocationSource(GpsResult.Success(viewModelPoint, null)), locateFirstLocation = true)
+        advanceUntilIdle()
+        assertEquals(viewModelPoint.latitude, repository.added.single().latitude, 0.0)
+    }
+
+    @Test
+    fun permission_result_after_manual_selection_does_not_override_it() = runTest {
+        val repository = FakeLocationRepository()
+        val gps = RecordingDeviceLocationSource(GpsResult.PermissionRequired)
+        val viewModel = picker(repository = repository, gps = gps, locateFirstLocation = true)
+        advanceUntilIdle()
+        viewModel.onCameraIdle(viewModelPoint)
+        viewModel.onPermissionResult(true)
+        advanceUntilIdle()
+        assertEquals(1, gps.calls)
+        assertEquals(viewModelPoint, viewModel.state.value.point)
+        assertTrue(repository.added.isEmpty())
+    }
+
+    @Test
+    fun manual_selection_cancels_pending_automatic_fix() = runTest {
+        val repository = FakeLocationRepository()
+        val gps = DeferredDeviceLocationSource()
+        val viewModel = picker(repository = repository, gps = gps, locateFirstLocation = true)
+        val manual = GeoPoint(45.6495, 13.7768)
+        viewModel.onCameraIdle(manual)
+        gps.first.complete(GpsResult.Success(viewModelPoint, null))
+        advanceUntilIdle()
+        assertEquals(manual, viewModel.state.value.point)
+        assertTrue(repository.added.isEmpty())
     }
 
     @Test
@@ -366,7 +448,8 @@ class LocationPickerViewModelTest {
         reverseGeocodeDebounceMillis: Long = 0L,
         placeSearchSources: List<PlaceSearchSource> = emptyList(),
         placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
-        placeSearchDebounceMillis: Long = 300L
+        placeSearchDebounceMillis: Long = 300L,
+        locateFirstLocation: Boolean = false
     ) = LocationPickerViewModel(
         locationRepository = repository,
         deviceLocationSource = gps,
@@ -376,7 +459,8 @@ class LocationPickerViewModelTest {
         reverseGeocodeDebounceMillis = reverseGeocodeDebounceMillis,
         placeSearchSources = placeSearchSources,
         placeSearchProvider = placeSearchProvider,
-        placeSearchDebounceMillis = placeSearchDebounceMillis
+        placeSearchDebounceMillis = placeSearchDebounceMillis,
+        locateFirstLocation = locateFirstLocation
     )
 
     private class RecordingPlaceSearchSource(

@@ -327,6 +327,7 @@ private fun gpsStatusText(status: GpsStatus): String? = when (status) {
     GpsStatus.Locating -> "Finding your location..."
     GpsStatus.Success -> "Location found"
     GpsStatus.PermissionRequired -> "Location permission is required"
+    GpsStatus.PermissionDenied -> "Location permission denied; choose a location on the map"
     GpsStatus.LocationDisabled -> "Location is disabled"
     GpsStatus.Unavailable -> "Location unavailable"
 }

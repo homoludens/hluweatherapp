@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.GeoPoint
@@ -42,6 +43,7 @@ sealed interface GpsStatus {
     data object Locating : GpsStatus
     data object Success : GpsStatus
     data object PermissionRequired : GpsStatus
+    data object PermissionDenied : GpsStatus
     data object LocationDisabled : GpsStatus
     data object Unavailable : GpsStatus
 }
@@ -85,7 +87,8 @@ class LocationPickerViewModel(
     private val reverseGeocodeDebounceMillis: Long = 300L,
     private val placeSearchSources: List<PlaceSearchSource> = emptyList(),
     private val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
-    private val placeSearchDebounceMillis: Long = 300L
+    private val placeSearchDebounceMillis: Long = 300L,
+    private val locateFirstLocation: Boolean = false
 ) : ViewModel() {
     private val _state = MutableStateFlow(initialLocation.toPickerState())
     val state: StateFlow<LocationPickerUiState> = _state
@@ -98,6 +101,9 @@ class LocationPickerViewModel(
     private var reverseGeocodingJob: Job? = null
     private var gpsJob: Job? = null
     private var gpsRequestGeneration = 0L
+    private var autoLocatePending = false
+    private var pickerTouched = false
+    private var ignorePermissionResult = false
     private val searchInput = MutableStateFlow("")
     private val editingLocationId = initialLocation?.id ?: locationId
     val isEditMode: Boolean
@@ -155,6 +161,14 @@ class LocationPickerViewModel(
         }
         if (initialLocation == null && locationId == null) {
             requestReverseGeocode(_state.value.point)
+            if (locateFirstLocation) {
+                viewModelScope.launch {
+                    if (locationRepository.locations.first().isEmpty() && !pickerTouched) {
+                        autoLocatePending = true
+                        onGpsClick()
+                    }
+                }
+            }
         }
         if (initialLocation == null && locationId != null) {
             _state.update { it.copy(initialization = LocationPickerInitialization.Loading) }
@@ -173,17 +187,21 @@ class LocationPickerViewModel(
     }
 
     fun onCameraIdle(point: GeoPoint) {
+        if (point == _state.value.point) return
+        if (point != _state.value.point) cancelAutomaticLocation()
         updatePoint(point, altitude = null)
         requestReverseGeocode(point)
     }
 
     fun onNameChanged(name: String) {
+        cancelAutomaticLocation()
         _state.update {
             it.copy(name = name, isNameEditing = true, isNameLoading = false)
         }
     }
 
     fun onSearchQueryChanged(query: String) {
+        cancelAutomaticLocation()
         _state.update {
             it.copy(
                 searchQuery = query,
@@ -196,6 +214,7 @@ class LocationPickerViewModel(
     }
 
     fun selectSearchResult(result: PlaceSearchResult) {
+        cancelAutomaticLocation()
         _state.update {
             it.copy(
                 latitude = result.point.latitude,
@@ -224,6 +243,7 @@ class LocationPickerViewModel(
     }
 
     fun onGpsClick() {
+        ignorePermissionResult = false
         val generation = ++gpsRequestGeneration
         gpsJob?.cancel()
         _state.update { it.copy(gpsStatus = GpsStatus.Locating) }
@@ -246,29 +266,57 @@ class LocationPickerViewModel(
             is GpsResult.Success -> {
                 updatePoint(result.point, result.altitude)
                 _state.update { it.copy(gpsStatus = GpsStatus.Success) }
-                requestReverseGeocode(result.point)
+                if (autoLocatePending) {
+                    reverseGeocodingJob?.cancel()
+                    reverseGeocodingJob = viewModelScope.launch {
+                        val name = try {
+                            withTimeoutOrNull(5_000L) { reverseGeocoder.reverse(result.point) }
+                        } catch (exception: CancellationException) {
+                            throw exception
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (autoLocatePending) {
+                            onReverseGeocoded(name)
+                            autoLocatePending = false
+                            save()
+                        }
+                    }
+                } else {
+                    requestReverseGeocode(result.point)
+                }
             }
 
             GpsResult.PermissionRequired ->
                 _state.update { it.copy(gpsStatus = GpsStatus.PermissionRequired) }
 
-            GpsResult.LocationDisabled ->
+            GpsResult.LocationDisabled -> {
+                autoLocatePending = false
                 _state.update { it.copy(gpsStatus = GpsStatus.LocationDisabled) }
+            }
 
-            GpsResult.Unavailable ->
+            GpsResult.Unavailable -> {
+                autoLocatePending = false
                 _state.update { it.copy(gpsStatus = GpsStatus.Unavailable) }
+            }
         }
     }
 
     fun onPermissionResult(granted: Boolean) {
+        if (ignorePermissionResult) {
+            ignorePermissionResult = false
+            return
+        }
         if (granted) {
             onGpsClick()
         } else {
-            _state.update { it.copy(gpsStatus = GpsStatus.PermissionRequired) }
+            autoLocatePending = false
+            _state.update { it.copy(gpsStatus = GpsStatus.PermissionDenied) }
         }
     }
 
     fun save(): Job {
+        cancelAutomaticLocation()
         if (_state.value.initialization != LocationPickerInitialization.Ready) {
             return viewModelScope.launch { }
         }
@@ -324,6 +372,20 @@ class LocationPickerViewModel(
         }
     }
 
+    private fun cancelAutomaticLocation() {
+        pickerTouched = true
+        if (autoLocatePending) {
+            if (_state.value.gpsStatus == GpsStatus.PermissionRequired) {
+                ignorePermissionResult = true
+                _state.update { it.copy(gpsStatus = GpsStatus.Idle) }
+            }
+            autoLocatePending = false
+            gpsRequestGeneration++
+            gpsJob?.cancel()
+            reverseGeocodingJob?.cancel()
+        }
+    }
+
     private fun requestReverseGeocode(point: GeoPoint) {
         reverseGeocodingJob?.cancel()
         _state.update { it.copy(isNameLoading = !it.isNameEditing) }
@@ -356,6 +418,7 @@ class LocationPickerViewModel(
                     deviceLocationSource = application.deviceLocationSource,
                     reverseGeocoder = application.reverseGeocoder,
                     locationId = locationId,
+                    locateFirstLocation = true,
                     placeSearchProvider = placeSearchProvider,
                     placeSearchSources = placeSearchSources
                 )
