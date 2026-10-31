@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check native-library coverage in the built Google Play bundle."""
+"""Check native-library coverage and mapping metadata in the Google Play bundle."""
 
 from pathlib import Path
 import unittest
@@ -13,6 +13,11 @@ BUNDLE = (
 
 
 class GooglePlayBundleTest(unittest.TestCase):
+    def test_r8_mapping_is_embedded(self):
+        with ZipFile(BUNDLE) as bundle:
+            mapping = bundle.getinfo("BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map")
+            self.assertGreater(mapping.file_size, 0)
+
     def test_every_packaged_abi_has_map_libraries(self):
         libraries = {}
         with ZipFile(BUNDLE) as bundle:
