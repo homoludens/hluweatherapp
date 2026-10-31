@@ -226,29 +226,28 @@ class SmallWeatherWidgetTest {
 
     @Test
     fun failed_refresh_keeps_cached_fahrenheit_weather_and_reports_failure_in_remote_views() {
-        val view = render(
-            availableSnapshot(
-                temperature = "73°F",
-                apparentTemperature = "74°F",
-                settings = PersistedSettings(
-                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
-                    themeMode = ThemeMode.DARK
-                )
-            ).copy(
-                refresh = WidgetRefreshStatus(
-                    endedAt = Instant.parse("2026-10-28T12:00:00Z"),
-                    lastAttemptFailed = true
-                )
-            ),
-            widthDp = 200f,
-            heightDp = 160f
+        val snapshot = availableSnapshot(
+            temperature = "73°F",
+            apparentTemperature = "74°F",
+            settings = PersistedSettings(
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                themeMode = ThemeMode.DARK
+            )
+        ).copy(
+            refresh = WidgetRefreshStatus(
+                endedAt = Instant.parse("2026-10-28T12:00:00Z"),
+                lastAttemptFailed = true
+            )
         )
 
-        assertText(view, "73°F")
-        assertText(view, "Clear sky")
-        assertText(view, "Feels like 74°F")
-        assertText(view, "Update failed")
-        assertPrimaryContentFits(view, widthDp = 200f, heightDp = 160f)
+        listOf(160f to false, 200f to true).forEach { (height, showFeelsLike) ->
+            val view = render(snapshot, widthDp = 200f, heightDp = height)
+            assertText(view, "73°F")
+            assertText(view, "Clear sky")
+            assertEquals(showFeelsLike, hasText(view, "Feels like 74°F"))
+            assertText(view, "Update failed")
+            assertPrimaryContentFits(view, widthDp = 200f, heightDp = height)
+        }
     }
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
