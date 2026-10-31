@@ -1,6 +1,9 @@
 package net.droopia.hluweather.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -9,8 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
@@ -49,7 +52,6 @@ val LocalHluColors = staticCompositionLocalOf<HluColors> {
 }
 
 @Composable
-@Suppress("DEPRECATION")
 fun HluWeatherTheme(
     darkTheme: Boolean,
     content: @Composable () -> Unit
@@ -66,7 +68,6 @@ fun HluWeatherTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.navigationBarColor = materialColors.background.toArgb()
             WindowCompat.getInsetsController(window, view)
                 .isAppearanceLightNavigationBars = !darkTheme
         }
@@ -76,6 +77,10 @@ fun HluWeatherTheme(
         LocalDensity provides cappedDensity,
         LocalHluColors provides hluColors
     ) {
-        MaterialTheme(colorScheme = materialColors, content = content)
+        MaterialTheme(colorScheme = materialColors) {
+            Box(Modifier.fillMaxSize().background(materialColors.background)) {
+                content()
+            }
+        }
     }
 }

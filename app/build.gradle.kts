@@ -98,6 +98,10 @@ kotlin {
 }
 
 dependencies {
+    constraints {
+        // Play services location otherwise brings in the outdated Fragment 1.1.0.
+        implementation(libs.androidx.fragment)
+    }
     implementation(libs.androidx.glance.preview)
     add("googleImplementation", libs.play.services.location)
 

@@ -5,7 +5,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -13,6 +12,7 @@ import androidx.core.view.WindowCompat
 import net.droopia.hluweather.ComposeTestActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,16 +93,29 @@ class ThemeTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun dark_theme_uses_dark_navigation_bar() {
+    fun dark_theme_uses_light_navigation_bar_icons() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = true) {}
         }
 
         composeRule.runOnIdle {
             val window = composeRule.activity.window
-            assertEquals(Color(0xFF09111E).toArgb(), window.navigationBarColor)
             assertFalse(
+                WindowCompat.getInsetsController(window, window.decorView)
+                    .isAppearanceLightNavigationBars
+            )
+        }
+    }
+
+    @Test
+    fun light_theme_uses_dark_navigation_bar_icons() {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {}
+        }
+
+        composeRule.runOnIdle {
+            val window = composeRule.activity.window
+            assertTrue(
                 WindowCompat.getInsetsController(window, window.decorView)
                     .isAppearanceLightNavigationBars
             )
