@@ -1,7 +1,7 @@
 ## 1. Radar provider and data
 
 - [x] 1.1 [low] Verify current LibreWXR public metadata, documented tile URL/options, caching, permitted usage and provider/upstream attribution; record sources and any blocker, and verify the documented endpoint and sample response before integration.
-- [ ] 1.2 [low] Implement metadata parsing and documented tile URL construction using the existing network stack; run focused tests for dynamic hosts/paths, timestamps, observed/forecast frames, empty and malformed responses.
+- [x] 1.2 [low] Implement metadata parsing and documented tile URL construction using the existing network stack; run focused tests for dynamic hosts/paths, timestamps, observed/forecast frames, empty and malformed responses.
 - [ ] 1.3 [high] Implement lifecycle-cancellable metadata refresh, bounded transient exponential retry and cached fallback; run focused coroutine tests covering cancellation, refresh, recovery, stale cache and failure without provider substitution.
 - [ ] 1.4 [low] Add radar visibility to existing DataStore settings with enabled default and preserve unrelated preferences; run focused persistence and migration/default tests.
 
