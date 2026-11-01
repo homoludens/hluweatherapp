@@ -79,6 +79,10 @@ class SettingsViewModel(
                                 PersistedSetting.PRECIPITATION_UNIT,
                                 persisted.precipitationUnit
                             ),
+                            radarEnabled = current.value(
+                                PersistedSetting.RADAR_ENABLED,
+                                persisted.radarEnabled
+                            ),
                             weatherAlerts = current.value(
                                 PersistedSetting.WEATHER_ALERTS,
                                 persisted.weatherAlerts
@@ -181,6 +185,10 @@ class SettingsViewModel(
         updateSettings(PersistedSetting.PRECIPITATION_UNIT) { it.copy(precipitationUnit = unit) }
     }
 
+    fun setRadarEnabled(enabled: Boolean) {
+        updateSettings(PersistedSetting.RADAR_ENABLED) { it.copy(radarEnabled = enabled) }
+    }
+
     fun setHourlyTableColumn(column: HourlyTableColumn, enabled: Boolean) {
         updateSettings(PersistedSetting.HOURLY_TABLE_COLUMNS) { state ->
             state.copy(
@@ -247,6 +255,7 @@ class SettingsViewModel(
             PersistedSetting.WIND_DIRECTION_DISPLAY -> windDirectionDisplay
             PersistedSetting.DISTANCE_UNIT -> distanceUnit
             PersistedSetting.PRECIPITATION_UNIT -> precipitationUnit
+            PersistedSetting.RADAR_ENABLED -> radarEnabled
             PersistedSetting.WEATHER_ALERTS -> weatherAlerts
             PersistedSetting.DAILY_SUMMARY -> dailySummary
             PersistedSetting.DAILY_SUMMARY_TIME -> dailySummaryTime
@@ -296,6 +305,7 @@ private fun PersistedSettings.toUiState(
         windDirectionDisplay = windDirectionDisplay,
         distanceUnit = distanceUnit,
         precipitationUnit = precipitationUnit,
+        radarEnabled = radarEnabled,
         weatherAlerts = weatherAlerts,
         dailySummary = dailySummary,
         dailySummaryTime = dailySummaryTime,
@@ -313,6 +323,7 @@ private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     windDirectionDisplay = windDirectionDisplay,
     distanceUnit = distanceUnit,
     precipitationUnit = precipitationUnit,
+    radarEnabled = radarEnabled,
     weatherAlerts = weatherAlerts,
     dailySummary = dailySummary,
     dailySummaryTime = dailySummaryTime,
@@ -335,6 +346,7 @@ private enum class PersistedSetting {
     WIND_DIRECTION_DISPLAY,
     DISTANCE_UNIT,
     PRECIPITATION_UNIT,
+    RADAR_ENABLED,
     WEATHER_ALERTS,
     DAILY_SUMMARY,
     DAILY_SUMMARY_TIME,

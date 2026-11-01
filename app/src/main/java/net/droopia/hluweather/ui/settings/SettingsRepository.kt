@@ -30,6 +30,7 @@ data class PersistedSettings(
     val windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    val radarEnabled: Boolean = true,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
     val dailySummaryTime: LocalTime = LocalTime(8, 0),
@@ -70,6 +71,7 @@ class DataStoreSettingsRepository(
                 ),
                 distanceUnit = preferences.enum(distanceUnitKey, defaults.distanceUnit),
                 precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
+                radarEnabled = preferences.getBooleanOrNull(radarEnabledKey) ?: defaults.radarEnabled,
                 weatherAlerts = if (preferences[weatherAlertsMigrationKey] == true) {
                     preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts
                 } else {
@@ -106,6 +108,7 @@ class DataStoreSettingsRepository(
             preferences[windDirectionDisplayKey] = settings.windDirectionDisplay.name
             preferences[distanceUnitKey] = settings.distanceUnit.name
             preferences[precipitationUnitKey] = settings.precipitationUnit.name
+            preferences[radarEnabledKey] = settings.radarEnabled
             preferences[weatherAlertsKey] = settings.weatherAlerts
             preferences[weatherAlertsMigrationKey] = true
             preferences[dailySummaryKey] = settings.dailySummary
@@ -162,6 +165,7 @@ private val windUnitKey = stringPreferencesKey("settings.wind_unit")
 private val windDirectionDisplayKey = stringPreferencesKey("settings.wind_direction_display")
 private val distanceUnitKey = stringPreferencesKey("settings.distance_unit")
 private val precipitationUnitKey = stringPreferencesKey("settings.precipitation_unit")
+private val radarEnabledKey = booleanPreferencesKey("settings.radar_enabled")
 private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")
 private val weatherAlertsMigrationKey = booleanPreferencesKey("settings.weather_alerts_migrated")
 private val dailySummaryKey = booleanPreferencesKey("settings.daily_summary")

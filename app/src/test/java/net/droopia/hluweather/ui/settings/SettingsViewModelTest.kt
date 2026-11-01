@@ -66,6 +66,22 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun radar_visibility_updates_and_survives_other_settings_changes() = runTest {
+        val repository = InMemorySettingsRepository(PersistedSettings(radarEnabled = false))
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
+
+        viewModel.setDailySummary(true)
+        advanceUntilIdle()
+        assertFalse(repository.saved?.radarEnabled ?: true)
+
+        viewModel.setRadarEnabled(true)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.radarEnabled)
+        assertTrue(repository.saved?.radarEnabled ?: false)
+    }
+
+    @Test
     fun selecting_location_disables_track_me_and_selects_location() {
         val viewModel = SettingsViewModel(
             InMemorySettingsRepository(),

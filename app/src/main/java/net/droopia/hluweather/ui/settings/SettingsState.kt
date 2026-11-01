@@ -71,6 +71,7 @@ data class SettingsUiState(
     val windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    val radarEnabled: Boolean = true,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
     val dailySummaryTime: LocalTime = LocalTime(8, 0),

@@ -78,6 +78,119 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun radar_visibility_defaults_to_enabled_when_key_is_absent_from_existing_settings() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        dataStore.edit {
+            it[stringPreferencesKey("settings.provider")] = WeatherProvider.MET_NO.name
+            it[stringPreferencesKey("settings.theme_mode")] = ThemeMode.DARK.name
+            it[booleanPreferencesKey("settings.daily_summary")] = true
+        }
+
+        val settings = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertTrue(settings.radarEnabled)
+        assertEquals(WeatherProvider.MET_NO, settings.provider)
+        assertEquals(ThemeMode.DARK, settings.themeMode)
+        assertTrue(settings.dailySummary)
+        assertEquals(null, dataStore.data.first()[booleanPreferencesKey("settings.radar_enabled")])
+    }
+
+    @Test
+    fun disabled_radar_visibility_survives_repository_reload() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        DataStoreSettingsRepository(dataStore).save(PersistedSettings(radarEnabled = false))
+
+        val reloadedSettings = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertFalse(reloadedSettings.radarEnabled)
+        assertEquals(false, dataStore.data.first()[booleanPreferencesKey("settings.radar_enabled")])
+    }
+
+    @Test
+    fun enabled_radar_visibility_is_explicitly_persisted() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val repository = DataStoreSettingsRepository(dataStore)
+        repository.save(PersistedSettings(radarEnabled = false))
+
+        repository.save(repository.settings.first().copy(radarEnabled = true))
+
+        assertTrue(DataStoreSettingsRepository(dataStore).settings.first().radarEnabled)
+        assertEquals(true, dataStore.data.first()[booleanPreferencesKey("settings.radar_enabled")])
+    }
+
+    @Test
+    fun radar_visibility_save_preserves_unrelated_preferences() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val unrelatedKey = stringPreferencesKey("unrelated.preference")
+        dataStore.edit {
+            it[stringPreferencesKey("settings.provider")] = WeatherProvider.MET_NO.name
+            it[stringPreferencesKey("settings.place_search_provider")] = PlaceSearchProvider.OPEN_METEO.name
+            it[stringPreferencesKey("settings.theme_mode")] = ThemeMode.DARK.name
+            it[stringPreferencesKey("settings.temperature_unit")] = TemperatureUnit.FAHRENHEIT.name
+            it[stringPreferencesKey("settings.wind_unit")] = WindUnit.MPH.name
+            it[stringPreferencesKey("settings.wind_direction_display")] = WindDirectionDisplay.EIGHT_POINT.name
+            it[stringPreferencesKey("settings.distance_unit")] = DistanceUnit.MILES.name
+            it[stringPreferencesKey("settings.precipitation_unit")] = PrecipitationUnit.INCH.name
+            it[booleanPreferencesKey("settings.weather_alerts")] = true
+            it[booleanPreferencesKey("settings.weather_alerts_migrated")] = true
+            it[booleanPreferencesKey("settings.daily_summary")] = true
+            it[stringPreferencesKey("settings.daily_summary_time")] = "06:45"
+            it[stringPreferencesKey("settings.hourly_table_columns")] = "WIND_SPEED,PM2_5"
+            it[stringPreferencesKey("settings.selected_location_id")] = "trieste"
+            it[booleanPreferencesKey("settings.track_me_enabled")] = true
+            it[unrelatedKey] = "keep me"
+        }
+        val repository = DataStoreSettingsRepository(dataStore)
+        val beforeSave = repository.settings.first()
+
+        repository.save(beforeSave.copy(radarEnabled = false))
+
+        assertEquals(beforeSave.copy(radarEnabled = false), repository.settings.first())
+        assertEquals("keep me", dataStore.data.first()[unrelatedKey])
+    }
+
+    @Test
+    fun legacy_weather_alert_migration_preserves_radar_and_other_settings() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val unrelatedKey = stringPreferencesKey("unrelated.preference")
+        dataStore.edit {
+            it[booleanPreferencesKey("settings.weather_alerts")] = true
+            it[booleanPreferencesKey("settings.radar_enabled")] = false
+            it[stringPreferencesKey("settings.provider")] = WeatherProvider.MET_NO.name
+            it[unrelatedKey] = "keep me"
+        }
+
+        val settings = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertFalse(settings.weatherAlerts)
+        assertFalse(settings.radarEnabled)
+        assertEquals(WeatherProvider.MET_NO, settings.provider)
+        assertEquals(true, dataStore.data.first()[booleanPreferencesKey("settings.weather_alerts_migrated")])
+        assertEquals(false, dataStore.data.first()[booleanPreferencesKey("settings.radar_enabled")])
+        assertEquals("keep me", dataStore.data.first()[unrelatedKey])
+    }
+
+    @Test
     fun saves_and_reads_the_complete_persisted_settings_snapshot() = runTest {
         val file = temporaryFolder.newFile("settings.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(
