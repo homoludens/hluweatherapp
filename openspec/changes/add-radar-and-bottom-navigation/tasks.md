@@ -22,5 +22,5 @@
 
 ## 4. Final verification
 
-- [ ] 4.1 [low] Run relevant broader automated tests and the Google debug build with the configured Android SDK; record commands, results and any unavailable checks.
+- [x] 4.1 [low] Run relevant broader automated tests and the Google debug build with the configured Android SDK; record commands, results and any unavailable checks.
 - [ ] 4.2 [low] Perform available device/emulator end-to-end checks for all four tabs, radar, location, route, settings, lifecycle and offline behavior; document changed files, verified provider endpoints/tile format/attribution, limitations and remaining issues.
