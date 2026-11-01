@@ -26,6 +26,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -115,7 +116,7 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun passes_selected_columns_to_current_card_in_non_daily_path() {
+    fun map_mode_hides_current_weather_card_and_expands_map_below_header() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         viewModel.onForecastModeSelected(ForecastMode.MAP)
 
@@ -123,15 +124,28 @@ class WeatherScreenTest {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
-                    hourlyTableColumns = setOf(HourlyTableColumn.PM10),
                     mapContent = { _, _, _, _, _ ->
-                        Text("Map", Modifier.testTag("weather_map"))
+                        Box(Modifier.fillMaxSize().testTag("weather_map"))
                     }
                 )
             }
         }
 
-        assertCurrentCardMetric("PM10")
+        composeRule.onNodeWithTag("weather_hero").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("current_weather_card")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+
+        val headerBounds = composeRule.onNodeWithTag("weather_hero")
+            .fetchSemanticsNode().boundsInRoot
+        val mapBounds = composeRule.onNodeWithTag("weather_map")
+            .fetchSemanticsNode().boundsInRoot
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        assertEquals("Map should start immediately below the header", headerBounds.bottom, mapBounds.top, 1f)
+        assertTrue("Map should fill the space below the header", mapBounds.height > rootBounds.height * 0.6f)
     }
 
     @Test

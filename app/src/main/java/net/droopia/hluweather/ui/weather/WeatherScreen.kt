@@ -262,20 +262,6 @@ fun WeatherScreen(
                             onSettingsClick = onSettingsClick
                         )
 
-                        if (state.forecastMode != ForecastMode.DAILY) {
-                            CurrentWeatherCard(
-                                location = location,
-                                forecast = forecast,
-                                temperatureUnit = temperatureUnit,
-                                precipitationUnit = precipitationUnit,
-                                hourlyTableColumns = hourlyTableColumns,
-                                onLocationClick = { locationSwitcherVisible = true },
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp)
-                                    .offset(y = (-8).dp)
-                            )
-                        }
-
                         when (state.forecastMode) {
                             ForecastMode.DAILY -> {
                                 DailyForecastList(
