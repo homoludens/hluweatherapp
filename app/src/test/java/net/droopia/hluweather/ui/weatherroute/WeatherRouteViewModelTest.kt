@@ -107,6 +107,44 @@ class WeatherRouteViewModelTest {
     }
 
     @Test
+    fun changing_search_provider_keeps_route_inputs_and_rejects_old_search_results() = runTest {
+        val oldResults = CompletableDeferred<List<PlaceSearchResult>>()
+        val oldSearch = object : PlaceSearchSource {
+            override val provider = PlaceSearchProvider.PHOTON
+            override suspend fun search(query: String) = oldResults.await()
+        }
+        val newSearch = object : PlaceSearchSource {
+            override val provider = PlaceSearchProvider.OPEN_METEO
+            override suspend fun search(query: String) = listOf(trieste)
+        }
+        val viewModel = WeatherRouteViewModel(
+            routingSource = FakeRoutingSource(route()),
+            placeSearchSources = listOf(oldSearch, newSearch),
+            placeSearchProvider = PlaceSearchProvider.PHOTON,
+            routeWeatherSource = FakeRouteWeatherSource(),
+            locationRepository = FakeLocationRepository(),
+            deviceLocationSource = FakeDeviceLocationSource(GpsResult.Unavailable),
+            now = { now }
+        )
+        viewModel.selectSavedLocation(RouteEndpointSlot.END, end)
+        viewModel.onSearchQueryChanged(RouteEndpointSlot.START, "trieste")
+        advanceTimeBy(301)
+        runCurrent()
+
+        viewModel.onPlaceSearchProviderChanged(PlaceSearchProvider.OPEN_METEO)
+        oldResults.complete(listOf(PlaceSearchResult("Stale", startPoint)))
+        runCurrent()
+        assertTrue(viewModel.state.value.isSearching)
+        assertTrue(viewModel.state.value.searchResults.isEmpty())
+        advanceUntilIdle()
+
+        assertEquals(PlaceSearchProvider.OPEN_METEO, viewModel.state.value.searchProvider)
+        assertEquals(listOf(trieste), viewModel.state.value.searchResults)
+        assertEquals(RouteEndpoint(end.name, endPoint), viewModel.state.value.end)
+        assertFalse(viewModel.state.value.isSearching)
+    }
+
+    @Test
     fun invalid_speed_and_incomplete_endpoints_are_rejected_before_routing() = runTest {
         val route = FakeRoutingSource(route())
         val viewModel = viewModel(route = route)

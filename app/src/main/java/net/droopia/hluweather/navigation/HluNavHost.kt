@@ -1,11 +1,13 @@
 package net.droopia.hluweather.navigation
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -19,11 +21,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.material3.Text
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherRouteResult
 import net.droopia.hluweather.ui.locationpicker.LocationPickerScreen
@@ -47,9 +49,13 @@ fun HluNavHost(
     routeMapContent: (@Composable (WeatherRouteResult, Int?, Boolean, (Int) -> Unit) -> Unit)? = null,
     notificationsPermissionGranted: Boolean = true,
     onNotificationPermissionRequest: () -> Unit = {},
-    onOpenNotificationSettings: () -> Unit = {}
+    onOpenNotificationSettings: () -> Unit = {},
+    mainNavigation: MainNavigation = rememberMainNavigation(weatherViewModel)
 ) {
-    val navController = rememberNavController()
+    require(weatherViewModel == null || mainNavigation.usesWeatherViewModel(weatherViewModel)) {
+        "Pass the same weather ViewModel to rememberMainNavigation and HluNavHost"
+    }
+    val navController = mainNavigation.navController
     val settingsState = settingsViewModel.state.collectAsStateWithLifecycle().value
     val application = LocalContext.current.applicationContext as HluWeatherApplication
     val routeLocations = application.locationRepository.locations
@@ -57,17 +63,21 @@ fun HluNavHost(
         .value
     NavHost(
         navController = navController,
-        startDestination = "weather",
+        startDestination = WEATHER,
         modifier = Modifier.fillMaxSize()
     ) {
-        composable("weather") {
+        composable(WEATHER) {
+            val mainWeatherViewModel = mainNavigation.weatherViewModel()
+            val weatherState by mainWeatherViewModel.state.collectAsStateWithLifecycle()
+            BackHandler(enabled = weatherState.forecastMode != ForecastMode.HOURLY) {
+                mainNavigation.select(MainDestination.HOURLY)
+            }
             if (weatherMapContent == null) {
                 WeatherScreen(
-                    viewModel = weatherViewModel
-                        ?: viewModel(factory = WeatherViewModel.Factory),
-                    onSettingsClick = { navController.navigate("settings") },
+                    viewModel = mainWeatherViewModel,
+                    onSettingsClick = mainNavigation::openSettings,
                     onAddLocationClick = { navController.navigate("location_picker") },
-                    onWeatherRouteClick = { navController.navigate(WEATHER_ROUTE) },
+                    onWeatherRouteClick = { mainNavigation.select(MainDestination.ROUTE) },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
@@ -81,11 +91,10 @@ fun HluNavHost(
                 )
             } else {
                 WeatherScreen(
-                    viewModel = weatherViewModel
-                        ?: viewModel(factory = WeatherViewModel.Factory),
-                    onSettingsClick = { navController.navigate("settings") },
+                    viewModel = mainWeatherViewModel,
+                    onSettingsClick = mainNavigation::openSettings,
                     onAddLocationClick = { navController.navigate("location_picker") },
-                    onWeatherRouteClick = { navController.navigate(WEATHER_ROUTE) },
+                    onWeatherRouteClick = { mainNavigation.select(MainDestination.ROUTE) },
                     onTrackMeClick = { settingsViewModel.setTrackMe(true) },
                     trackMeSelected = settingsState.trackMeEnabled,
                     darkTheme = darkTheme,
@@ -102,6 +111,7 @@ fun HluNavHost(
         }
 
         composable(WEATHER_ROUTE) {
+            BackHandler { mainNavigation.returnFromRoute() }
             if (!settingsState.isInitialized) {
                 Box(
                     modifier = Modifier.fillMaxSize().testTag("weather_route_settings_loading"),
@@ -125,6 +135,9 @@ fun HluNavHost(
                     )
                 }
                 val routeViewModel: WeatherRouteViewModel = viewModel(factory = routeFactory)
+                LaunchedEffect(routeViewModel, settingsState.placeSearchProvider) {
+                    routeViewModel.onPlaceSearchProviderChanged(settingsState.placeSearchProvider)
+                }
                 WeatherRouteScreen(
                     viewModel = routeViewModel,
                     savedLocations = routeLocations,
@@ -133,13 +146,13 @@ fun HluNavHost(
                     windUnit = settingsState.windUnit,
                     distanceUnit = settingsState.distanceUnit,
                     precipitationUnit = settingsState.precipitationUnit,
-                    onBackClick = navController::popBackStack,
+                    onBackClick = { mainNavigation.returnFromRoute() },
                     mapContent = routeMapContent ?: ::defaultRouteMapContent
                 )
             }
         }
 
-        composable("settings") {
+        composable(SETTINGS) {
             SettingsScreen(
                 state = settingsState,
                 onBackClick = {
@@ -233,7 +246,6 @@ fun HluNavHost(
 
 private const val LOCATION_ID_ARGUMENT = "locationId"
 private const val LOCATION_PICKER_ROUTE = "location_picker?$LOCATION_ID_ARGUMENT={$LOCATION_ID_ARGUMENT}"
-private const val WEATHER_ROUTE = "weather_route"
 
 @Composable
 private fun defaultRouteMapContent(

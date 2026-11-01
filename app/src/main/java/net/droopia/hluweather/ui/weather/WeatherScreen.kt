@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
@@ -116,6 +117,8 @@ fun WeatherScreen(
     var locationSwitcherVisible by remember { mutableStateOf(false) }
     var permissionRetry by remember { mutableIntStateOf(0) }
     var radarOpacity by rememberSaveable { mutableFloatStateOf(0.75f) }
+    val hourlyListState = rememberLazyListState()
+    val dailyListState = rememberLazyListState()
     val lifecycleOwner = LocalLifecycleOwner.current
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -247,6 +250,7 @@ fun WeatherScreen(
                             windUnit = windUnit,
                             windDirectionDisplay = windDirectionDisplay,
                             hourlyTableColumns = hourlyTableColumns,
+                            listState = hourlyListState,
                             now = now,
                             onDaySelected = viewModel::onDaySelected,
                             onForecastModeSelected = viewModel::onForecastModeSelected,
@@ -269,6 +273,7 @@ fun WeatherScreen(
                                     temperatureUnit = temperatureUnit,
                                     precipitationUnit = precipitationUnit,
                                     onDaySelected = viewModel::onDaySelected,
+                                    listState = dailyListState,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -445,11 +450,11 @@ private fun HourlyWeatherContent(
     onSettingsClick: () -> Unit,
     onLocationClick: () -> Unit,
     now: Instant?,
+    listState: LazyListState,
     modifier: Modifier = Modifier
 ) {
     val displayZone = ZoneId.of(forecast.timezone)
     val tableNow = rememberWeatherNow(forecast.timezone, now)
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val isCollapsed by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }

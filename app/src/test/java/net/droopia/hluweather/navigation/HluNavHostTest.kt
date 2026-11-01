@@ -3,7 +3,9 @@ package net.droopia.hluweather.navigation
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -30,7 +32,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 import net.droopia.hluweather.data.device.DeviceLocationSource
+import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.DrivingRoute
+import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.RouteEndpoint
@@ -45,6 +49,7 @@ import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import net.droopia.hluweather.ui.settings.SettingsViewModel
 import net.droopia.hluweather.ui.weatherroute.WeatherRouteViewModel
+import net.droopia.hluweather.ui.weatherroute.RouteEndpointSlot
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
@@ -60,6 +65,9 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -219,6 +227,256 @@ class HluNavHostTest {
 
         assertEquals(1, routeFactory.createCalls)
         assertEquals(PlaceSearchProvider.OPEN_METEO, routeViewModel.state.value.searchProvider)
+    }
+
+    @Test
+    fun main_navigation_switches_four_destinations_and_back_does_not_repeat_entries() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        val routeFactory = RecordingRouteFactory(delayedRouteViewModel(PlaceSearchProvider.PHOTON))
+        renderMainNavigation(weatherViewModel, routeFactory = routeFactory)
+
+        assertMainDestination(MainDestination.HOURLY)
+        composeRule.onNodeWithText("Daily").performClick()
+        assertMainDestination(MainDestination.DAILY)
+        val firstDay = weatherViewModel.state.value.forecast!!.daily.first().date.dayText()
+        composeRule.onNodeWithText(firstDay).performClick()
+        assertMainDestination(MainDestination.HOURLY)
+        composeRule.onNodeWithText("Map").performClick()
+        assertMainDestination(MainDestination.MAP)
+
+        composeRule.onNodeWithTag("weather_route_open").performClick()
+        assertMainDestination(MainDestination.ROUTE)
+        composeRule.runOnIdle {
+            mainNavigation.select(MainDestination.ROUTE)
+            mainNavigation.select(MainDestination.ROUTE)
+            assertEquals(WEATHER, mainNavigation.navController.previousBackStackEntry?.destination?.route)
+            mainNavigation.openSettings()
+            mainNavigation.openSettings()
+            mainNavigation.select(MainDestination.DAILY) // secondary screens do not accept tab selections
+            assertEquals(WEATHER_ROUTE, mainNavigation.navController.previousBackStackEntry?.destination?.route)
+        }
+        assertMainDestination(null)
+        pressBack()
+        assertMainDestination(MainDestination.ROUTE)
+        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+        pressBack()
+        assertMainDestination(MainDestination.MAP)
+        pressBack()
+        assertMainDestination(MainDestination.HOURLY)
+        composeRule.runOnIdle {
+            mainNavigation.select(MainDestination.HOURLY)
+            assertNull(mainNavigation.navController.previousBackStackEntry)
+        }
+        assertEquals(1, routeFactory.createCalls)
+    }
+
+    @Test
+    fun weather_scroll_and_mode_survive_primary_and_secondary_navigation_without_refresh() {
+        val repository = MockWeatherRepository()
+        val weatherViewModel = WeatherViewModel(repository, Svilajnac)
+        renderMainNavigation(weatherViewModel)
+
+        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(15)
+        val hourlyPosition = scrollPosition("weather_scroll")
+        val selectedDay = weatherViewModel.state.value.selectedDayIndex
+        assertTrue(hourlyPosition > 0f)
+
+        select(MainDestination.DAILY)
+        composeRule.onNodeWithTag("daily_list").performScrollToIndex(3)
+        val dailyPosition = scrollPosition("daily_list")
+        assertTrue(dailyPosition > 0f)
+        select(MainDestination.ROUTE)
+        select(MainDestination.DAILY)
+        assertEquals(dailyPosition, scrollPosition("daily_list"), 0.01f)
+
+        composeRule.runOnIdle { mainNavigation.openSettings() }
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(2)
+        composeRule.onNodeWithText("Add Location").performClick()
+        composeRule.onNodeWithText("Location picker").assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag("settings_scroll").assertIsDisplayed()
+        pressBack()
+        assertMainDestination(MainDestination.DAILY)
+        assertEquals(dailyPosition, scrollPosition("daily_list"), 0.01f)
+
+        select(MainDestination.HOURLY)
+        assertEquals(hourlyPosition, scrollPosition("weather_scroll"), 0.01f)
+        assertEquals(selectedDay, weatherViewModel.state.value.selectedDayIndex)
+        composeRule.runOnIdle { mainNavigation.openSettings() }
+        pressBack()
+        assertMainDestination(MainDestination.HOURLY)
+        assertEquals(hourlyPosition, scrollPosition("weather_scroll"), 0.01f)
+        assertEquals(1, repository.requests.size)
+    }
+
+    @Test
+    fun route_owner_and_inputs_survive_back_and_settings_with_updated_search_provider() {
+        val settingsRepository = MutableSettingsRepository()
+        val settingsViewModel = SettingsViewModel(settingsRepository, EmptyLocationRepository())
+        val routeViewModel = delayedRouteViewModel(PlaceSearchProvider.PHOTON)
+        val routeFactory = RecordingRouteFactory(routeViewModel)
+        renderMainNavigation(
+            WeatherViewModel(MockWeatherRepository(), Svilajnac),
+            settingsViewModel = settingsViewModel,
+            routeFactory = routeFactory
+        )
+
+        select(MainDestination.MAP)
+        select(MainDestination.ROUTE)
+        val endpoint = RouteEndpoint("Kept start", GeoPoint(44.0, 21.0))
+        composeRule.runOnIdle { routeViewModel.selectMapEndpoint(RouteEndpointSlot.START, endpoint) }
+        composeRule.onNodeWithText("Kept start").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(2)
+        val routePosition = scrollPosition("weather_route_content")
+        assertTrue(routePosition > 0f)
+
+        composeRule.runOnIdle { mainNavigation.openSettings() }
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(8)
+        composeRule.onNodeWithTag("settings_place_search_open_meteo").performClick()
+        pressBack()
+        assertMainDestination(MainDestination.ROUTE)
+        assertEquals(routePosition, scrollPosition("weather_route_content"), 0.01f)
+        assertEquals(PlaceSearchProvider.OPEN_METEO, routeViewModel.state.value.searchProvider)
+
+        composeRule.onNodeWithTag("weather_route_back").performClick()
+        assertMainDestination(MainDestination.MAP)
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(8)
+        composeRule.onNodeWithTag("settings_place_search_photon").performClick()
+        pressBack()
+        assertMainDestination(MainDestination.MAP)
+        select(MainDestination.ROUTE)
+        assertEquals(routePosition, scrollPosition("weather_route_content"), 0.01f)
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(0)
+        composeRule.onNodeWithText("Kept start").assertIsDisplayed()
+        assertEquals(endpoint, routeViewModel.state.value.start)
+        assertEquals(PlaceSearchProvider.PHOTON, routeViewModel.state.value.searchProvider)
+        assertEquals(1, routeFactory.createCalls)
+    }
+
+    @Test
+    fun default_weather_owner_is_the_original_weather_navigation_entry() {
+        val settingsViewModel = SettingsViewModel(MutableSettingsRepository(), EmptyLocationRepository())
+        val routeFactory = RecordingRouteFactory(delayedRouteViewModel(PlaceSearchProvider.PHOTON))
+        fun render() {
+            composeRule.setContent {
+                HluWeatherTheme(darkTheme = false) {
+                    val navigation = rememberMainNavigation()
+                    SideEffect { mainNavigation = navigation }
+                    HluNavHost(
+                        settingsViewModel = settingsViewModel,
+                        mainNavigation = navigation,
+                        routeViewModelFactory = routeFactory,
+                        weatherMapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize()) }
+                    )
+                }
+            }
+            composeRule.waitForIdle()
+        }
+        render()
+        lateinit var weatherViewModel: WeatherViewModel
+        composeRule.runOnIdle {
+            val weatherOwner = mainNavigation.navController.getBackStackEntry(WEATHER)
+            weatherViewModel = ViewModelProvider(weatherOwner, WeatherViewModel.Factory)
+                .get(WeatherViewModel::class.java)
+            assertSame(weatherViewModel, mainNavigation.weatherViewModel())
+            mainNavigation.select(MainDestination.MAP)
+            mainNavigation.select(MainDestination.ROUTE)
+            mainNavigation.select(MainDestination.DAILY)
+            assertSame(weatherViewModel, mainNavigation.weatherViewModel())
+        }
+        composeRule.runOnIdle { composeRule.activity.recreate() }
+        render()
+        composeRule.runOnIdle {
+            assertSame(weatherViewModel, mainNavigation.weatherViewModel())
+            assertEquals(ForecastMode.DAILY, weatherViewModel.state.value.forecastMode)
+        }
+    }
+
+    @Test
+    fun configuration_recreation_restores_secondary_screen_and_saved_route() {
+        val repository = MockWeatherRepository()
+        val weatherViewModel = WeatherViewModel(repository, Svilajnac)
+        val settingsViewModel = SettingsViewModel(MutableSettingsRepository(), EmptyLocationRepository())
+        val routeViewModel = delayedRouteViewModel(PlaceSearchProvider.PHOTON)
+        val routeFactory = RecordingRouteFactory(routeViewModel)
+        renderMainNavigation(weatherViewModel, settingsViewModel, routeFactory)
+
+        select(MainDestination.MAP)
+        select(MainDestination.ROUTE)
+        val endpoint = RouteEndpoint("Restored start", GeoPoint(44.0, 21.0))
+        composeRule.runOnIdle { routeViewModel.selectMapEndpoint(RouteEndpointSlot.START, endpoint) }
+        pressBack()
+        composeRule.runOnIdle { mainNavigation.openSettings() }
+        assertMainDestination(null)
+
+        composeRule.runOnIdle { composeRule.activity.recreate() }
+        renderMainNavigation(weatherViewModel, settingsViewModel, routeFactory)
+        composeRule.onNodeWithTag("settings_scroll").assertIsDisplayed()
+        pressBack()
+        assertMainDestination(MainDestination.MAP)
+        select(MainDestination.ROUTE)
+        composeRule.onNodeWithText("Restored start").assertIsDisplayed()
+        assertEquals(endpoint, routeViewModel.state.value.start)
+        assertEquals(1, routeFactory.createCalls)
+        assertEquals(1, repository.requests.size)
+    }
+
+    private lateinit var mainNavigation: MainNavigation
+    private var currentMainDestination: MainDestination? = null
+
+    private fun renderMainNavigation(
+        weatherViewModel: WeatherViewModel,
+        settingsViewModel: SettingsViewModel = SettingsViewModel(
+            MutableSettingsRepository(), EmptyLocationRepository()
+        ),
+        routeFactory: ViewModelProvider.Factory = RecordingRouteFactory(
+            delayedRouteViewModel(PlaceSearchProvider.PHOTON)
+        )
+    ) {
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                val navigation = rememberMainNavigation(weatherViewModel)
+                val destination = navigation.currentDestination()
+                SideEffect {
+                    mainNavigation = navigation
+                    currentMainDestination = destination
+                }
+                HluNavHost(
+                    settingsViewModel = settingsViewModel,
+                    weatherViewModel = weatherViewModel,
+                    mainNavigation = navigation,
+                    routeViewModelFactory = routeFactory,
+                    weatherMapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize()) },
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun select(destination: MainDestination) {
+        composeRule.runOnIdle { mainNavigation.select(destination) }
+        assertMainDestination(destination)
+    }
+
+    private fun assertMainDestination(destination: MainDestination?) {
+        composeRule.runOnIdle { assertEquals(destination, currentMainDestination) }
+    }
+
+    private fun pressBack() {
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.waitForIdle()
+    }
+
+    private fun scrollPosition(tag: String): Float = composeRule.onNodeWithTag(tag)
+        .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+
+    private class MutableSettingsRepository : SettingsRepository {
+        override val settings = MutableStateFlow(PersistedSettings())
+        override suspend fun save(settings: PersistedSettings) {
+            this.settings.value = settings
+        }
     }
 
     private fun delayedRouteViewModel(provider: PlaceSearchProvider) = WeatherRouteViewModel(

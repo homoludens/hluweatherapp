@@ -87,7 +87,7 @@ data class WeatherRouteUiState(
 class WeatherRouteViewModel(
     private val routingSource: RoutingSource,
     private val placeSearchSources: List<PlaceSearchSource>,
-    private val placeSearchProvider: PlaceSearchProvider,
+    placeSearchProvider: PlaceSearchProvider,
     private val routeWeatherSource: RouteWeatherSource,
     private val locationRepository: LocationRepository,
     private val deviceLocationSource: DeviceLocationSource,
@@ -116,20 +116,21 @@ class WeatherRouteViewModel(
                 .flatMapLatest { input ->
                     val source = placeSearchSources.firstOrNull { it.provider == input.provider }
                     if (source == null || input.slot == null || input.query.isBlank()) {
-                        flow { emit(SearchOutcome(emptyList(), null)) }
+                        flow { emit(SearchOutcome(input, emptyList(), null)) }
                     } else {
                         flow {
                             try {
-                                emit(SearchOutcome(source.search(input.query), null))
+                                emit(SearchOutcome(input, source.search(input.query), null))
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (error: Throwable) {
-                                emit(SearchOutcome(emptyList(), searchErrorMessage(error)))
+                                emit(SearchOutcome(input, emptyList(), searchErrorMessage(error)))
                             }
                         }
                     }
                 }
                 .collect { outcome ->
+                    if (outcome.input != searchInput.value) return@collect
                     _state.update {
                         it.copy(
                             searchResults = outcome.results,
@@ -169,6 +170,20 @@ class WeatherRouteViewModel(
             )
         }
         searchInput.value = SearchInput(slot, query, _state.value.searchProvider)
+    }
+
+    fun onPlaceSearchProviderChanged(provider: PlaceSearchProvider) {
+        if (_state.value.searchProvider == provider) return
+        _state.update {
+            it.copy(
+                searchProvider = provider,
+                searchResults = emptyList(),
+                isSearching = it.activeSearchSlot != null && it.searchQuery.isNotBlank(),
+                routeError = if (it.activeSearchSlot != null) null else it.routeError
+            )
+        }
+        val current = _state.value
+        searchInput.value = SearchInput(current.activeSearchSlot, current.searchQuery, provider)
     }
 
     fun selectSearchResult(result: PlaceSearchResult) {
@@ -709,6 +724,7 @@ private data class SearchInput(
 )
 
 private data class SearchOutcome(
+    val input: SearchInput,
     val results: List<PlaceSearchResult>,
     val error: String?
 )

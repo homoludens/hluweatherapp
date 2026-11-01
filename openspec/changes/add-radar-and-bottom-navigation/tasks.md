@@ -15,7 +15,7 @@
 
 ## 3. Four-tab navigation (after radar phase)
 
-- [ ] 3.1 [high] Refactor the shared main-screen shell and navigation coordination to reuse existing weather and route owners, support four destinations and sensible single-top/back/state restoration; run focused navigation tests for switching, settings return, back stack, retained state and no unnecessary refresh.
+- [x] 3.1 [high] Refactor the shared main-screen shell and navigation coordination to reuse existing weather and route owners, support four destinations and sensible single-top/back/state restoration; run focused navigation tests for switching, settings return, back stack, retained state and no unnecessary refresh.
 - [ ] 3.2 [low] Replace top tabs and subtitle with a compact gradient title/settings header and themed Material 3 four-item bottom bar; run UI tests for labels, selected indicator, default Hourly, themes and inset handling.
 - [ ] 3.3 [low] Integrate the existing Route screen as a top-level destination and remove redundant Hourly/Map route shortcuts while keeping radar and route behavior; run focused route and map navigation/UI tests.
 - [ ] 3.4 [low] Adjust main-screen content and insets for compact header and bottom bar without redesigning forecasts or route planner; verify small-screen layouts, forecast scrolling, radar controls and route planner in light and dark themes.
