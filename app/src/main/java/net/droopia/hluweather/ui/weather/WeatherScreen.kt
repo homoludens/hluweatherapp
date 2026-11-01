@@ -25,6 +25,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -40,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,6 +54,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -70,6 +74,8 @@ import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.map.WeatherMap
+import net.droopia.hluweather.ui.map.RadarMapOverlay
+import net.droopia.hluweather.ui.map.RadarPlaybackViewModel
 import net.droopia.hluweather.ui.map.WeatherMapRadarConfig
 
 private const val WEATHER_HEADER_KEY = "weather_header"
@@ -96,28 +102,20 @@ fun WeatherScreen(
     windUnit: WindUnit = WindUnit.KMH,
     windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
-    radar: WeatherMapRadarConfig? = null,
+    radarEnabled: Boolean = true,
+    onRadarEnabledChange: (Boolean) -> Unit = {},
+    radarPlaybackViewModel: RadarPlaybackViewModel = viewModel(factory = RadarPlaybackViewModel.Factory),
     now: Instant? = null,
     modifier: Modifier = Modifier,
-    mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
-        { mapLocation, locations, activeLocationId, mapDarkTheme, onRecenterClick ->
-            WeatherMap(
-                locations = locations,
-                activeLocationId = activeLocationId,
-                center = GeoPoint(mapLocation.latitude, mapLocation.longitude),
-                darkTheme = mapDarkTheme,
-                fitLocations = true,
-                radar = radar,
-                onLocationClick = viewModel::selectLocation,
-                onRecenterClick = onRecenterClick
-            )
-        }
+    mapContent: (@Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val radarState by radarPlaybackViewModel.state.collectAsStateWithLifecycle()
     val forecast = state.forecast
     val location = state.activeLocation
     var locationSwitcherVisible by remember { mutableStateOf(false) }
     var permissionRetry by remember { mutableIntStateOf(0) }
+    var radarOpacity by rememberSaveable { mutableFloatStateOf(0.75f) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -135,6 +133,42 @@ fun WeatherScreen(
                 viewModel.trackMeWhileStarted()
             }
         }
+    }
+
+    val radarShouldBeVisible = state.forecastMode == ForecastMode.MAP &&
+        radarEnabled &&
+        forecast != null &&
+        location != null
+    LaunchedEffect(lifecycleOwner, radarShouldBeVisible, radarPlaybackViewModel) {
+        if (radarShouldBeVisible) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                radarPlaybackViewModel.setVisible(true)
+                try {
+                    awaitCancellation()
+                } finally {
+                    radarPlaybackViewModel.setVisible(false)
+                }
+            }
+        } else {
+            radarPlaybackViewModel.setVisible(false)
+        }
+    }
+    DisposableEffect(radarPlaybackViewModel) {
+        onDispose { radarPlaybackViewModel.setVisible(false) }
+    }
+
+    val selectedRadar = if (
+        radarShouldBeVisible && radarState.isVisible
+    ) {
+        val frame = radarState.selectedFrame
+        val host = radarState.metadata?.host
+        if (frame != null && host != null) {
+            WeatherMapRadarConfig(host = host, frame = frame, opacity = radarOpacity)
+        } else {
+            null
+        }
+    } else {
+        null
     }
 
     LaunchedEffect(state.trackMeStatus, trackMeSelected) {
@@ -254,14 +288,46 @@ fun WeatherScreen(
                             }
                             ForecastMode.MAP -> {
                                 Box(modifier = Modifier.weight(1f)) {
-                                    mapContent(
-                                        location,
-                                        state.locations,
-                                        location.id.takeUnless { it == "current" },
-                                        darkTheme
-                                    ) {
+                                    val onRecenterClick = {
                                         if (!trackMeSelected) onTrackMeClick()
                                     }
+                                    if (mapContent != null) {
+                                        mapContent(
+                                            location,
+                                            state.locations,
+                                            location.id.takeUnless { it == "current" },
+                                            darkTheme,
+                                            onRecenterClick
+                                        )
+                                    } else {
+                                        WeatherMap(
+                                            locations = state.locations,
+                                            activeLocationId = location.id.takeUnless { it == "current" },
+                                            center = GeoPoint(location.latitude, location.longitude),
+                                            darkTheme = darkTheme,
+                                            fitLocations = true,
+                                            radar = selectedRadar,
+                                            recenterTopPadding = 72.dp,
+                                            onLocationClick = viewModel::selectLocation,
+                                            onRecenterClick = onRecenterClick
+                                        )
+                                    }
+                                    RadarMapOverlay(
+                                        enabled = radarEnabled,
+                                        onEnabledChange = onRadarEnabledChange,
+                                        playbackState = radarState,
+                                        metadataState = radarState.metadataState,
+                                        opacity = radarOpacity,
+                                        onOpacityChange = { radarOpacity = it },
+                                        onFrameSelected = radarPlaybackViewModel::selectFrame,
+                                        onPlayPause = {
+                                            if (radarState.isPlaying) {
+                                                radarPlaybackViewModel.pause()
+                                            } else {
+                                                radarPlaybackViewModel.play()
+                                            }
+                                        }
+                                    )
                                 }
                             }
                             ForecastMode.HOURLY -> Unit

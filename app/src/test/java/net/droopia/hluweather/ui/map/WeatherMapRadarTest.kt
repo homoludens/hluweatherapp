@@ -305,7 +305,7 @@ class WeatherMapRadarTest {
             listOf("ui/locationpicker/LocationPickerScreen.kt", "ui/weatherroute/RouteEndpointPicker.kt", "ui/weatherroute/WeatherRouteMap.kt")
                 .forEach { path -> assertFalse(mainSource(path).contains("radar =")) }
             assertTrue(mainSource("ui/map/WeatherMap.kt").contains("radar: WeatherMapRadarConfig? = null"))
-            assertTrue(mainSource("ui/weather/WeatherScreen.kt").contains("radar = radar"))
+            assertTrue(mainSource("ui/weather/WeatherScreen.kt").contains("radar = selectedRadar"))
         } finally {
             content.close()
         }

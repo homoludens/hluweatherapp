@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
@@ -210,6 +211,7 @@ fun WeatherMap(
     darkTheme: Boolean,
     modifier: Modifier = Modifier,
     radar: WeatherMapRadarConfig? = null,
+    recenterTopPadding: Dp = 16.dp,
     onLocationClick: (WeatherLocation) -> Unit = {},
     onMapClick: (GeoPoint) -> Unit = {},
     onCameraIdle: (GeoPoint) -> Unit = {},
@@ -347,7 +349,7 @@ fun WeatherMap(
                 },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(16.dp)
+                    .padding(top = recenterTopPadding, end = 16.dp)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
             )
         }

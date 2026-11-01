@@ -1,0 +1,385 @@
+package net.droopia.hluweather.ui.map
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
+import net.droopia.hluweather.data.repository.RadarMetadataState
+
+private val RadarObservedColor = Color(0xFF27835A)
+
+@Composable
+internal fun RadarMapOverlay(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    playbackState: RadarPlaybackState,
+    metadataState: RadarMetadataState,
+    opacity: Float,
+    onOpacityChange: (Float) -> Unit,
+    onFrameSelected: (Long) -> Unit,
+    onPlayPause: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        RadarLayerControls(
+            enabled = enabled,
+            onEnabledChange = onEnabledChange,
+            opacity = opacity,
+            onOpacityChange = onOpacityChange,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+        )
+
+        if (enabled) {
+            RadarTimeline(
+                playbackState = playbackState,
+                metadataState = metadataState,
+                onFrameSelected = onFrameSelected,
+                onPlayPause = onPlayPause,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .padding(bottom = 76.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RadarLayerControls(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    opacity: Float,
+    onOpacityChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            tonalElevation = 3.dp
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconToggleButton(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics {
+                            contentDescription = "Radar visibility"
+                            stateDescription = if (enabled) "On" else "Off"
+                        }
+                        .testTag("radar_visibility_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (enabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = null,
+                        tint = if (enabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = "Radar layer options" }
+                        .testTag("radar_layer_options")
+                ) {
+                    Icon(Icons.Outlined.Layers, contentDescription = null)
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(240.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Radar layers", style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Radar visibility", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = onEnabledChange,
+                        modifier = Modifier
+                            .semantics {
+                                contentDescription = "Radar visibility in layer menu"
+                                stateDescription = if (enabled) "On" else "Off"
+                            }
+                            .testTag("radar_layer_visibility")
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Opacity", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "${(opacity.coerceIn(0f, 1f) * 100).toInt()}%",
+                        modifier = Modifier.testTag("radar_opacity_value"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Slider(
+                    value = opacity.coerceIn(0f, 1f),
+                    onValueChange = onOpacityChange,
+                    valueRange = 0f..1f,
+                    steps = 99,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "Radar opacity"
+                            stateDescription = "${(opacity.coerceIn(0f, 1f) * 100).toInt()} percent"
+                        }
+                        .testTag("radar_opacity_slider")
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("0%", style = MaterialTheme.typography.labelSmall)
+                    Text("100%", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadarTimeline(
+    playbackState: RadarPlaybackState,
+    metadataState: RadarMetadataState,
+    onFrameSelected: (Long) -> Unit,
+    onPlayPause: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val frames = playbackState.frames
+    val selectedIndex = frames.indexOfFirst {
+        it.timestampSeconds == playbackState.selectedFrame?.timestampSeconds
+    }.coerceAtLeast(0)
+    val selectedType = playbackState.selectedFrameType
+    val badgeColor = when (selectedType) {
+        LibreWxrRadarFrameType.OBSERVED -> MaterialTheme.colorScheme.tertiaryContainer
+        LibreWxrRadarFrameType.FORECAST -> MaterialTheme.colorScheme.primaryContainer
+        null -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val badgeTextColor = when (selectedType) {
+        LibreWxrRadarFrameType.OBSERVED -> MaterialTheme.colorScheme.onTertiaryContainer
+        LibreWxrRadarFrameType.FORECAST -> MaterialTheme.colorScheme.onPrimaryContainer
+        null -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val status = when {
+        metadataState.error != null -> if (frames.isEmpty()) "Radar unavailable" else "Radar updating"
+        metadataState.isLoading && frames.isEmpty() -> "Loading radar…"
+        frames.isEmpty() -> "No radar frames"
+        metadataState.isLoading -> "Updating radar…"
+        else -> null
+    }
+
+    Surface(
+        modifier = modifier.testTag("radar_timeline"),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        tonalElevation = 4.dp
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            if (status != null) {
+                Text(
+                    text = status,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
+                        .testTag("radar_status"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (metadataState.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    if (selectedType != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = badgeColor
+                        ) {
+                            Text(
+                                text = buildString {
+                                    append(playbackState.selectedFrameTypeLabel.orEmpty())
+                                    playbackState.forecastOffsetLabel?.let { append(" $it") }
+                                },
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = badgeTextColor
+                            )
+                        }
+                    } else {
+                        Text("Radar timeline", style = MaterialTheme.typography.labelMedium)
+                    }
+                    Text(
+                        text = playbackState.selectedFrameTimeLabel ?: "Waiting for radar frames",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(
+                    onClick = onPlayPause,
+                    enabled = frames.isNotEmpty(),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics {
+                            contentDescription = if (playbackState.isPlaying) {
+                                "Pause radar playback"
+                            } else {
+                                "Play radar playback"
+                            }
+                        }
+                        .testTag("radar_play_pause")
+                ) {
+                    Icon(
+                        imageVector = if (playbackState.isPlaying) {
+                            Icons.Outlined.Pause
+                        } else {
+                            Icons.Outlined.PlayArrow
+                        },
+                        contentDescription = null
+                    )
+                }
+            }
+
+            if (frames.isNotEmpty()) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                ) {
+                    val sliderRange = (frames.lastIndex).coerceAtLeast(1).toFloat()
+                    Slider(
+                        value = selectedIndex.toFloat().coerceAtMost(sliderRange),
+                        onValueChange = { position ->
+                            frames.getOrNull(position.toInt())?.let { onFrameSelected(it.timestampSeconds) }
+                        },
+                        valueRange = 0f..sliderRange,
+                        steps = (frames.size - 2).coerceAtLeast(0),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                contentDescription = "Radar timeline"
+                                stateDescription = buildString {
+                                    append(playbackState.selectedFrameTypeLabel ?: "No frame selected")
+                                    playbackState.selectedFrameTimeLabel?.let { append(", $it") }
+                                    playbackState.forecastOffsetLabel?.let { append(", $it from latest observation") }
+                                }
+                            }
+                            .testTag("radar_timeline_slider")
+                    )
+
+                    val latestObservedIndex = frames.indexOfLast {
+                        it.type == LibreWxrRadarFrameType.OBSERVED
+                    }
+                    if (latestObservedIndex >= 0) {
+                        val markerFraction = if (frames.size <= 1) {
+                            0f
+                        } else {
+                            latestObservedIndex.toFloat() / frames.lastIndex.toFloat()
+                        }
+                        val markerX = 12.dp + (maxWidth - 24.dp) * markerFraction
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .offset(x = markerX - 1.dp)
+                                .width(2.dp)
+                                .height(12.dp)
+                                .clip(CircleShape)
+                                .background(RadarObservedColor)
+                                .semantics {
+                                    contentDescription = "Latest observed radar frame"
+                                    stateDescription = playbackState.latestObservedTimestampSeconds
+                                        ?.let { "Frame ${it}" }.orEmpty()
+                                }
+                                .testTag("radar_latest_observed_marker")
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Weather data via LibreWXR (librewxr.net)\n" +
+                    "Upstream may include EUMETNET OPERA; Precipitation data from NOAA Enterprise Rain Rate (RRQPE); and DPC's Radar-DPC (Italy).",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("radar_attribution"),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}

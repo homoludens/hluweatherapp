@@ -75,7 +75,9 @@ fun HluNavHost(
                     precipitationUnit = settingsState.precipitationUnit,
                     windUnit = settingsState.windUnit,
                     windDirectionDisplay = settingsState.windDirectionDisplay,
-                    hourlyTableColumns = settingsState.hourlyTableColumns
+                    hourlyTableColumns = settingsState.hourlyTableColumns,
+                    radarEnabled = settingsState.radarEnabled,
+                    onRadarEnabledChange = settingsViewModel::setRadarEnabled
                 )
             } else {
                 WeatherScreen(
@@ -92,6 +94,8 @@ fun HluNavHost(
                     windUnit = settingsState.windUnit,
                     windDirectionDisplay = settingsState.windDirectionDisplay,
                     hourlyTableColumns = settingsState.hourlyTableColumns,
+                    radarEnabled = settingsState.radarEnabled,
+                    onRadarEnabledChange = settingsViewModel::setRadarEnabled,
                     mapContent = weatherMapContent
                 )
             }
