@@ -11,7 +11,7 @@
 - [x] 2.2 [low] Implement selected frame, play/pause, looping, observed/forecast classification, local-time labels and visibility-scoped playback; run focused state tests including missing forecasts, refresh reconciliation, 500–800 ms cadence and leaving Map.
 - [x] 2.3 [low] Add compact Material 3 radar toggle, layer/opacity menu, timeline, provider-required attribution and unobtrusive loading/error states; run focused UI tests for controls, opacity, visibility, accessibility and theme readability.
 - [x] 2.4 [low] Remove the Map weather card and expand the map while retaining the existing header, location functions and route shortcut for this phase; run focused WeatherScreen tests for map layout, route and unaffected Hourly/Daily content.
-- [ ] 2.5 [low] Verify the radar phase before navigation work: test Serbia coverage when available, pan/zoom, playback, style reload, GPS, route shortcut, missing tiles/service and both themes; record device/provider limitations and test results.
+- [x] 2.5 [low] Verify the radar phase before navigation work: test Serbia coverage when available, pan/zoom, playback, style reload, GPS, route shortcut, missing tiles/service and both themes; record device/provider limitations and test results.
 
 ## 3. Four-tab navigation (after radar phase)
 
