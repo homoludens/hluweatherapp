@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -179,29 +180,37 @@ class HluNavHostTest {
     }
 
     @Test
-    fun map_mode_opens_weather_on_route_and_back_returns_to_weather() {
+    fun route_tab_opens_existing_planner_from_each_weather_destination_and_back_returns_to_origin() {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
-        composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
-                HluNavHost(
-                    weatherViewModel = weatherViewModel,
-                    weatherMapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize()) },
-                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
-                )
+        val routeFactory = RecordingRouteFactory(delayedRouteViewModel(PlaceSearchProvider.PHOTON))
+        renderMainNavigation(weatherViewModel, routeFactory = routeFactory)
+
+        listOf(MainDestination.HOURLY, MainDestination.DAILY, MainDestination.MAP).forEach { origin ->
+            select(origin)
+            composeRule.onNodeWithTag("main_destination_${origin.name.lowercase()}").assertIsSelected()
+            if (origin == MainDestination.MAP) {
+                composeRule.onAllNodesWithText("Weather on route").assertCountEquals(0)
+                composeRule.onAllNodesWithTag("weather_route_open").assertCountEquals(0)
+                composeRule.onNodeWithTag("radar_visibility_toggle").assertIsDisplayed()
             }
+
+            composeRule.onNodeWithTag("main_destination_route").performClick()
+            composeRule.waitForIdle()
+            assertMainDestination(MainDestination.ROUTE)
+            composeRule.onNodeWithTag("main_destination_route").assertIsSelected()
+            composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+            composeRule.onNodeWithTag("route_start_search").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithTag("route_end_search").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithTag("trip_show_weather").assertIsDisplayed()
+            composeRule.onAllNodesWithTag("trip_setup_screen").assertCountEquals(0)
+            composeRule.onAllNodesWithTag("trip_overview_screen").assertCountEquals(0)
+            composeRule.onAllNodesWithTag("trip_details_screen").assertCountEquals(0)
+
+            composeRule.onNodeWithTag("weather_route_back").performClick()
+            assertMainDestination(origin)
+            composeRule.onNodeWithTag("main_destination_${origin.name.lowercase()}").assertIsSelected()
         }
-
-        composeRule.onNodeWithText("Map").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("weather_route_open").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("trip_setup_screen").assertCountEquals(0)
-        composeRule.onAllNodesWithTag("trip_overview_screen").assertCountEquals(0)
-        composeRule.onAllNodesWithTag("trip_details_screen").assertCountEquals(0)
-
-        composeRule.onNodeWithTag("weather_route_back").performClick()
-        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+        assertEquals(1, routeFactory.createCalls)
     }
 
     @Test
@@ -225,7 +234,7 @@ class HluNavHostTest {
         }
 
         composeRule.onNodeWithText("Map").performClick()
-        composeRule.onNodeWithTag("weather_route_open").performClick()
+        composeRule.onNodeWithTag("main_destination_route").performClick()
         composeRule.waitForIdle()
         assertEquals(0, routeFactory.createCalls)
 
@@ -251,7 +260,7 @@ class HluNavHostTest {
         composeRule.onNodeWithText("Map").performClick()
         assertMainDestination(MainDestination.MAP)
 
-        composeRule.onNodeWithTag("weather_route_open").performClick()
+        composeRule.onNodeWithTag("main_destination_route").performClick()
         assertMainDestination(MainDestination.ROUTE)
         composeRule.runOnIdle {
             mainNavigation.select(MainDestination.ROUTE)

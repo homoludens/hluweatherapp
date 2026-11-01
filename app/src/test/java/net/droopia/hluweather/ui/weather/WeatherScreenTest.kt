@@ -517,17 +517,14 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun map_mode_displays_weather_on_route_action() {
+    fun route_shortcut_is_absent_from_hourly_and_map_while_map_radar_controls_remain() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
-        viewModel.onForecastModeSelected(ForecastMode.MAP)
-        var routeClicked = false
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
                 WeatherScreen(
                     viewModel = viewModel,
                     onSettingsClick = {},
-                    onWeatherRouteClick = { routeClicked = true },
                     mapContent = { _, _, _, _, _ ->
                         Text("Map", Modifier.testTag("weather_map"))
                     }
@@ -535,9 +532,16 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithTag("weather_route_open").assertIsDisplayed().performClick()
+        composeRule.onAllNodesWithText("Weather on route").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("weather_route_open").assertCountEquals(0)
 
-        assertTrue(routeClicked)
+        viewModel.onForecastModeSelected(ForecastMode.MAP)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Weather on route").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("weather_route_open").assertCountEquals(0)
+        composeRule.onNodeWithTag("radar_visibility_toggle").assertIsDisplayed()
     }
 
     @Test
