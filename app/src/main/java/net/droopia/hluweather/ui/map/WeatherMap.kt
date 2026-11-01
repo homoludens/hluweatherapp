@@ -209,6 +209,7 @@ fun WeatherMap(
     fitLocations: Boolean = false,
     darkTheme: Boolean,
     modifier: Modifier = Modifier,
+    radar: WeatherMapRadarConfig? = null,
     onLocationClick: (WeatherLocation) -> Unit = {},
     onMapClick: (GeoPoint) -> Unit = {},
     onCameraIdle: (GeoPoint) -> Unit = {},
@@ -235,7 +236,9 @@ fun WeatherMap(
             target = viewport.center.toPosition(),
             zoom = viewport.zoom
         )
-    )
+    ) {
+        WeatherMapRadar(radar)
+    }
     val scope = rememberCoroutineScope()
     val markers = remember(locations, activeLocationId) {
         weatherMapMarkers(locations, activeLocationId)

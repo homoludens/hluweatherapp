@@ -139,6 +139,38 @@ class LibreWxrRadarApiTest {
     }
 
     @Test
+    fun tile_template_preserves_xyz_placeholders_and_matches_concrete_tile_builder() {
+        val template = LibreWxrRadarTileUrlBuilder.buildTemplate(
+            host = "https://tiles.example.test/",
+            path = "/radar/frame/",
+            size = 256,
+            color = 2,
+            smooth = true,
+            snow = true,
+            extension = "png"
+        )
+
+        assertEquals("https://tiles.example.test/radar/frame/256/{z}/{x}/{y}/2/1_1.png", template)
+        assertEquals(
+            buildTile(),
+            template.replace("{z}", "7").replace("{x}", "71").replace("{y}", "44")
+        )
+    }
+
+    @Test
+    fun tile_template_validates_the_same_provider_options_and_paths() {
+        listOf(
+            { LibreWxrRadarTileUrlBuilder.buildTemplate("http://tiles.test", "/frame", 256, 2, true, true, "png") },
+            { LibreWxrRadarTileUrlBuilder.buildTemplate("https://tiles.test", "//other.test/frame", 256, 2, true, true, "png") },
+            { LibreWxrRadarTileUrlBuilder.buildTemplate("https://tiles.test", "/frame", 128, 2, true, true, "png") },
+            { LibreWxrRadarTileUrlBuilder.buildTemplate("https://tiles.test", "/frame", 256, 15, true, true, "png") },
+            { LibreWxrRadarTileUrlBuilder.buildTemplate("https://tiles.test", "/frame", 256, 2, true, true, "jpg") }
+        ).forEach { invalidTemplate ->
+            assertThrows(IllegalArgumentException::class.java) { invalidTemplate() }
+        }
+    }
+
+    @Test
     fun tile_url_rejects_malformed_host_path_and_options() {
         assertThrows(IllegalArgumentException::class.java) {
             buildTile(host = "http://tiles.example.test")

@@ -70,6 +70,7 @@ import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.map.WeatherMap
+import net.droopia.hluweather.ui.map.WeatherMapRadarConfig
 
 private const val WEATHER_HEADER_KEY = "weather_header"
 private const val HOURLY_HEADER_KEY = "hourly_header"
@@ -95,6 +96,7 @@ fun WeatherScreen(
     windUnit: WindUnit = WindUnit.KMH,
     windDirectionDisplay: WindDirectionDisplay = WindDirectionDisplay.ARROW,
     hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
+    radar: WeatherMapRadarConfig? = null,
     now: Instant? = null,
     modifier: Modifier = Modifier,
     mapContent: @Composable (WeatherLocation, List<WeatherLocation>, String?, Boolean, () -> Unit) -> Unit =
@@ -105,6 +107,7 @@ fun WeatherScreen(
                 center = GeoPoint(mapLocation.latitude, mapLocation.longitude),
                 darkTheme = mapDarkTheme,
                 fitLocations = true,
+                radar = radar,
                 onLocationClick = viewModel::selectLocation,
                 onRecenterClick = onRecenterClick
             )

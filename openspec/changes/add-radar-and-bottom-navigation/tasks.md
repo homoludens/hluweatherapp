@@ -7,7 +7,7 @@
 
 ## 2. Radar map and controls
 
-- [ ] 2.1 [high] Integrate radar raster sources/layers into the existing main WeatherMap with stable identities, efficient frame changes and style reload handling, without affecting picker maps; run focused map tests for layer ordering, alignment, duplicate prevention and reload/frame-change races.
+- [x] 2.1 [high] Integrate radar raster sources/layers into the existing main WeatherMap with stable identities, efficient frame changes and style reload handling, without affecting picker maps; run focused map tests for layer ordering, alignment, duplicate prevention and reload/frame-change races.
 - [ ] 2.2 [low] Implement selected frame, play/pause, looping, observed/forecast classification, local-time labels and visibility-scoped playback; run focused state tests including missing forecasts, refresh reconciliation, 500–800 ms cadence and leaving Map.
 - [ ] 2.3 [low] Add compact Material 3 radar toggle, layer/opacity menu, timeline, provider-required attribution and unobtrusive loading/error states; run focused UI tests for controls, opacity, visibility, accessibility and theme readability.
 - [ ] 2.4 [low] Remove the Map weather card and expand the map while retaining the existing header, location functions and route shortcut for this phase; run focused WeatherScreen tests for map layout, route and unaffected Hourly/Daily content.

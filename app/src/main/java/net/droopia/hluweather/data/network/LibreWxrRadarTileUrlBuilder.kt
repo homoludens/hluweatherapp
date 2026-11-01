@@ -15,14 +15,38 @@ object LibreWxrRadarTileUrlBuilder {
         snow: Boolean,
         extension: String
     ): String {
-        validateHost(host)
-        validateFramePath(path)
-        require(size == 256 || size == 512) { "Tile size must be 256 or 512" }
         require(zoom in MIN_ZOOM..MAX_ZOOM) { "Zoom must be between $MIN_ZOOM and $MAX_ZOOM" }
         val tileCount = 1 shl zoom
         require(x in 0 until tileCount && y in 0 until tileCount) {
             "Tile coordinates must be within the selected zoom level"
         }
+        return buildUrl(host, path, size, "$zoom/$x/$y", color, smooth, snow, extension)
+    }
+
+    /** XYZ template for MapLibre; keep placeholders unescaped for its tile loader. */
+    fun buildTemplate(
+        host: String,
+        path: String,
+        size: Int,
+        color: Int,
+        smooth: Boolean,
+        snow: Boolean,
+        extension: String
+    ): String = buildUrl(host, path, size, "{z}/{x}/{y}", color, smooth, snow, extension)
+
+    private fun buildUrl(
+        host: String,
+        path: String,
+        size: Int,
+        coordinates: String,
+        color: Int,
+        smooth: Boolean,
+        snow: Boolean,
+        extension: String
+    ): String {
+        validateHost(host)
+        validateFramePath(path)
+        require(size == 256 || size == 512) { "Tile size must be 256 or 512" }
         require(color in 0..14 || color == 255) { "Unsupported radar color scheme: $color" }
         require(extension == "png" || extension == "webp") {
             "Tile extension must be png or webp"
@@ -32,10 +56,8 @@ object LibreWxrRadarTileUrlBuilder {
         val normalizedPath = path.trimEnd('/')
         val smoothFlag = if (smooth) 1 else 0
         val snowFlag = if (snow) 1 else 0
-        return URI(
-            "$normalizedHost$normalizedPath/$size/$zoom/$x/$y/$color/" +
-                "${smoothFlag}_${snowFlag}.$extension"
-        ).toASCIIString()
+        return URI("$normalizedHost$normalizedPath/$size/").toASCIIString() +
+            "$coordinates/$color/${smoothFlag}_${snowFlag}.$extension"
     }
 
     internal fun validateHost(host: String) {
