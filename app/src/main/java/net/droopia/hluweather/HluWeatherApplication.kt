@@ -20,10 +20,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.cache.ForecastCache
+import net.droopia.hluweather.data.cache.RadarMetadataCache
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.data.device.AndroidDeviceLocationSource
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.network.KtorMetNoApi
+import net.droopia.hluweather.data.network.KtorLibreWxrRadarApi
 import net.droopia.hluweather.data.network.KtorNominatimApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoAirQualityApi
@@ -33,6 +35,7 @@ import net.droopia.hluweather.data.network.KtorOsrmApi
 import net.droopia.hluweather.data.network.KtorPhotonApi
 import net.droopia.hluweather.data.repository.NominatimReverseGeocoder
 import net.droopia.hluweather.data.repository.LocationRepository
+import net.droopia.hluweather.data.repository.LibreWxrRadarRepository
 import net.droopia.hluweather.data.repository.MetNoWeatherRepository
 import net.droopia.hluweather.data.repository.OpenMeteoPlaceSearchSource
 import net.droopia.hluweather.data.repository.OpenMeteoRouteWeatherSource
@@ -42,6 +45,7 @@ import net.droopia.hluweather.data.repository.PhotonPlaceSearchSource
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.ReverseGeocoder
+import net.droopia.hluweather.data.repository.RadarRepository
 import net.droopia.hluweather.data.repository.RouteWeatherSource
 import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.repository.WeatherRepository
@@ -143,6 +147,14 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
 
     val metNoWeatherRepository: WeatherSource by lazy {
         MetNoWeatherRepository(KtorMetNoApi(httpClient))
+    }
+
+    val radarRepository: RadarRepository by lazy {
+        LibreWxrRadarRepository(
+            api = KtorLibreWxrRadarApi(httpClient),
+            cache = RadarMetadataCache(applicationDataStore),
+            scope = applicationScope
+        )
     }
 
     val settingsRepository: SettingsRepository by lazy {

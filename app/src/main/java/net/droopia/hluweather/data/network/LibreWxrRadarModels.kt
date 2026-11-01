@@ -4,11 +4,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
+@Serializable
 enum class LibreWxrRadarFrameType {
     OBSERVED,
     FORECAST
 }
 
+@Serializable
 data class LibreWxrRadarFrame(
     val timestampSeconds: Long,
     val path: String,
@@ -21,6 +23,7 @@ data class LibreWxrRadarColorScheme(
     val name: String
 )
 
+@Serializable
 data class LibreWxrRadarMetadata(
     val host: String,
     val frames: List<LibreWxrRadarFrame>,

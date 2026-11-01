@@ -9,7 +9,7 @@ interface LibreWxrRadarApi {
     suspend fun metadata(): LibreWxrRadarMetadata
 }
 
-class LibreWxrRadarApiException(message: String) : IOException(message)
+class LibreWxrRadarApiException(message: String, val statusCode: Int? = null) : IOException(message)
 
 class KtorLibreWxrRadarApi(
     private val client: HttpClient,
@@ -19,7 +19,8 @@ class KtorLibreWxrRadarApi(
         val response = client.get(metadataUrl)
         if (response.status.value !in 200..299) {
             throw LibreWxrRadarApiException(
-                "LibreWXR radar service returned HTTP ${response.status.value}"
+                "LibreWXR radar service returned HTTP ${response.status.value}",
+                statusCode = response.status.value
             )
         }
         return parseLibreWxrRadarMetadata(response.body())
