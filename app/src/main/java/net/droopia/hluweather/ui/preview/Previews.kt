@@ -4,7 +4,6 @@ import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.time.Instant
-import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
@@ -12,7 +11,7 @@ import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import net.droopia.hluweather.ui.weather.CurrentWeatherCard
 import net.droopia.hluweather.ui.weather.DailyForecastList
 import net.droopia.hluweather.ui.weather.HourlyForecast
-import net.droopia.hluweather.ui.weather.WeatherHero
+import net.droopia.hluweather.ui.app.MainScreenHeader
 
 private val previewForecast = buildMockForecast(
     location = Svilajnac,
@@ -40,13 +39,9 @@ private val previewCardForecast = previewForecast.copy(
     heightDp = 915
 )
 @Composable
-private fun WeatherHeroLightPreview() {
+private fun MainScreenHeaderLightPreview() {
     HluWeatherTheme(darkTheme = false) {
-        WeatherHero(
-            selected = ForecastMode.HOURLY,
-            onSelected = {},
-            onSettingsClick = {}
-        )
+        MainScreenHeader(onSettingsClick = {})
     }
 }
 
@@ -57,13 +52,9 @@ private fun WeatherHeroLightPreview() {
     uiMode = Configuration.UI_MODE_NIGHT_YES
 )
 @Composable
-private fun WeatherHeroDarkPreview() {
+private fun MainScreenHeaderDarkPreview() {
     HluWeatherTheme(darkTheme = true) {
-        WeatherHero(
-            selected = ForecastMode.HOURLY,
-            onSelected = {},
-            onSettingsClick = {}
-        )
+        MainScreenHeader(onSettingsClick = {})
     }
 }
 

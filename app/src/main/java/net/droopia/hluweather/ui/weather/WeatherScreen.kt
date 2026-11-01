@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -189,7 +188,6 @@ fun WeatherScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .navigationBarsPadding()
             .background(MaterialTheme.colorScheme.background)
     ) {
         if (forecast == null || location == null) {
@@ -253,19 +251,11 @@ fun WeatherScreen(
                             listState = hourlyListState,
                             now = now,
                             onDaySelected = viewModel::onDaySelected,
-                            onForecastModeSelected = viewModel::onForecastModeSelected,
-                            onSettingsClick = onSettingsClick,
                             onLocationClick = { locationSwitcherVisible = true },
                             modifier = Modifier
                                 .weight(1f)
                         )
                     } else {
-                        WeatherHero(
-                            selected = state.forecastMode,
-                            onSelected = viewModel::onForecastModeSelected,
-                            onSettingsClick = onSettingsClick
-                        )
-
                         when (state.forecastMode) {
                             ForecastMode.DAILY -> {
                                 DailyForecastList(
@@ -446,8 +436,6 @@ private fun HourlyWeatherContent(
     windDirectionDisplay: WindDirectionDisplay,
     hourlyTableColumns: Set<HourlyTableColumn>,
     onDaySelected: (Int) -> Unit,
-    onForecastModeSelected: (ForecastMode) -> Unit,
-    onSettingsClick: () -> Unit,
     onLocationClick: () -> Unit,
     now: Instant?,
     listState: LazyListState,
@@ -539,11 +527,6 @@ private fun HourlyWeatherContent(
             state = listState
         ) {
             item(key = WEATHER_HEADER_KEY) {
-                WeatherHero(
-                    selected = ForecastMode.HOURLY,
-                    onSelected = onForecastModeSelected,
-                    onSettingsClick = onSettingsClick
-                )
                 CurrentWeatherCard(
                     location = location,
                     forecast = forecast,
@@ -562,7 +545,6 @@ private fun HourlyWeatherContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(top = if (isCollapsed) 96.dp else 0.dp)
                 ) {
                     HourlyDaySelector(
                         tableData = tableData,
@@ -628,7 +610,6 @@ private fun HourlyWeatherContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(top = 96.dp)
             ) {
                 HourlyDaySelector(
                     tableData = tableData,
@@ -639,18 +620,5 @@ private fun HourlyWeatherContent(
             }
         }
 
-        AnimatedVisibility(
-            visible = isCollapsed,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .testTag("compact_weather_hero")
-        ) {
-            WeatherHero(
-                selected = ForecastMode.HOURLY,
-                onSelected = onForecastModeSelected,
-                onSettingsClick = onSettingsClick,
-                compact = true
-            )
-        }
     }
 }

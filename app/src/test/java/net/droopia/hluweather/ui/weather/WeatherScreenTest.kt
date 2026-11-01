@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.hasAnyDescendant
@@ -8,10 +9,8 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -19,7 +18,6 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
@@ -116,7 +114,7 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun map_mode_hides_current_weather_card_and_expands_map_below_header() {
+    fun map_mode_hides_current_weather_card_and_fills_weather_screen() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         viewModel.onForecastModeSelected(ForecastMode.MAP)
 
@@ -131,21 +129,19 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithTag("weather_hero").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("weather_hero").assertCountEquals(0)
         assertTrue(
             composeRule.onAllNodesWithTag("current_weather_card")
                 .fetchSemanticsNodes()
                 .isEmpty()
         )
 
-        val headerBounds = composeRule.onNodeWithTag("weather_hero")
-            .fetchSemanticsNode().boundsInRoot
         val mapBounds = composeRule.onNodeWithTag("weather_map")
             .fetchSemanticsNode().boundsInRoot
         val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals("Map should start immediately below the header", headerBounds.bottom, mapBounds.top, 1f)
-        assertTrue("Map should fill the space below the header", mapBounds.height > rootBounds.height * 0.6f)
+        assertEquals("Map should fill the weather content", rootBounds.top, mapBounds.top, 1f)
+        assertEquals("Map should fill the weather content", rootBounds.bottom, mapBounds.bottom, 1f)
     }
 
     @Test
@@ -267,11 +263,14 @@ class WeatherScreenTest {
         val viewModel = renderWeather(baseTime = Instant.fromEpochSeconds(0L))
         val selectedDayText = viewModel.state.value.forecast!!.daily[2].date.dayText()
 
-        composeRule.onNodeWithText("Daily").performClick()
+        viewModel.onForecastModeSelected(ForecastMode.DAILY)
+        composeRule.waitForIdle()
         composeRule.onNodeWithText(selectedDayText).performClick()
         composeRule.waitForIdle()
 
         assertEquals(2, viewModel.state.value.selectedDayIndex)
+        viewModel.onForecastModeSelected(ForecastMode.HOURLY)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("hourly_selected_day_2").assertIsDisplayed()
     }
 
@@ -341,11 +340,14 @@ class WeatherScreenTest {
         }, Svilajnac)
         renderWeather(viewModel)
 
-        composeRule.onNodeWithText("Daily").performClick()
+        viewModel.onForecastModeSelected(ForecastMode.DAILY)
+        composeRule.waitForIdle()
         composeRule.onNodeWithText(missingDate.dayText()).performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("hourly_day_chip_${nearestDay.dayIndex}").assertIsSelected()
+        viewModel.onForecastModeSelected(ForecastMode.HOURLY)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("hourly_selected_day_${nearestDay.dayIndex}").assertIsDisplayed()
     }
 
@@ -413,6 +415,7 @@ class WeatherScreenTest {
     @Test
     fun switches_to_daily_content() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        viewModel.onForecastModeSelected(ForecastMode.DAILY)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -424,8 +427,7 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Daily").performClick()
-        composeRule.onNodeWithTag("weather_hero").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("weather_hero").assertCountEquals(0)
         assertTrue(
             composeRule.onAllNodesWithTag("current_weather_card")
                 .fetchSemanticsNodes()
@@ -437,6 +439,7 @@ class WeatherScreenTest {
     @Test
     fun dark_theme_keeps_selected_navigation_and_day_text_visible() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        viewModel.onForecastModeSelected(ForecastMode.DAILY)
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = true) {
@@ -448,10 +451,10 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Daily").performClick()
-        composeRule.onNodeWithText("Daily").assertIsDisplayed()
+        composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Hourly").performClick()
+        viewModel.onForecastModeSelected(ForecastMode.HOURLY)
+        composeRule.waitForIdle()
         val forecast = viewModel.state.value.forecast!!
         val day = forecast.toHourlyTableData().days[1]
         val dayText = day.date.dayText(ZoneId.of(forecast.timezone))
@@ -492,6 +495,7 @@ class WeatherScreenTest {
     @Test
     fun switches_to_map_content() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        viewModel.onForecastModeSelected(ForecastMode.MAP)
         var mapDarkTheme = false
 
         composeRule.setContent {
@@ -508,7 +512,6 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Map").performClick()
         composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
         assertEquals(true, mapDarkTheme)
     }
@@ -516,6 +519,7 @@ class WeatherScreenTest {
     @Test
     fun map_mode_displays_weather_on_route_action() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        viewModel.onForecastModeSelected(ForecastMode.MAP)
         var routeClicked = false
 
         composeRule.setContent {
@@ -531,14 +535,13 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Map").performClick()
         composeRule.onNodeWithTag("weather_route_open").assertIsDisplayed().performClick()
 
         assertTrue(routeClicked)
     }
 
     @Test
-    fun settings_icon_reports_click() {
+    fun location_manage_action_reports_settings_click() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         var settingsClicked = false
 
@@ -551,7 +554,8 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("current_location").performClick()
+        composeRule.onNodeWithText("Manage locations").performClick()
         assertTrue(settingsClicked)
     }
 
@@ -695,7 +699,7 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun scrolling_hourly_collapses_header_to_icons_and_days() {
+    fun scrolling_hourly_does_not_create_a_duplicate_navigation_header() {
         val viewModel = WeatherViewModel(
             MockWeatherRepository(baseTime = Instant.fromEpochSeconds(0L)),
             Svilajnac
@@ -711,35 +715,17 @@ class WeatherScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(20)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithContentDescription("Hourly").assertIsDisplayed()
-        assertTrue(
-            composeRule.onNodeWithContentDescription("Hourly")
-                .fetchSemanticsNode()
-                .config[SemanticsProperties.Selected]
-        )
+        composeRule.onAllNodesWithTag("weather_hero").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("compact_weather_hero").assertCountEquals(0)
         composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
-        val compactHero = composeRule.onNodeWithTag("compact_weather_hero")
-            .fetchSemanticsNode()
-            .boundsInRoot
-        val dayStrip = composeRule.onNodeWithTag("hourly_day_strip")
-            .fetchSemanticsNode()
-            .boundsInRoot
-        assertTrue(
-            "Day strip must start below the compact hero",
-            dayStrip.top >= compactHero.bottom
-        )
-        assertTextOutsideViewport("HluWeatherApp")
-        assertTextOutsideViewport("Hourly")
-        assertTextOutsideViewport("Svilajnac")
     }
 
     @Test
-    fun tiny_hourly_scroll_does_not_show_compact_header_early() {
+    fun tiny_hourly_scroll_does_not_create_a_compact_navigation_header() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
 
         composeRule.setContent {
@@ -760,24 +746,7 @@ class WeatherScreenTest {
         }
         composeRule.waitForIdle()
 
-        assertTrue(
-            composeRule.onAllNodesWithContentDescription("Hourly")
-                .fetchSemanticsNodes()
-                .isEmpty()
-        )
-    }
-
-    private fun assertTextOutsideViewport(text: String) {
-        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
-        val nodes = composeRule.onAllNodesWithText(text).fetchSemanticsNodes()
-
-        assertTrue(
-            "$text should not remain visible after collapsing",
-            nodes.all { node ->
-                node.boundsInRoot.bottom <= rootBounds.top ||
-                    node.boundsInRoot.top >= rootBounds.bottom
-            }
-        )
+        composeRule.onAllNodesWithTag("compact_weather_hero").assertCountEquals(0)
     }
 
     private fun assertCurrentCardMetric(title: String) {

@@ -19,6 +19,7 @@ import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.ui.app.HluWeatherApp
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +37,7 @@ class MainActivityInsetsTest {
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
-    fun weather_content_respects_dispatched_system_bar_insets() {
+    fun main_shell_respects_system_insets_without_double_padding() {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.activity.enableEdgeToEdge()
         composeRule.setContent {
@@ -55,6 +56,7 @@ class MainActivityInsetsTest {
         val density = composeRule.activity.resources.displayMetrics.density
         val statusBarInset = (48 * density).roundToInt()
         val navigationBarInset = (40 * density).roundToInt()
+        val cutoutInset = (24 * density).roundToInt()
         val systemBars = WindowInsets.Builder()
             .setInsets(
                 WindowInsets.Type.statusBars(),
@@ -64,43 +66,60 @@ class MainActivityInsetsTest {
                 WindowInsets.Type.navigationBars(),
                 Insets.of(0, 0, 0, navigationBarInset)
             )
+            .setInsets(
+                WindowInsets.Type.displayCutout(),
+                Insets.of(cutoutInset, 0, cutoutInset, 0)
+            )
             .build()
 
         composeRule.activity.window.decorView.dispatchApplyWindowInsets(systemBars)
         composeRule.waitForIdle()
 
-        val rootBottom = composeRule.onRoot().fetchSemanticsNode().boundsInRoot.bottom
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val rootBottom = rootBounds.bottom
         val settingsTop = composeRule.onNodeWithContentDescription("Settings")
             .fetchSemanticsNode()
             .boundsInRoot
             .top
+        val headerContent = composeRule.onNodeWithTag("main_header_content")
+            .fetchSemanticsNode().boundsInRoot
+        val bottomNavigation = composeRule.onNodeWithTag("main_bottom_navigation")
+            .fetchSemanticsNode().boundsInRoot
+        val hourlyTab = composeRule.onNodeWithTag("main_destination_hourly")
+            .fetchSemanticsNode().boundsInRoot
+        val routeTab = composeRule.onNodeWithTag("main_destination_route")
+            .fetchSemanticsNode().boundsInRoot
 
         assertTrue(
             "Settings control must be below the status bar",
             settingsTop >= statusBarInset
         )
-        assertModeAboveNavigationBar("weather_scroll", rootBottom, navigationBarInset)
+        assertTrue("The compact header must follow the status bar", headerContent.top >= statusBarInset)
+        assertTrue("Header content must avoid the display cutout", headerContent.left >= cutoutInset)
+        assertTrue("Bottom navigation must avoid the left display cutout", hourlyTab.left >= cutoutInset)
+        assertTrue(
+            "Bottom navigation must avoid the right display cutout",
+            routeTab.right <= rootBounds.right - cutoutInset
+        )
+        assertTrue("The bottom bar must include the navigation inset", bottomNavigation.bottom <= rootBottom)
+        assertModeAboveBottomNavigation("weather_scroll", bottomNavigation.top)
 
         composeRule.onNodeWithText("Daily").performClick()
-        assertModeAboveNavigationBar("daily_list", rootBottom, navigationBarInset)
+        assertModeAboveBottomNavigation("daily_list", bottomNavigation.top)
 
         composeRule.onNodeWithText("Map").performClick()
-        assertModeAboveNavigationBar("map_placeholder", rootBottom, navigationBarInset)
+        assertModeAboveBottomNavigation("map_placeholder", bottomNavigation.top)
     }
 
-    private fun assertModeAboveNavigationBar(
+    private fun assertModeAboveBottomNavigation(
         tag: String,
-        rootBottom: Float,
-        navigationBarInset: Int
+        navigationTop: Float
     ) {
         val modeBottom = composeRule.onNodeWithTag(tag)
             .fetchSemanticsNode()
             .boundsInRoot
             .bottom
 
-        assertTrue(
-            "$tag must be above the navigation bar",
-            modeBottom <= rootBottom - navigationBarInset
-        )
+        assertEquals("$tag must not have duplicate bottom inset padding", navigationTop, modeBottom, 1f)
     }
 }

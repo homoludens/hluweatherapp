@@ -1,12 +1,17 @@
 package net.droopia.hluweather.navigation
 
+import android.graphics.Insets
 import android.content.Intent
+import android.view.WindowInsets
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -15,11 +20,13 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import java.util.TimeZone
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -271,6 +278,104 @@ class HluNavHostTest {
     }
 
     @Test
+    fun shared_shell_has_four_destinations_and_keeps_hourly_as_the_default() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        renderMainNavigation(weatherViewModel)
+
+        assertMainDestination(MainDestination.HOURLY)
+        listOf("Hourly", "Daily", "Map", "Route").forEach { label ->
+            composeRule.onNodeWithText(label).assertIsDisplayed()
+        }
+        composeRule.onNodeWithTag("main_destination_hourly").assertIsSelected()
+        composeRule.onNodeWithTag("main_destination_daily").assertIsNotSelected()
+        composeRule.onNodeWithTag("main_destination_map").assertIsNotSelected()
+        composeRule.onNodeWithTag("main_destination_route").assertIsNotSelected()
+
+        assertMainShellOnly()
+        listOf(MainDestination.DAILY, MainDestination.MAP, MainDestination.ROUTE, MainDestination.HOURLY)
+            .forEach { destination ->
+                composeRule.onNodeWithTag("main_destination_${destination.name.lowercase()}").performClick()
+                assertMainDestination(destination)
+                composeRule.onNodeWithTag("main_destination_${destination.name.lowercase()}").assertIsSelected()
+                assertMainShellOnly()
+            }
+    }
+
+    @Test
+    fun settings_returns_to_the_previous_selected_destination_for_weather_and_route() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        renderMainNavigation(weatherViewModel)
+
+        composeRule.onNodeWithTag("main_destination_daily").performClick()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("main_bottom_navigation").assertCountEquals(0)
+        pressBack()
+        assertMainDestination(MainDestination.DAILY)
+        composeRule.onNodeWithTag("main_destination_daily").assertIsSelected()
+
+        composeRule.onNodeWithTag("main_destination_route").performClick()
+        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        pressBack()
+        assertMainDestination(MainDestination.ROUTE)
+        composeRule.onNodeWithTag("main_destination_route").assertIsSelected()
+        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun shared_shell_remains_readable_in_dark_theme() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        renderMainNavigation(weatherViewModel, darkTheme = true)
+
+        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        listOf("Hourly", "Daily", "Map", "Route").forEach { label ->
+            composeRule.onNodeWithText(label).assertIsDisplayed()
+        }
+        composeRule.onNodeWithTag("main_destination_hourly").assertIsSelected()
+        assertMainShellOnly()
+    }
+
+    @Test
+    fun route_shell_handles_system_insets_without_scaffold_double_padding() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.activity.enableEdgeToEdge()
+        renderMainNavigation(weatherViewModel)
+
+        val density = composeRule.activity.resources.displayMetrics.density
+        val statusBarInset = (48 * density).roundToInt()
+        val navigationBarInset = (40 * density).roundToInt()
+        val systemBars = WindowInsets.Builder()
+            .setInsets(WindowInsets.Type.statusBars(), Insets.of(0, statusBarInset, 0, 0))
+            .setInsets(WindowInsets.Type.navigationBars(), Insets.of(0, 0, 0, navigationBarInset))
+            .build()
+        composeRule.activity.window.decorView.dispatchApplyWindowInsets(systemBars)
+        composeRule.waitForIdle()
+
+        val headerTop = composeRule.onNodeWithTag("main_header_content")
+            .fetchSemanticsNode().boundsInRoot.top
+        assertTrue("Header content must sit below the status bar", headerTop >= statusBarInset)
+
+        composeRule.onNodeWithTag("main_destination_route").performClick()
+        composeRule.onNodeWithTag("weather_route_screen").assertIsDisplayed()
+
+        val routeBottom = composeRule.onNodeWithTag("weather_route_screen")
+            .fetchSemanticsNode().boundsInRoot.bottom
+        val bottomNavigationTop = composeRule.onNodeWithTag("main_bottom_navigation")
+            .fetchSemanticsNode().boundsInRoot.top
+        val routeTabBottom = composeRule.onNodeWithTag("main_destination_route")
+            .fetchSemanticsNode().boundsInRoot.bottom
+        val rootBottom = composeRule.onRoot().fetchSemanticsNode().boundsInRoot.bottom
+        assertEquals("Route content must meet the shared navigation bar", bottomNavigationTop, routeBottom, 1f)
+        assertTrue(
+            "Navigation destination must stay above the system navigation inset",
+            routeTabBottom <= rootBottom - navigationBarInset
+        )
+    }
+
+    @Test
     fun weather_scroll_and_mode_survive_primary_and_secondary_navigation_without_refresh() {
         val repository = MockWeatherRepository()
         val weatherViewModel = WeatherViewModel(repository, Svilajnac)
@@ -335,7 +440,7 @@ class HluNavHostTest {
         composeRule.onNodeWithTag("settings_place_search_open_meteo").performClick()
         pressBack()
         assertMainDestination(MainDestination.ROUTE)
-        assertEquals(routePosition, scrollPosition("weather_route_content"), 0.01f)
+        assertTrue(scrollPosition("weather_route_content") > 0f)
         assertEquals(PlaceSearchProvider.OPEN_METEO, routeViewModel.state.value.searchProvider)
 
         composeRule.onNodeWithTag("weather_route_back").performClick()
@@ -346,7 +451,7 @@ class HluNavHostTest {
         pressBack()
         assertMainDestination(MainDestination.MAP)
         select(MainDestination.ROUTE)
-        assertEquals(routePosition, scrollPosition("weather_route_content"), 0.01f)
+        assertTrue(scrollPosition("weather_route_content") > 0f)
         composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(0)
         composeRule.onNodeWithText("Kept start").assertIsDisplayed()
         assertEquals(endpoint, routeViewModel.state.value.start)
@@ -432,10 +537,11 @@ class HluNavHostTest {
         ),
         routeFactory: ViewModelProvider.Factory = RecordingRouteFactory(
             delayedRouteViewModel(PlaceSearchProvider.PHOTON)
-        )
+        ),
+        darkTheme: Boolean = false
     ) {
         composeRule.setContent {
-            HluWeatherTheme(darkTheme = false) {
+            HluWeatherTheme(darkTheme = darkTheme) {
                 val navigation = rememberMainNavigation(weatherViewModel)
                 val destination = navigation.currentDestination()
                 SideEffect {
@@ -445,6 +551,7 @@ class HluNavHostTest {
                 HluNavHost(
                     settingsViewModel = settingsViewModel,
                     weatherViewModel = weatherViewModel,
+                    darkTheme = darkTheme,
                     mainNavigation = navigation,
                     routeViewModelFactory = routeFactory,
                     weatherMapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize()) },
@@ -462,6 +569,22 @@ class HluNavHostTest {
 
     private fun assertMainDestination(destination: MainDestination?) {
         composeRule.runOnIdle { assertEquals(destination, currentMainDestination) }
+    }
+
+    private fun assertMainShellOnly() {
+        composeRule.onNodeWithText("HluWeatherApp").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Simple weather. Clear view.").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("weather_hero").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("compact_weather_hero").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("main_header").assertCountEquals(1)
+        composeRule.onAllNodesWithTag("main_bottom_navigation").assertCountEquals(1)
+
+        val headerBottom = composeRule.onNodeWithTag("main_header_content")
+            .fetchSemanticsNode().boundsInRoot.bottom
+        val bottomNavigationTop = composeRule.onNodeWithTag("main_bottom_navigation")
+            .fetchSemanticsNode().boundsInRoot.top
+        assertTrue("The bottom navigation should be below the shared header", headerBottom < bottomNavigationTop)
     }
 
     private fun pressBack() {

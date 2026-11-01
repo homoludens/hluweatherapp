@@ -25,12 +25,13 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import net.droopia.hluweather.ComposeTestActivity
-import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.navigation.MainDestination
+import net.droopia.hluweather.ui.app.MainBottomNavigationBar
+import net.droopia.hluweather.ui.app.MainScreenHeader
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.SettingsScreen
 import net.droopia.hluweather.ui.settings.SettingsUiState
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
-import net.droopia.hluweather.ui.weather.WeatherHero
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,14 +50,13 @@ class PrimaryFlowsAccessibilityTest {
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
 
     @Test
-    fun weather_actions_have_labels_selected_state_and_touch_targets() {
+    fun main_navigation_actions_have_labels_selected_state_and_touch_targets() {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                WeatherHero(
-                    selected = ForecastMode.HOURLY,
-                    onSelected = {},
-                    onSettingsClick = {}
-                )
+                androidx.compose.foundation.layout.Column {
+                    MainScreenHeader(onSettingsClick = {})
+                    MainBottomNavigationBar(selected = MainDestination.HOURLY, onDestinationSelected = {})
+                }
             }
         }
 
@@ -67,6 +67,9 @@ class PrimaryFlowsAccessibilityTest {
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithText("Map")
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithText("Route")
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
     }
@@ -200,7 +203,7 @@ class PrimaryFlowsAccessibilityTest {
     }
 
     @Test
-    fun large_font_weather_hero_stays_inside_constrained_width() {
+    fun main_header_stays_inside_constrained_width_at_large_font_scale() {
         composeRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, 1.5f)) {
                 HluWeatherTheme(darkTheme = false) {
@@ -210,11 +213,7 @@ class PrimaryFlowsAccessibilityTest {
                             .fillMaxHeight()
                             .testTag("hero_width")
                     ) {
-                        WeatherHero(
-                            selected = ForecastMode.HOURLY,
-                            onSelected = {},
-                            onSettingsClick = {}
-                        )
+                        MainScreenHeader(onSettingsClick = {})
                     }
                 }
             }
@@ -222,7 +221,7 @@ class PrimaryFlowsAccessibilityTest {
 
         val container = composeRule.onNodeWithTag("hero_width")
             .getUnclippedBoundsInRoot()
-        listOf("HluWeatherApp", "Simple weather. Clear view.", "Hourly", "Daily", "Map")
+        listOf("HluWeatherApp")
             .forEach { text ->
                 composeRule.onNodeWithText(text).assertIsDisplayed()
                 val bounds = composeRule.onNodeWithText(text).getUnclippedBoundsInRoot()
