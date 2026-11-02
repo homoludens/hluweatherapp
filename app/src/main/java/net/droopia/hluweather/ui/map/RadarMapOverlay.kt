@@ -373,7 +373,8 @@ private fun RadarTimeline(
 
             Text(
                 text = "Weather data via LibreWXR (librewxr.net)\n" +
-                    "Upstream may include EUMETNET OPERA; Precipitation data from NOAA Enterprise Rain Rate (RRQPE); and DPC's Radar-DPC (Italy).",
+                    "EUMETNET OPERA · Precipitation data from NOAA Enterprise Rain Rate (RRQPE) · " +
+                    "Radar-DPC (Italy; CC BY-SA 4.0 where included).",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("radar_attribution"),

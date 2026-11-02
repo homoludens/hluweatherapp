@@ -5,7 +5,7 @@
 ## 2. Map information and credits
 
 - [x] 2.1 [low] Make the main Map's basemap information initially collapsed with an accessible open/close control, preserving style-provided links, MapLibre logo and other map controls without changing other `WeatherMap` callers; run focused overlay/map UI tests for initial state, opening and closing, credits, controls and unaffected picker maps.
-- [ ] 2.2 [low] Check current LibreWXR and applicable upstream attribution terms, remove the sentence beginning “Upstream may include…” from the radar display, and retain required credits in a concise visible presentation; update and run focused radar UI tests for sentence absence, credits, timeline, controls and error states, recording any attribution blocker rather than dropping required credit.
+- [x] 2.2 [low] Check current LibreWXR and applicable upstream attribution terms, remove the sentence beginning “Upstream may include…” from the radar display, and retain required credits in a concise visible presentation; update and run focused radar UI tests for sentence absence, credits, timeline, controls and error states, recording any attribution blocker rather than dropping required credit.
 
 ## 3. Route result navigation
 

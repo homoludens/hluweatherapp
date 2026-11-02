@@ -189,12 +189,15 @@ class RadarMapOverlayTest {
         composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
         composeRule.onNodeWithText("Weather data via LibreWXR (librewxr.net)", substring = true)
             .assertIsDisplayed()
+        composeRule.onNodeWithText("Upstream may include", substring = true)
+            .assertDoesNotExist()
         composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText(
             "Precipitation data from NOAA Enterprise Rain Rate (RRQPE)",
             substring = true
         ).assertIsDisplayed()
-        composeRule.onNodeWithText("DPC's Radar-DPC", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
+            .assertIsDisplayed()
         assertTagAbsent("radar_timeline_slider")
 
         emptyRepository.updates.value = RadarMetadataState(isLoading = false)
@@ -204,6 +207,9 @@ class RadarMapOverlayTest {
         emptyRepository.updates.value = RadarMetadataState(error = IllegalStateException("offline"))
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar unavailable").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
+        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
+            .assertIsDisplayed()
     }
 
     @Test
