@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -523,7 +522,8 @@ private fun HourlyWeatherContent(
                     onLocationClick = onLocationClick,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .offset(y = (-8).dp)
+                        .padding(vertical = 16.dp)
+                        .testTag("current_weather_card")
                 )
             }
 
@@ -532,6 +532,7 @@ private fun HourlyWeatherContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                 ) {
                     HourlyDaySelector(
                         tableData = tableData,
@@ -602,7 +603,8 @@ private fun HourlyWeatherContent(
                     tableData = tableData,
                     selectedDayDate = selectedTableDay?.date,
                     displayZone = displayZone,
-                    onDaySelected = ::onDayChipSelected
+                    onDaySelected = ::onDayChipSelected,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
         }

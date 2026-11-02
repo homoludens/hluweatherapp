@@ -104,6 +104,45 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun hourly_page_sections_use_aligned_16dp_gutters_and_gaps() {
+        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+
+        val spacing = with(composeRule.density) { 16.dp.toPx() }
+        val content = composeRule.onNodeWithTag("weather_scroll")
+            .fetchSemanticsNode().boundsInRoot
+        val card = composeRule.onNodeWithTag("current_weather_card")
+            .fetchSemanticsNode().boundsInRoot
+        val dayStrip = composeRule.onNodeWithTag("hourly_day_strip")
+            .fetchSemanticsNode().boundsInRoot
+        val tableHeader = composeRule.onNodeWithTag("hourly_column_header")
+            .fetchSemanticsNode().boundsInRoot
+
+        assertEquals(
+            "Card starts one page gutter below the content top",
+            content.top + spacing,
+            card.top,
+            1f
+        )
+        assertEquals("Card has a 16dp leading gutter", content.left + spacing, card.left, 1f)
+        assertEquals("Card has a 16dp trailing gutter", content.right - spacing, card.right, 1f)
+        assertEquals("Day strip aligns with card leading edge", card.left, dayStrip.left, 1f)
+        assertEquals("Day strip aligns with card trailing edge", card.right, dayStrip.right, 1f)
+        assertEquals(
+            "Day strip follows the card by one page gap",
+            spacing,
+            dayStrip.top - card.bottom,
+            1f
+        )
+        assertEquals("Table header aligns with the page gutter", card.left, tableHeader.left, 1f)
+        assertEquals(
+            "Table header follows the day strip by one page gap",
+            spacing,
+            tableHeader.top - dayStrip.bottom,
+            1f
+        )
+    }
+
+    @Test
     fun passes_selected_columns_to_current_card_in_hourly_path() {
         renderWeather(
             baseTime = Instant.fromEpochSeconds(0L),

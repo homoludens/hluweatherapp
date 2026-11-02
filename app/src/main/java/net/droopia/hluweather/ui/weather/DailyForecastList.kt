@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
@@ -51,21 +51,17 @@ fun DailyForecastList(
             .fillMaxSize()
             .testTag("daily_list"),
         state = listState,
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = 24.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(forecast.daily.size) { index ->
+        itemsIndexed(forecast.daily) { index, day ->
             DailyRow(
-                day = forecast.daily[index],
+                day = day,
                 displayZone = displayZone,
                 temperatureUnit = temperatureUnit,
                 precipitationUnit = precipitationUnit,
-                onClick = { onDaySelected(index) }
+                onClick = { onDaySelected(index) },
+                modifier = Modifier.testTag("daily_card_$index")
             )
         }
     }
@@ -77,11 +73,12 @@ private fun DailyRow(
     displayZone: ZoneId,
     temperatureUnit: TemperatureUnit,
     precipitationUnit: PrecipitationUnit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     ElevatedCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = LocalHluColors.current.weatherCard,

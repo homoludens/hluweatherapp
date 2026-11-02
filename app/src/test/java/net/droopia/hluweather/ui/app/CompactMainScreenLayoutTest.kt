@@ -131,6 +131,18 @@ class CompactMainScreenLayoutTest {
         dispatchCompactInsets()
 
         assertCompactShellBounds()
+        val contentBounds = composeRule.onNodeWithTag("compact_shared_content")
+            .fetchSemanticsNode().boundsInRoot
+        val pageSpacing = with(composeRule.density) { 16.dp.toPx() }
+        val currentCard = composeRule.onNodeWithTag("current_weather_card")
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(
+            "Hourly page spacing starts within the inset-adjusted content, not below the status bar twice",
+            contentBounds.top + pageSpacing,
+            currentCard.top,
+            1f
+        )
+        assertEquals(contentBounds.left + pageSpacing, currentCard.left, 1f)
         composeRule.onNodeWithTag("main_destination_hourly").assertIsSelected()
         composeRule.onNodeWithTag("current_temperature").assertIsDisplayed()
 
@@ -163,10 +175,36 @@ class CompactMainScreenLayoutTest {
             composeRule.waitForIdle()
             composeRule.onNodeWithTag("main_destination_daily").assertIsSelected()
             val forecast = weatherViewModel.state.value.forecast!!
+            composeRule.onNodeWithTag("daily_list").performScrollToIndex(0)
+            composeRule.waitForIdle()
+            val dailyList = composeRule.onNodeWithTag("daily_list")
+                .fetchSemanticsNode().boundsInRoot
+            val firstDailyCard = composeRule.onNodeWithTag("daily_card_0")
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(
+                "Daily page top gap remains 16dp on a compact screen",
+                pageSpacing,
+                firstDailyCard.top - dailyList.top,
+                1f
+            )
+            assertEquals(
+                "Daily page leading gutter remains 16dp",
+                pageSpacing,
+                firstDailyCard.left - dailyList.left,
+                1f
+            )
             val lastDay = forecast.daily.last()
             composeRule.onNodeWithTag("daily_list")
                 .performScrollToIndex(forecast.daily.lastIndex)
             composeRule.waitForIdle()
+            val lastDailyCard = composeRule.onNodeWithTag("daily_card_${forecast.daily.lastIndex}")
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(
+                "Daily bottom margin remains reachable above the navigation bar",
+                pageSpacing,
+                dailyList.bottom - lastDailyCard.bottom,
+                1f
+            )
             composeRule.onNodeWithText(lastDay.date.dayText(ZoneId.of(forecast.timezone)))
                 .assertIsDisplayed()
             assertEquals(
