@@ -12,4 +12,4 @@
 
 ## 4. Integration verification
 
-- [ ] 4.1 [low] Run the broader Google-debug automated tests and `:app:assembleGoogleDebug`; when a device or emulator is available, verify pinned headings, date synchronization, and precipitation labels on a small screen in both themes, recording commands, outcomes, and unavailable checks as not run.
+- [x] 4.1 [low] Run the broader Google-debug automated tests and `:app:assembleGoogleDebug`; when a device or emulator is available, verify pinned headings, date synchronization, and precipitation labels on a small screen in both themes, recording commands, outcomes, and unavailable checks as not run.
