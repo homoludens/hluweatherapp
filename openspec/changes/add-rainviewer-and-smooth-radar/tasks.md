@@ -12,7 +12,7 @@
 
 ## 3. Neighborhood Planning and Shared Tile Loading
 
-- [ ] 3.1 [low] Implement a pure two-step timeline-neighborhood planner centered on the requested frame and ordered by distance, excluding the requested frame and clamping without wraparound. Verify focused tests for empty/single/short timelines, both endpoints, middle indices, irregular frame intervals, duplicate entries, and metadata-window refreshes.
+- [x] 3.1 [low] Implement a pure two-step timeline-neighborhood planner centered on the requested frame and ordered by distance, excluding the requested frame and clamping without wraparound. Verify focused tests for empty/single/short timelines, both endpoints, middle indices, irregular frame intervals, duplicate entries, and metadata-window refreshes.
 - [ ] 3.2 [high] Implement the shared radar tile loader/resource-provider bridge, provider-aware viewport-to-canonical-XYZ coverage, 16 MiB byte LRU, bounded queue/concurrency, consumer-safe in-flight deduplication, foreground priority, obsolete-work cancellation, and a rolling RainViewer budget shared by metadata/tiles/retries with foreground reserve and `Retry-After` backoff. Connect the planner from 3.1 and expose the adapter for a stable main-map runtime. Verify deterministic clock/network tests for native zoom/overzoom, rotation/antimeridian/world-wrap coverage, exact neighborhood tile demand, prefetch-to-display cache reuse, byte/queue/concurrency bounds, priority inversion, cancelling one of several consumers, provider isolation, all-request rate accounting, and stop/replan behavior; prove the public resource hook serves radar while declining unrelated resources on the installed runtime.
 
 ## 4. Buffered Rendering and Playback Coordination
