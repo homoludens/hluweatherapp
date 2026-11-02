@@ -13,4 +13,4 @@
 
 ## 4. Integration verification
 
-- [ ] 4.1 [low] Run relevant broader Google-debug automated tests and the Google debug build using the configured Android SDK; when a device or emulator is available, check forecast spacing, map information/credits and route scrolling on a small screen and in both themes, recording commands, outcomes and any unavailable checks as not run.
+- [x] 4.1 [low] Run relevant broader Google-debug automated tests and the Google debug build using the configured Android SDK; when a device or emulator is available, check forecast spacing, map information/credits and route scrolling on a small screen and in both themes, recording commands, outcomes and any unavailable checks as not run.
