@@ -8,6 +8,8 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
+import android.text.Spanned
+import android.text.style.TextAppearanceSpan
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -164,6 +166,47 @@ class MediumWeatherWidgetTest {
         assertMediumContentStaysWithinOuterInsets(available, 4f)
         assertMediumInternalGapsRemainVisible(available)
         assertLayoutFits(available, 320f, 144f)
+    }
+
+    @Config(sdk = [34])
+    @Test
+    fun transparent_widget_text_has_theme_opposite_outline() {
+        assertEquals(
+            androidx.compose.ui.graphics.Color.White,
+            weatherWidgetTextOutlineColor(androidx.compose.ui.graphics.Color(0xFF222222))
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFF111827),
+            weatherWidgetTextOutlineColor(androidx.compose.ui.graphics.Color.White)
+        )
+
+        listOf(
+            availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.LIGHT)),
+            availableSnapshot(settings = PersistedSettings(themeMode = ThemeMode.DARK)),
+            WeatherWidgetSnapshot.NoWeather(PersistedSettings(), widgetRequest("Trieste")),
+            WeatherWidgetSnapshot.NoLocation(PersistedSettings())
+        ).forEach { snapshot ->
+            val view = render(snapshot, 260f, 110f)
+            val texts = findViews(view).filterIsInstance<TextView>()
+                .filter { it.visibility == View.VISIBLE && it.text.isNotBlank() }
+
+            assertFalse("fixture contains visible widget text", texts.isEmpty())
+            texts.forEach { text ->
+                val expectedOutline = weatherWidgetTextOutlineColor(
+                    androidx.compose.ui.graphics.Color(text.currentTextColor)
+                ).toArgb()
+                val spans = (text.text as? Spanned)?.getSpans(0, text.text.length, TextAppearanceSpan::class.java)
+                val outline = spans?.singleOrNull()
+                assertEquals("${text.text} has the opposite-color outline", expectedOutline, outline?.shadowColor)
+                assertTrue("${text.text} has a visible outline", (outline?.shadowRadius ?: 0f) > 0f)
+                assertEquals("${text.text} keeps its original weight", text.typeface.style, outline?.textStyle)
+                assertEquals("${text.text} keeps its foreground color", null, outline?.textColor)
+                when (text.text.toString()) {
+                    "Zaječar", "Clear sky" -> assertEquals("${text.text} keeps its medium face", "sans-serif-medium", outline?.family)
+                    "23°C" -> assertEquals("${text.text} keeps its sans-serif face", "sans-serif", outline?.family)
+                }
+            }
+        }
     }
 
     @Test

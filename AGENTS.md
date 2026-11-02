@@ -1,6 +1,8 @@
 Android sdk location:
 export ANDROID_HOME=/home/homoludens/Android/Sdk
 export ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk
+export ANDROID_AVD_HOME=/home/homoludens/.config/.android/avd/
+<!--~/Android/Sdk/emulator/emulator -list-avds -->
 
 simpler code is good.
 simple architecture is good.
@@ -30,14 +32,14 @@ Use this mandatory model assignment for implementation and the task's associated
 | Tag | Assigned model | Exact model/variant reference |
 | --- | --- | --- |
 | `[low]` | luna6 max fast (GPT-6 Luna, max, fast) | `openai/gpt-6-luna#max` |
-| `[high]` | sol6.1 xhigh (GPT-6.1 Sol, xhigh) | `openai/gpt-6.1-sol#xhigh` |
+| `[high]` | terra6.1 max (GPT-6.1 Terra, xhigh) | `openai/gpt-6.1-terra#max` |
 
 ### Classification
 
 - Default to `[low]` for work with a clear design and an established implementation approach, including normal feature implementation, API/library integration, schema additions, permissions, UI work, documentation, and defined verification procedures. `[low]` does not mean trivial or lower-quality work.
 - Reserve `[high]` for the most complex tasks: foundational security design, difficult architectural extraction, multi-stage recovery under partial failure, subtle concurrency/state-machine behavior, or substantial networking/gesture/history algorithms.
 - Target approximately **20% `[high]` tasks** across a change, with the remainder `[low]`. Compare tasks by their actual implementation and verification difficulty; security sensitivity, multiple files, platform APIs, or integration tests alone do not make a task `[high]`. Do not weaken scope, tests, or safety requirements to meet the target.
-- If a `[low]` task reveals substantial unexpected complexity, stop and reassess its tag with a concrete reason before routing the remaining work to sol6.1 xhigh. Routine debugging or a failed command is not an automatic promotion. Explain any material increase beyond the approximate 20% target rather than broadly relabeling categories.
+- If a `[low]` task reveals substantial unexpected complexity, stop and reassess its tag with a concrete reason before routing the remaining work to terra6.1 max. Routine debugging or a failed command is not an automatic promotion. Explain any material increase beyond the approximate 20% target rather than broadly relabeling categories.
 - Do not silently downgrade a `[high]` task or substitute another model/variant; obtain user approval for exceptions. Both models must meet the same correctness, security, and verification standards.
 
 ### Execution and maintenance

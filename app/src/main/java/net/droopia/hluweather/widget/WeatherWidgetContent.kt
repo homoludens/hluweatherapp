@@ -3,6 +3,9 @@ package net.droopia.hluweather.widget
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.TextAppearanceSpan
 import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.compose.material.icons.Icons
@@ -12,11 +15,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -44,10 +49,6 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
-import androidx.glance.text.FontFamily
-import androidx.glance.text.FontWeight
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.R
@@ -61,6 +62,8 @@ import net.droopia.hluweather.ui.theme.LightHluColors
 import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
 
 internal const val WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+
+private val LocalWidgetTextOutlineEnabled = staticCompositionLocalOf { false }
 
 /** Palette resolved from the saved preference and system configuration without touching a window. */
 data class WeatherWidgetPalette internal constructor(
@@ -120,38 +123,40 @@ fun WeatherWidgetCard(
         is WeatherWidgetSnapshot.Available -> snapshot.refresh.isRefreshing
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .then(
-                if (drawCardSurface) {
-                    GlanceModifier.background(
-                        ImageProvider(R.drawable.weather_widget_card_surface),
-                        contentScale = ContentScale.FillBounds,
-                        colorFilter = ColorFilter.tint(ColorProvider(palette.cardSurface))
-                    )
-                } else {
-                    GlanceModifier
-                }
-            )
-            .clickable(openMainWeatherAction(context))
-            .padding(horizontal = horizontalPaddingDp.dp, vertical = verticalPaddingDp.dp)
-    ) {
-        if (showHeader) {
-            WeatherWidgetHeader(
-                locationName = locationName,
-                isRefreshing = isRefreshing,
-                palette = palette,
-                displayLocationName = locationDisplayName,
-                locationContentDescription = locationContentDescription,
-                updateText = headerUpdateText,
-                updateContentDescription = headerUpdateContentDescription,
-                updateTextWidthDp = headerUpdateTextWidthDp,
-                headerHeightDp = headerHeightDp,
-                showRefreshAction = showRefreshAction
-            )
+    CompositionLocalProvider(LocalWidgetTextOutlineEnabled provides !drawCardSurface) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .then(
+                    if (drawCardSurface) {
+                        GlanceModifier.background(
+                            ImageProvider(R.drawable.weather_widget_card_surface),
+                            contentScale = ContentScale.FillBounds,
+                            colorFilter = ColorFilter.tint(ColorProvider(palette.cardSurface))
+                        )
+                    } else {
+                        GlanceModifier
+                    }
+                )
+                .clickable(openMainWeatherAction(context))
+                .padding(horizontal = horizontalPaddingDp.dp, vertical = verticalPaddingDp.dp)
+        ) {
+            if (showHeader) {
+                WeatherWidgetHeader(
+                    locationName = locationName,
+                    isRefreshing = isRefreshing,
+                    palette = palette,
+                    displayLocationName = locationDisplayName,
+                    locationContentDescription = locationContentDescription,
+                    updateText = headerUpdateText,
+                    updateContentDescription = headerUpdateContentDescription,
+                    updateTextWidthDp = headerUpdateTextWidthDp,
+                    headerHeightDp = headerHeightDp,
+                    showRefreshAction = showRefreshAction
+                )
+            }
+            content(palette)
         }
-        content(palette)
     }
 }
 
@@ -514,11 +519,14 @@ fun WeatherWidgetEmptyContent(
         }
         is WeatherWidgetSnapshot.Available -> return
     }
-    Text(
+    WeatherWidgetAdaptiveText(
         text = text,
-        modifier = modifier.semantics { contentDescription = text },
-        style = widgetTextStyle(palette.secondaryText, EMPTY_STATE_FONT_SIZE_SP.sp),
-        maxLines = 2
+        role = WeatherWidgetAdaptiveTextRole.EMPTY_STATE,
+        color = palette.secondaryText,
+        fontSizeSp = EMPTY_STATE_FONT_SIZE_SP,
+        modifier = modifier,
+        contentDescription = text,
+        lineCount = 2
     )
 }
 
@@ -615,15 +623,34 @@ private fun WeatherWidgetAdaptiveText(
     modifier: GlanceModifier = GlanceModifier,
     contentDescription: String? = text,
     lineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
+    lineCount: Int = 1,
 ) {
     val context = LocalContext.current
+    val addOutline = LocalWidgetTextOutlineEnabled.current
     val fontScale = context.resources.configuration.fontScale
         .takeIf { it.isFinite() && it > 0f } ?: 1f
     val lineBoxHeightDp = (fontSizeSp.coerceAtLeast(0.1f) * fontScale *
         lineHeightMultiplier.coerceAtLeast(WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER))
         .coerceAtLeast(MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP)
     val remoteViews = RemoteViews(context.packageName, role.layoutId).apply {
-        setTextViewText(R.id.weather_widget_adaptive_text, text)
+        val displayText = if (addOutline && text.isNotEmpty()) {
+            SpannableString(text).apply {
+                setSpan(
+                    TextAppearanceSpan(
+                        context,
+                        role.outlineTextAppearance(
+                            lightOutline = weatherWidgetTextOutlineColor(color) == Color.White
+                        )
+                    ),
+                    0,
+                    text.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        } else {
+            text
+        }
+        setTextViewText(R.id.weather_widget_adaptive_text, displayText)
         setTextViewTextSize(
             R.id.weather_widget_adaptive_text,
             TypedValue.COMPLEX_UNIT_SP,
@@ -632,33 +659,56 @@ private fun WeatherWidgetAdaptiveText(
         setTextColor(R.id.weather_widget_adaptive_text, color.toArgb())
         setContentDescription(R.id.weather_widget_adaptive_text, contentDescription)
     }
-    AndroidRemoteViews(remoteViews, modifier = modifier.height(lineBoxHeightDp.dp))
+    AndroidRemoteViews(
+        remoteViews,
+        modifier = modifier.height((lineBoxHeightDp * lineCount.coerceAtLeast(1)).dp)
+    )
 }
 
-private enum class WeatherWidgetAdaptiveTextRole(val layoutId: Int) {
-    PRIMARY(R.layout.weather_widget_adaptive_text_primary),
-    LARGE_PRIMARY(R.layout.weather_widget_adaptive_text_large_primary),
-    MEDIUM(R.layout.weather_widget_adaptive_text_medium),
-    LARGE_MEDIUM(R.layout.weather_widget_adaptive_text_large_medium),
-    MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_medium_center),
+private enum class WeatherWidgetTextFont { REGULAR, MEDIUM, BOLD }
+
+private enum class WeatherWidgetAdaptiveTextRole(
+    val layoutId: Int,
+    private val font: WeatherWidgetTextFont = WeatherWidgetTextFont.REGULAR
+) {
+    PRIMARY(R.layout.weather_widget_adaptive_text_primary, WeatherWidgetTextFont.BOLD),
+    LARGE_PRIMARY(R.layout.weather_widget_adaptive_text_large_primary, WeatherWidgetTextFont.BOLD),
+    MEDIUM(R.layout.weather_widget_adaptive_text_medium, WeatherWidgetTextFont.MEDIUM),
+    LARGE_MEDIUM(R.layout.weather_widget_adaptive_text_large_medium, WeatherWidgetTextFont.MEDIUM),
+    MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_medium_center, WeatherWidgetTextFont.MEDIUM),
     REGULAR(R.layout.weather_widget_adaptive_text_regular),
     LARGE_REGULAR(R.layout.weather_widget_adaptive_text_large_regular),
-    COMPACT_MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_compact_medium_center),
+    COMPACT_MEDIUM_CENTER(R.layout.weather_widget_adaptive_text_compact_medium_center, WeatherWidgetTextFont.MEDIUM),
     COMPACT_REGULAR(R.layout.weather_widget_adaptive_text_compact_regular),
     COMPACT_REGULAR_CENTER(R.layout.weather_widget_adaptive_text_compact_regular_center),
-    TINY_REGULAR(R.layout.weather_widget_adaptive_text_tiny_regular)
+    TINY_REGULAR(R.layout.weather_widget_adaptive_text_tiny_regular),
+    EMPTY_STATE(R.layout.weather_widget_adaptive_text_empty_state);
+
+    fun outlineTextAppearance(lightOutline: Boolean): Int = when (font) {
+        WeatherWidgetTextFont.REGULAR -> if (lightOutline) {
+            R.style.WeatherWidgetTextOutlineLightRegular
+        } else {
+            R.style.WeatherWidgetTextOutlineDarkRegular
+        }
+        WeatherWidgetTextFont.MEDIUM -> if (lightOutline) {
+            R.style.WeatherWidgetTextOutlineLightMedium
+        } else {
+            R.style.WeatherWidgetTextOutlineDarkMedium
+        }
+        WeatherWidgetTextFont.BOLD -> if (lightOutline) {
+            R.style.WeatherWidgetTextOutlineLightBold
+        } else {
+            R.style.WeatherWidgetTextOutlineDarkBold
+        }
+    }
 }
 
-private fun widgetTextStyle(
-    color: Color,
-    fontSize: androidx.compose.ui.unit.TextUnit,
-    fontWeight: FontWeight = FontWeight.Normal
-) = TextStyle(
-    color = ColorProvider(color),
-    fontSize = fontSize,
-    fontWeight = fontWeight,
-    fontFamily = FontFamily.SansSerif
-)
+internal fun weatherWidgetTextOutlineColor(textColor: Color): Color =
+    if (textColor.luminance() >= TEXT_OUTLINE_LUMINANCE_THRESHOLD) {
+        TEXT_OUTLINE_DARK
+    } else {
+        Color.White
+    }
 
 internal fun weatherWidgetPalette(
     settings: PersistedSettings,
@@ -693,6 +743,8 @@ private const val DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER = WEATHER_WIDGET_MIN_AUTO_
 internal const val MIN_ADAPTIVE_TEXT_BOX_HEIGHT_DP = 10f
 internal const val MEDIUM_STATUS_GLYPH_SIZE_DP = 12f
 internal const val MEDIUM_STATUS_GLYPH_GAP_DP = 2f
+private const val TEXT_OUTLINE_LUMINANCE_THRESHOLD = 0.5f
+private val TEXT_OUTLINE_DARK = Color(0xFF111827)
 
 private fun openMainWeatherAction(context: Context): Action = actionStartActivity(
     Intent(context, MainActivity::class.java).addFlags(

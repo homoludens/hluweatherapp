@@ -57,4 +57,55 @@
         <item name="android:autoSizeMaxTextSize">9sp</item>
         <item name="android:textStyle">normal</item>
     </style>
+
+    <style name="WeatherWidgetAdaptiveText.EmptyState" parent="WeatherWidgetAdaptiveTextBase">
+        <item name="android:autoSizeMinTextSize">9sp</item>
+        <item name="android:autoSizeMaxTextSize">13sp</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineLightBase">
+        <item name="android:shadowColor">#FFFFFFFF</item>
+        <item name="android:shadowRadius">1.25</item>
+        <item name="android:shadowDx">0</item>
+        <item name="android:shadowDy">0</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineDarkBase">
+        <item name="android:shadowColor">#FF111827</item>
+        <item name="android:shadowRadius">1.25</item>
+        <item name="android:shadowDx">0</item>
+        <item name="android:shadowDy">0</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineLightRegular" parent="WeatherWidgetTextOutlineLightBase">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineDarkRegular" parent="WeatherWidgetTextOutlineDarkBase">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineLightMedium" parent="WeatherWidgetTextOutlineLightBase">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineDarkMedium" parent="WeatherWidgetTextOutlineDarkBase">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineLightBold" parent="WeatherWidgetTextOutlineLightBase">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="WeatherWidgetTextOutlineDarkBold" parent="WeatherWidgetTextOutlineDarkBase">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textStyle">bold</item>
+    </style>
 </resources>
