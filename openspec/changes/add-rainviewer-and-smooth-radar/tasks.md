@@ -23,7 +23,7 @@
 ## 5. Main-Map UI and Lifecycle Integration
 
 - [x] 5.1 [low] Connect settings-selected provider, playback, renderer acknowledgments, viewport planning, and lifecycle visibility in the main Map screen; show distinct requested versus displayed time and unobtrusive pending/error/rate-limit states. Verify focused screen tests that provider changes immediately apply, hidden/disabled/background radar produces no metadata or speculative work, late callbacks cannot restore hidden imagery, and picker/route maps and bottom-navigation state remain unchanged.
-- [ ] 5.2 [low] Replace hard-coded radar credits with displayed-provider attribution, including accessible RainViewer and LibreWXR source links and applicable LibreWXR upstream credits; keep basemap attribution initially collapsed and the removed upstream disclaimer absent. Verify overlay/attribution Compose tests for both providers, switching/loading/failure states, link activation/semantics, and readable controls in light/dark themes and a compact viewport.
+- [x] 5.2 [low] Replace hard-coded radar credits with displayed-provider attribution, including accessible RainViewer and LibreWXR source links and applicable LibreWXR upstream credits; keep basemap attribution initially collapsed and the removed upstream disclaimer absent. Verify overlay/attribution Compose tests for both providers, switching/loading/failure states, link activation/semantics, and readable controls in light/dark themes and a compact viewport.
 
 ## 6. Cross-Area Verification and Documentation
 

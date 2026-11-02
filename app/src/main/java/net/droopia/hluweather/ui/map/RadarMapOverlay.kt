@@ -42,17 +42,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.io.IOException
+import java.net.URI
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarProviderDescriptors
 import net.droopia.hluweather.data.network.RadarApiException
 import net.droopia.hluweather.data.repository.RadarMetadataState
 
@@ -88,6 +94,7 @@ internal fun RadarMapOverlay(
         if (enabled) {
             RadarTimeline(
                 playbackState = playbackState,
+                selectedProvider = selectedProvider,
                 metadataState = metadataState,
                 onFrameSelected = onFrameSelected,
                 onPlayPause = onPlayPause,
@@ -272,6 +279,7 @@ private fun RadarProviderOption(
 @Composable
 private fun RadarTimeline(
     playbackState: RadarPlaybackState,
+    selectedProvider: RadarProvider,
     metadataState: RadarMetadataState,
     onFrameSelected: (Long) -> Unit,
     onPlayPause: () -> Unit,
@@ -451,18 +459,68 @@ private fun RadarTimeline(
                 }
             }
 
+            RadarAttribution(
+                provider = playbackState.displayedFrame?.provider ?: selectedProvider
+            )
+        }
+    }
+}
+
+@Composable
+private fun RadarAttribution(provider: RadarProvider) {
+    val descriptor = RadarProviderDescriptors[provider]
+    val sourceLink = descriptor.sourceLink
+    val uriHandler = LocalUriHandler.current
+    val safeSourceUrl = safeRadarSourceUrl(sourceLink.url)
+    val sourceText = "Weather radar via ${sourceLink.label}"
+    val sourceLabel = buildAnnotatedString {
+        if (safeSourceUrl != null) {
+            pushLink(
+                LinkAnnotation.Url(
+                    url = safeSourceUrl,
+                    linkInteractionListener = LinkInteractionListener {
+                        runCatching { uriHandler.openUri(safeSourceUrl) }
+                    }
+                )
+            )
+        }
+        append(sourceText)
+        if (safeSourceUrl != null) pop()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("radar_attribution"),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = sourceLabel,
+            modifier = Modifier
+                .semantics { contentDescription = "Open ${sourceLink.label} source link" }
+                .testTag("radar_attribution_source"),
+            style = MaterialTheme.typography.labelSmall.copy(
+                textDecoration = TextDecoration.Underline
+            ),
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        if (descriptor.credits.isNotEmpty()) {
             Text(
-                text = "Weather data via LibreWXR (librewxr.net)\n" +
-                    "EUMETNET OPERA · Precipitation data from NOAA Enterprise Rain Rate (RRQPE) · " +
-                    "Radar-DPC (Italy; CC BY-SA 4.0 where included).",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("radar_attribution"),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                text = descriptor.credits.joinToString(separator = " · "),
+                modifier = Modifier.testTag("radar_attribution_credits"),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
+}
+
+private fun safeRadarSourceUrl(url: String): String? {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return null
+    return url.takeIf {
+        uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() && uri.userInfo == null
+    }?.let { uri.toASCIIString() }
 }
 
 private fun radarMetadataErrorLabel(error: Throwable): String = when {
