@@ -19,6 +19,8 @@ import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -45,6 +47,7 @@ import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.LibreWxrRadarFrame
 import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
@@ -120,6 +123,43 @@ class RadarMapOverlayTest {
 
         composeRule.onNodeWithTag("radar_layer_visibility").performClick()
         assertFalse(enabled.value)
+    }
+
+    @Test
+    fun layer_provider_choice_works_when_radar_is_disabled_without_changing_other_settings() {
+        val playback = playbackViewModel()
+        val enabled = mutableStateOf(false)
+        val opacity = mutableFloatStateOf(0.42f)
+        val selectedProvider = mutableStateOf(RadarProvider.LIBREWXR)
+        var providerChanges = 0
+        setOverlayContent(
+            playback,
+            enabled,
+            opacity,
+            darkTheme = false,
+            selectedProvider = selectedProvider,
+            onProviderChange = { providerChanges++ }
+        )
+
+        assertTagAbsent("radar_timeline")
+        composeRule.onNodeWithTag("radar_layer_options").performClick()
+        composeRule.onNodeWithText("Radar provider").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_layer_provider_librewxr")
+            .assertIsDisplayed()
+            .assertIsSelected()
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer")
+            .assertIsDisplayed()
+            .assertIsNotSelected()
+
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").performClick()
+
+        assertEquals(1, providerChanges)
+        assertEquals(RadarProvider.RAINVIEWER, selectedProvider.value)
+        assertFalse(enabled.value)
+        assertEquals(0.42f, opacity.floatValue, 0f)
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").assertIsSelected()
+        composeRule.onNodeWithText("42%").assertIsDisplayed()
+        assertTagAbsent("radar_timeline")
     }
 
     @Test
@@ -227,6 +267,8 @@ class RadarMapOverlayTest {
                     RadarMapOverlay(
                         enabled = enabled.value,
                         onEnabledChange = { enabled.value = it },
+                        selectedProvider = RadarProvider.LIBREWXR,
+                        onProviderChange = {},
                         playbackState = playbackState,
                         metadataState = playbackState.metadataState,
                         opacity = opacity.floatValue,
@@ -329,7 +371,9 @@ class RadarMapOverlayTest {
         playback: RadarPlaybackViewModel,
         enabled: MutableState<Boolean>,
         opacity: androidx.compose.runtime.MutableFloatState,
-        darkTheme: Boolean
+        darkTheme: Boolean,
+        selectedProvider: MutableState<RadarProvider> = mutableStateOf(RadarProvider.LIBREWXR),
+        onProviderChange: (RadarProvider) -> Unit = {}
     ) {
         composeRule.setContent {
             val playbackState by playback.state.collectAsState()
@@ -338,6 +382,11 @@ class RadarMapOverlayTest {
                     RadarMapOverlay(
                         enabled = enabled.value,
                         onEnabledChange = { enabled.value = it },
+                        selectedProvider = selectedProvider.value,
+                        onProviderChange = { provider ->
+                            selectedProvider.value = provider
+                            onProviderChange(provider)
+                        },
                         playbackState = playbackState,
                         metadataState = playbackState.metadataState,
                         opacity = opacity.floatValue,

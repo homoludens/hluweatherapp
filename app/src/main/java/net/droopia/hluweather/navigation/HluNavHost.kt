@@ -122,7 +122,9 @@ fun HluNavHost(
                             windDirectionDisplay = settingsState.windDirectionDisplay,
                             hourlyTableColumns = settingsState.hourlyTableColumns,
                             radarEnabled = settingsState.radarEnabled,
-                            onRadarEnabledChange = settingsViewModel::setRadarEnabled
+                            onRadarEnabledChange = settingsViewModel::setRadarEnabled,
+                            radarProvider = settingsState.radarProvider,
+                            onRadarProviderChange = settingsViewModel::setRadarProvider
                         )
                     } else {
                         WeatherScreen(
@@ -139,6 +141,8 @@ fun HluNavHost(
                             hourlyTableColumns = settingsState.hourlyTableColumns,
                             radarEnabled = settingsState.radarEnabled,
                             onRadarEnabledChange = settingsViewModel::setRadarEnabled,
+                            radarProvider = settingsState.radarProvider,
+                            onRadarProviderChange = settingsViewModel::setRadarProvider,
                             mapContent = weatherMapContent
                         )
                     }
@@ -193,6 +197,7 @@ fun HluNavHost(
                             navController.popBackStack()
                         },
                         onProviderChange = settingsViewModel::setProvider,
+                        onRadarProviderChange = settingsViewModel::setRadarProvider,
                         onProviderInfoClick = settingsViewModel::onProviderInfoClick,
                         onPlaceSearchProviderChange = settingsViewModel::setPlaceSearchProvider,
                         onTrackMeChange = settingsViewModel::setTrackMe,

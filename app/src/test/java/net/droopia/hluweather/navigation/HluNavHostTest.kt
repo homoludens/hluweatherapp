@@ -44,6 +44,7 @@ import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.DrivingRoute
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.GpsResult
 import net.droopia.hluweather.data.model.RouteEndpoint
 import net.droopia.hluweather.data.model.WeatherRouteResult
@@ -73,6 +74,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -177,6 +179,54 @@ class HluNavHostTest {
         composeRule.onNodeWithContentDescription("Back").performClick()
 
         composeRule.onAllNodesWithText("70°F").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun radar_provider_selection_stays_shared_between_settings_and_map_layers_when_disabled() {
+        val settingsRepository = MutableSettingsRepository(
+            PersistedSettings(radarEnabled = false)
+        )
+        val settingsViewModel = SettingsViewModel(settingsRepository, EmptyLocationRepository())
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        weatherViewModel.onForecastModeSelected(ForecastMode.MAP)
+        renderMainNavigation(weatherViewModel, settingsViewModel)
+
+        assertFalse(settingsViewModel.state.value.radarEnabled)
+        composeRule.onAllNodesWithTag("radar_timeline").assertCountEquals(0)
+        composeRule.onNodeWithTag("radar_layer_options").performClick()
+        composeRule.onNodeWithTag("radar_layer_provider_librewxr").assertIsSelected()
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").assertIsNotSelected()
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").performClick()
+
+        assertEquals(RadarProvider.RAINVIEWER, settingsViewModel.state.value.radarProvider)
+        assertEquals(RadarProvider.RAINVIEWER, settingsRepository.settings.value.radarProvider)
+        assertFalse(settingsViewModel.state.value.radarEnabled)
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").assertIsSelected()
+        composeRule.onAllNodesWithTag("radar_timeline").assertCountEquals(0)
+        assertEquals(
+            "Off",
+            composeRule.onNodeWithTag("radar_layer_visibility")
+                .fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+        )
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(2)
+        composeRule.onNodeWithTag("settings_radar_provider_rainviewer").assertIsSelected()
+        composeRule.onNodeWithTag("settings_radar_provider_librewxr").performClick()
+
+        assertEquals(RadarProvider.LIBREWXR, settingsRepository.settings.value.radarProvider)
+        assertFalse(settingsViewModel.state.value.radarEnabled)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(0)
+        composeRule.onNodeWithContentDescription("Back").performClick()
+
+        assertFalse(settingsViewModel.state.value.radarEnabled)
+        composeRule.onNodeWithTag("radar_layer_options").performClick()
+        composeRule.onNodeWithTag("radar_layer_provider_librewxr").assertIsSelected()
+        composeRule.onAllNodesWithTag("radar_timeline").assertCountEquals(0)
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
     }
 
     @Test
@@ -604,8 +654,10 @@ class HluNavHostTest {
     private fun scrollPosition(tag: String): Float = composeRule.onNodeWithTag(tag)
         .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
 
-    private class MutableSettingsRepository : SettingsRepository {
-        override val settings = MutableStateFlow(PersistedSettings())
+    private class MutableSettingsRepository(
+        initial: PersistedSettings = PersistedSettings()
+    ) : SettingsRepository {
+        override val settings = MutableStateFlow(initial)
         override suspend fun save(settings: PersistedSettings) {
             this.settings.value = settings
         }

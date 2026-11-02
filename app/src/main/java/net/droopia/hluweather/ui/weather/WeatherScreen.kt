@@ -61,6 +61,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
@@ -97,6 +98,8 @@ fun WeatherScreen(
     hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     radarEnabled: Boolean = true,
     onRadarEnabledChange: (Boolean) -> Unit = {},
+    radarProvider: RadarProvider = RadarProvider.LIBREWXR,
+    onRadarProviderChange: (RadarProvider) -> Unit = {},
     radarPlaybackViewModel: RadarPlaybackViewModel = viewModel(factory = RadarPlaybackViewModel.Factory),
     now: Instant? = null,
     modifier: Modifier = Modifier,
@@ -290,6 +293,8 @@ fun WeatherScreen(
                                     RadarMapOverlay(
                                         enabled = radarEnabled,
                                         onEnabledChange = onRadarEnabledChange,
+                                        selectedProvider = radarProvider,
+                                        onProviderChange = onRadarProviderChange,
                                         playbackState = radarState,
                                         metadataState = radarState.metadataState,
                                         opacity = radarOpacity,

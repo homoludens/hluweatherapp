@@ -34,3 +34,10 @@
 - Passed focused Google debug Compose tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `SettingsScreenTest` and `PrimaryFlowsAccessibilityTest` — 27 tests, 0 failures, 0 errors, 0 skipped.
 - `SettingsScreenTest` verifies separate Radar Provider labels, LibreWXR/RainViewer choices and tags, selected radio semantics, one callback per choice change, and independence from forecast-provider changes. Accessibility tests verify existing Settings touch targets and layout remain usable after adding the section.
 - Passed `git diff --check` with no output.
+
+## Task 2.3 — shared map-layer provider selection
+
+- Passed focused Google debug Compose tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest --tests 'net.droopia.hluweather.navigation.HluNavHostTest' --tests 'net.droopia.hluweather.ui.map.RadarMapOverlayTest' --tests 'net.droopia.hluweather.ui.weather.WeatherScreenTest'` — 57 tests, 0 failures, 0 errors, 0 skipped.
+- `HluNavHostTest` verifies map-layer selection updates the shared persisted preference and Settings selection is reflected back in map layers while radar remains disabled. `RadarMapOverlayTest` verifies the provider choice works while disabled, invokes one callback, and preserves visibility and opacity. `WeatherScreenTest` verifies changing the provider while disabled does not enable radar or start repository collection and leaves the basemap and location controls present.
+- Passed `git diff --check` with no output.
+- Live radar-data provider switching is intentionally deferred to tasks 4.2 and 5.1.

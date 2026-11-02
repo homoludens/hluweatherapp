@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -41,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -48,6 +51,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.repository.RadarMetadataState
 
 private val RadarObservedColor = Color(0xFF27835A)
@@ -56,6 +60,8 @@ private val RadarObservedColor = Color(0xFF27835A)
 internal fun RadarMapOverlay(
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
+    selectedProvider: RadarProvider,
+    onProviderChange: (RadarProvider) -> Unit,
     playbackState: RadarPlaybackState,
     metadataState: RadarMetadataState,
     opacity: Float,
@@ -68,6 +74,8 @@ internal fun RadarMapOverlay(
         RadarLayerControls(
             enabled = enabled,
             onEnabledChange = onEnabledChange,
+            selectedProvider = selectedProvider,
+            onProviderChange = onProviderChange,
             opacity = opacity,
             onOpacityChange = onOpacityChange,
             modifier = Modifier
@@ -95,6 +103,8 @@ internal fun RadarMapOverlay(
 private fun RadarLayerControls(
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
+    selectedProvider: RadarProvider,
+    onProviderChange: (RadarProvider) -> Unit,
     opacity: Float,
     onOpacityChange: (Float) -> Unit,
     modifier: Modifier = Modifier
@@ -170,6 +180,24 @@ private fun RadarLayerControls(
                     )
                 }
                 HorizontalDivider()
+                Text(
+                    text = "Radar provider",
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                RadarProviderOption(
+                    provider = RadarProvider.LIBREWXR,
+                    selectedProvider = selectedProvider,
+                    onSelected = onProviderChange,
+                    tag = "radar_layer_provider_librewxr"
+                )
+                RadarProviderOption(
+                    provider = RadarProvider.RAINVIEWER,
+                    selectedProvider = selectedProvider,
+                    onSelected = onProviderChange,
+                    tag = "radar_layer_provider_rainviewer"
+                )
+                HorizontalDivider()
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -206,6 +234,36 @@ private fun RadarLayerControls(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RadarProviderOption(
+    provider: RadarProvider,
+    selectedProvider: RadarProvider,
+    onSelected: (RadarProvider) -> Unit,
+    tag: String
+) {
+    val selected = provider == selectedProvider
+    val label = when (provider) {
+        RadarProvider.LIBREWXR -> "LibreWXR"
+        RadarProvider.RAINVIEWER -> "RainViewer"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = { onSelected(provider) }
+            )
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

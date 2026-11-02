@@ -24,10 +24,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -41,27 +43,38 @@ import java.util.TimeZone
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.LocationMode
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.toAppLocalDate
 import net.droopia.hluweather.data.repository.MockWeatherRepository
+import net.droopia.hluweather.data.repository.RadarMetadataState
+import net.droopia.hluweather.data.repository.RadarRepository
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.ui.map.RadarPlaybackViewModel
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
@@ -85,6 +98,7 @@ class WeatherScreenTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComposeTestActivity>()
+    private val radarRepositories = mutableListOf<TrackingRadarRepository>()
 
     @Before
     fun setup() {
@@ -94,6 +108,7 @@ class WeatherScreenTest {
 
     @After
     fun teardown() {
+        radarRepositories.forEach(TrackingRadarRepository::close)
         Dispatchers.resetMain()
     }
 
@@ -183,6 +198,69 @@ class WeatherScreenTest {
         val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
         assertEquals("Map should fill the weather content", rootBounds.top, mapBounds.top, 1f)
         assertEquals("Map should fill the weather content", rootBounds.bottom, mapBounds.bottom, 1f)
+    }
+
+    @Test
+    fun changing_layer_provider_while_disabled_does_not_start_radar_or_change_map_controls() {
+        val repository = TrackingRadarRepository(RadarMetadataState())
+        radarRepositories += repository
+        val radarViewModel = RadarPlaybackViewModel(repository)
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        weatherViewModel.onForecastModeSelected(ForecastMode.MAP)
+        val enabled = mutableStateOf(false)
+        val provider = mutableStateOf(RadarProvider.LIBREWXR)
+        var providerChanges = 0
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = weatherViewModel,
+                    radarPlaybackViewModel = radarViewModel,
+                    radarEnabled = enabled.value,
+                    onRadarEnabledChange = { enabled.value = it },
+                    radarProvider = provider.value,
+                    onRadarProviderChange = {
+                        provider.value = it
+                        providerChanges++
+                    },
+                    mapContent = { _, _, _, _, _ ->
+                        Column {
+                            Text("Basemap attribution", Modifier.testTag("test_basemap_attribution"))
+                            Text("Location control", Modifier.testTag("test_map_location_control"))
+                        }
+                    }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertFalse(radarViewModel.state.value.isVisible)
+        assertEquals(0, repository.activeCollectors)
+        composeRule.onNodeWithTag("radar_visibility_toggle").assertIsDisplayed()
+        composeRule.onNodeWithTag("test_basemap_attribution").assertIsDisplayed()
+        composeRule.onNodeWithTag("test_map_location_control").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithTag("radar_timeline").fetchSemanticsNodes().isEmpty())
+
+        composeRule.onNodeWithTag("radar_layer_options").performClick()
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_layer_visibility").assertIsDisplayed()
+        assertEquals(
+            "Off",
+            composeRule.onNodeWithTag("radar_layer_visibility")
+                .fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+        )
+        composeRule.onNodeWithTag("radar_layer_provider_rainviewer").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(RadarProvider.RAINVIEWER, provider.value)
+        assertEquals(1, providerChanges)
+        assertFalse(enabled.value)
+        assertFalse(radarViewModel.state.value.isVisible)
+        assertEquals(0, repository.activeCollectors)
+        assertTrue(composeRule.onAllNodesWithTag("radar_timeline").fetchSemanticsNodes().isEmpty())
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
+        composeRule.onNodeWithTag("test_basemap_attribution").assertIsDisplayed()
+        composeRule.onNodeWithTag("test_map_location_control").assertIsDisplayed()
     }
 
     @Test
@@ -1011,6 +1089,24 @@ class WeatherScreenTest {
         override suspend fun selectSaved(id: String) = Unit
 
         override suspend fun setTrackMe(enabled: Boolean) = Unit
+    }
+
+    private class TrackingRadarRepository(initial: RadarMetadataState) : RadarRepository {
+        private val updates = MutableStateFlow(initial)
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        var activeCollectors = 0
+            private set
+
+        override val state = updates
+            .onStart { activeCollectors++ }
+            .onCompletion { activeCollectors-- }
+            .stateIn(
+                scope,
+                SharingStarted.WhileSubscribed(stopTimeoutMillis = 0, replayExpirationMillis = 0),
+                initial
+            )
+
+        fun close() = scope.cancel()
     }
 
     private fun ImageBitmap.hasLightForeground(): Boolean {
