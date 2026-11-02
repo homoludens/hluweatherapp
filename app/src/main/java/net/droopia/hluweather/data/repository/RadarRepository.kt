@@ -44,6 +44,12 @@ interface RadarRepository {
 fun interface RadarRequestBudget {
     suspend fun acquire(provider: RadarProvider)
 
+    /** Includes the network operation itself so a shared implementation can also bound concurrency. */
+    suspend fun <T> execute(provider: RadarProvider, request: suspend () -> T): T {
+        acquire(provider)
+        return request()
+    }
+
     companion object {
         val None = RadarRequestBudget { }
     }
@@ -139,9 +145,10 @@ class RadarMetadataRepository(
         val providerName = RadarProviderDescriptors[provider].displayName
         while (true) {
             try {
-                requestBudget.acquire(provider)
-                val metadata = withTimeoutOrNull(policy.requestTimeout) { api.metadata() }
-                    ?: throw IOException("$providerName radar metadata request timed out")
+                val metadata = requestBudget.execute(provider) {
+                    withTimeoutOrNull(policy.requestTimeout) { api.metadata() }
+                        ?: throw IOException("$providerName radar metadata request timed out")
+                }
                 check(metadata.provider == provider && metadata.frames.all { it.provider == provider }) {
                     "$providerName radar metadata provider does not match its request"
                 }

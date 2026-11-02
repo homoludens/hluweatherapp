@@ -10,7 +10,11 @@ fun interface RadarMetadataApi {
     suspend fun metadata(): RadarMetadata
 }
 
-open class RadarApiException(message: String, val statusCode: Int? = null) : IOException(message)
+open class RadarApiException(
+    message: String,
+    val statusCode: Int? = null,
+    val retryAfter: String? = null
+) : IOException(message)
 
 interface LibreWxrRadarApi : RadarMetadataApi
 

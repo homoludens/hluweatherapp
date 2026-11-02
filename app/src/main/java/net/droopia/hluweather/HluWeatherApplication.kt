@@ -27,6 +27,12 @@ import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.network.KtorMetNoApi
 import net.droopia.hluweather.data.network.KtorLibreWxrRadarApi
 import net.droopia.hluweather.data.network.KtorRainViewerRadarApi
+import net.droopia.hluweather.data.network.KtorRadarTileTransport
+import net.droopia.hluweather.data.network.RadarMapResourceProvider
+import net.droopia.hluweather.data.network.RadarNetworkScheduler
+import net.droopia.hluweather.data.network.RadarTileLoader
+import net.droopia.hluweather.data.network.RadarTileRegistry
+import net.droopia.hluweather.data.network.createRadarHttpClient
 import net.droopia.hluweather.data.network.KtorNominatimApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoAirQualityApi
@@ -37,7 +43,6 @@ import net.droopia.hluweather.data.network.KtorPhotonApi
 import net.droopia.hluweather.data.repository.NominatimReverseGeocoder
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.RadarMetadataRepository
-import net.droopia.hluweather.data.repository.RadarRequestBudget
 import net.droopia.hluweather.data.repository.MetNoWeatherRepository
 import net.droopia.hluweather.data.repository.OpenMeteoPlaceSearchSource
 import net.droopia.hluweather.data.repository.OpenMeteoRouteWeatherSource
@@ -152,25 +157,33 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
         MetNoWeatherRepository(KtorMetNoApi(httpClient))
     }
 
-    // Task 3.2 will supply the shared RainViewer metadata/tile limiter at this injection point.
-    private val radarRequestBudget by lazy { RadarRequestBudget.None }
+    private val radarHttpClient: HttpClient by lazy { createRadarHttpClient() }
+
+    val radarNetworkScheduler by lazy { RadarNetworkScheduler(applicationScope) }
+    val radarTileRegistry by lazy { RadarTileRegistry() }
+    val radarTileLoader by lazy {
+        RadarTileLoader(applicationScope, radarNetworkScheduler, KtorRadarTileTransport(radarHttpClient))
+    }
+    val radarMapResourceProvider by lazy {
+        RadarMapResourceProvider(radarTileRegistry, radarTileLoader, radarNetworkScheduler)
+    }
     private val radarMetadataCache by lazy { RadarMetadataCache(applicationDataStore) }
 
     val radarRepositories: Map<RadarProvider, RadarRepository> by lazy {
         mapOf(
             RadarProvider.LIBREWXR to RadarMetadataRepository(
                 provider = RadarProvider.LIBREWXR,
-                api = KtorLibreWxrRadarApi(httpClient),
+                api = KtorLibreWxrRadarApi(radarHttpClient),
                 cache = radarMetadataCache,
                 scope = applicationScope,
-                requestBudget = radarRequestBudget
+                requestBudget = radarNetworkScheduler
             ),
             RadarProvider.RAINVIEWER to RadarMetadataRepository(
                 provider = RadarProvider.RAINVIEWER,
-                api = KtorRainViewerRadarApi(httpClient),
+                api = KtorRainViewerRadarApi(radarHttpClient),
                 cache = radarMetadataCache,
                 scope = applicationScope,
-                requestBudget = radarRequestBudget
+                requestBudget = radarNetworkScheduler
             )
         )
     }
