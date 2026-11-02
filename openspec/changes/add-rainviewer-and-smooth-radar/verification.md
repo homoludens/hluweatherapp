@@ -120,3 +120,20 @@
 - Passed focused Google debug Compose tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest --tests 'net.droopia.hluweather.ui.map.RadarMapOverlayTest'` — **11 tests, 0 failures, 0 errors, 0 skipped**. Tests cover both provider credits/link targets and semantics, pending/failure states, retained-frame attribution across provider state changes, selected-provider fallback with no displayed frame, and compact light/dark layout/readability. The existing error tests also verify timeline controls and status remain usable.
 - `git diff --check` and `openspec validate add-rainviewer-and-smooth-radar --strict` passed after this task's edits.
 - The broader Google debug unit suite, `:app:assembleGoogleDebug`, device/emulator provider matrix, and final regression were not run; those remain for tasks 6.1 and 6.2. No task 4.1 readiness/race investigation or universal no-flash claim was made.
+
+## Task 6.1 — device matrix deferred by approval
+
+- **Approved scope:** the full both-provider device/emulator matrix is deferred to later work because this environment has no connected device and no configured AVD. Task 6.1 is complete only as a record of that approved deferral and the evidence available now; the deferred matrix is not considered passed.
+- Current availability check (as reported for this task):
+  ```text
+  $ /home/homoludens/Android/Sdk/platform-tools/adb devices -l
+  List of devices attached
+
+  $ /home/homoludens/Android/Sdk/emulator/emulator -list-avds
+  [no output; no AVD names]
+  ```
+- Current evidence is limited to the focused automated unit/Compose coverage documented in Tasks 1.1–5.2 and historical controlled native tests:
+  - Task 3.2's approved volatile-only verification (above) records **3 installed-runtime Android tests, 0 failures** on Android 15/API 35 emulator `emulator-5556`, using MapLibre Compose 0.16.0, SwiftShader OpenGL, controlled radar payloads, and local basemap responses. It verifies the resource hook, emitted tile coverage across the recorded viewport cases, prefetch-to-app-byte-cache reuse, basemap native-cache reuse, and the experimental live-map source/layer lifecycle/style-reload path. It does **not** use live provider HTTP.
+  - Task 4.1's historical native evidence (above) records six isolated composed native tests and a combined renderer/readiness run of **4 tests, 0 failures** on Android 15/API 35 emulator `emulator-5554`, with controlled local tile responses. The separate controlled no-gap trace failed and remains an accepted best-effort limitation as documented in Task 4.1; passing native runs do not establish universal blink-free behavior.
+- The following broader checks are **not run**, not passed: the full Settings/layers selection and on-device restart flow; cold-cache slow scrubbing and full-app playback; end-to-end app cache behavior for two-step prefetch/reuse; opacity extremes; high-zoom RainViewer; pan/zoom/rotation and style reload as complete app flows; unavailable/429 handling in the live app; and navigation/background cancellation. No screenshots or recordings, nor the associated end-to-end request/cache observations, were collected. No live RainViewer or LibreWXR HTTP was exercised, and provider-linked attribution was not verified end-to-end against displayed provider imagery.
+- Earlier focused tests cover portions of these behaviors in isolation (for example, preference persistence, playback coordination, cache/request policies, and attribution semantics); the controlled native tests also cover selected local-payload runtime paths. These are not substitutes for the deferred full application/device matrix. The final automated regression and Google debug build remain Task 6.2.
