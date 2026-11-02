@@ -31,10 +31,10 @@
     <a class="back-link" href="../">← Back to HluWeatherApp</a>
     <p class="eyebrow">Your data, explained</p>
     <h1>Privacy Policy</h1>
-    <p class="policy-meta">Effective and last updated: <time datetime="2026-10-30">October 30, 2026</time></p>
+    <p class="policy-meta">Effective and last updated: <time datetime="2026-11-02">November 2, 2026</time></p>
     <div class="policy-intro">
       <p>HluWeatherApp is an Android weather app maintained by <a href="https://github.com/homoludens">homoludens</a>. This policy describes the app and this website. For questions, contact <a href="mailto:playstore@droopia.net">playstore@droopia.net</a>.</p>
-      <p>The app does not require an account or send your weather requests to a server operated by the developer. It does send information directly to the services needed to provide forecasts, maps, place search, and routes, as described below.</p>
+      <p>The app does not require an account or send your weather requests to a server operated by the developer. It does send information directly to the services needed to provide forecasts, maps and radar, place search, and routes, as described below.</p>
     </div>
 
     <section aria-labelledby="information">
@@ -42,7 +42,7 @@
       <ul>
         <li><strong>Locations.</strong> Places you select or save can include a name, latitude, longitude, and altitude. If you grant Android location permission and use a location feature such as Track Me, the app can access your approximate or precise device location, depending on the permission you grant.</li>
         <li><strong>Searches and routes.</strong> Place searches and the start and destination you choose for a trip are used to find places, calculate a route, and request weather along it.</li>
-        <li><strong>Settings and cached data.</strong> The app saves preferences, saved locations, a last-known device location, forecast data, and information used for widgets and notifications on your device.</li>
+        <li><strong>Settings and cached data.</strong> The app saves preferences (including your shared radar-provider choice), saved locations, a last-known device location, forecast data, radar metadata, and information used for widgets and notifications on your device. Radar metadata is cached separately for each provider. Radar tile bytes use a bounded, memory-only cache and are not persisted to the radar map's disk cache; the basemap has a separate cache.</li>
       </ul>
       <p>Location permission is optional. You can choose saved places without granting access to your device location. Track Me obtains location updates while the app is in use; widgets may use a saved or last-known location for background weather updates. Enabled notifications can also trigger background forecast requests for a saved location.</p>
     </section>
@@ -56,9 +56,10 @@
         <li><strong>Nominatim (OpenStreetMap):</strong> coordinates to look up a place name.</li>
         <li><strong>OSRM:</strong> the start and destination coordinates for a driving route.</li>
         <li><strong>OpenFreeMap:</strong> map styles and tiles; requests for map tiles can reveal the area of the map being viewed.</li>
+        <li><strong>LibreWXR or RainViewer:</strong> when radar is used, metadata is requested directly from the selected provider's public endpoint: <a href="https://api.librewxr.net/public/weather-maps.json">LibreWXR</a> or <a href="https://api.rainviewer.com/public/weather-maps.json">RainViewer</a>. The app then requests radar tiles directly from the HTTPS host and frame path returned by that service, followed by path components for tile size and XYZ zoom/x/y/color/rendering options (for example, <code>{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png</code>). Tile requests identify the requested radar frame and tile coordinates/zoom, which reveal the map area being displayed (and may correspond to your location if the map is centered there). Radar tile fetching and best-effort nearby-frame prefetching occur only for the selected, visible radar. The app does not route these requests through a developer-operated server.</li>
         <li><strong>Google Play services:</strong> the Google version of the app uses Google's fused location provider when a device-location feature is used. Google's handling of information is subject to its own settings and policies.</li>
       </ul>
-      <p>These services also receive ordinary connection information, such as your IP address and request details, and may process or retain it under their own policies. The app uses HTTPS for its weather, search, and routing requests. We do not sell your personal data or use it to serve advertising.</p>
+      <p>These services also receive ordinary connection information, including your IP address and request details, and may process or retain it under their own policies. Radar provider selection can be changed in Settings or the map layers; both controls update the same saved choice, which defaults to LibreWXR. Changing providers while radar is disabled does not start radar requests. The app uses HTTPS for weather, search, routing, and radar requests. For radar capabilities, source credits, and loading details, see the <a href="../radar/radar-providers.md">radar provider guide</a>. We do not sell your personal data or use it to serve advertising.</p>
     </section>
 
     <section aria-labelledby="storage">
@@ -81,7 +82,7 @@
 
     <section aria-labelledby="choices">
       <h2 id="choices">Your choices and questions</h2>
-      <p>You can choose a weather or place-search provider in the app, manage location and notification permissions in Android settings, and use the deletion options above. Depending on where you live, you may have additional rights concerning your personal data. For privacy questions or requests, email <a href="mailto:playstore@droopia.net">playstore@droopia.net</a>.</p>
+      <p>You can choose a weather, radar, or place-search provider in the app, manage location and notification permissions in Android settings, and use the deletion options above. Depending on where you live, you may have additional rights concerning your personal data. For privacy questions or requests, email <a href="mailto:playstore@droopia.net">playstore@droopia.net</a>.</p>
     </section>
 
     <section aria-labelledby="changes">
