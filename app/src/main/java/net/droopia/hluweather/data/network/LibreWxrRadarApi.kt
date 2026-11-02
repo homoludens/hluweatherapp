@@ -6,11 +6,16 @@ import io.ktor.client.request.get
 import java.io.IOException
 import net.droopia.hluweather.data.model.RadarMetadata
 
-interface LibreWxrRadarApi {
+fun interface RadarMetadataApi {
     suspend fun metadata(): RadarMetadata
 }
 
-class LibreWxrRadarApiException(message: String, val statusCode: Int? = null) : IOException(message)
+open class RadarApiException(message: String, val statusCode: Int? = null) : IOException(message)
+
+interface LibreWxrRadarApi : RadarMetadataApi
+
+class LibreWxrRadarApiException(message: String, statusCode: Int? = null) :
+    RadarApiException(message, statusCode)
 
 class KtorLibreWxrRadarApi(
     private val client: HttpClient,

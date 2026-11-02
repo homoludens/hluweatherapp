@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.notifications.NotificationScheduler
 import net.droopia.hluweather.widget.WeatherWidgetUpdaterOwner
@@ -41,6 +42,20 @@ class HluWeatherApplicationTest {
         assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
         assertTrue(application is WeatherWidgetUpdaterOwner)
         assertSame(application.weatherWidgetUpdater, (application as WeatherWidgetUpdaterOwner).weatherWidgetUpdater)
+    }
+
+    @Test
+    fun application_wires_both_radar_repositories_without_collecting_either() {
+        val application = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val repositories = application.radarRepositories
+
+        assertEquals(setOf(RadarProvider.LIBREWXR, RadarProvider.RAINVIEWER), repositories.keys)
+        assertSame(repositories.getValue(RadarProvider.LIBREWXR), application.radarRepository)
+        assertSame(
+            repositories.getValue(RadarProvider.RAINVIEWER),
+            application.radarRepositoryFor(RadarProvider.RAINVIEWER)
+        )
+        assertTrue(repositories.values.all { it.state.value.isLoading })
     }
 
     @Test

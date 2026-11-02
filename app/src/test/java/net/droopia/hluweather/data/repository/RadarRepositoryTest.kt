@@ -25,6 +25,10 @@ import net.droopia.hluweather.data.network.LibreWxrRadarApiException
 import net.droopia.hluweather.data.network.LibreWxrRadarFrame
 import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
 import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
+import net.droopia.hluweather.data.model.RadarMetadata
+import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.network.RadarMetadataApi
+import net.droopia.hluweather.data.network.RainViewerRadarApiException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -48,6 +52,151 @@ class RadarRepositoryTest {
 
         assertEquals(0, api.calls)
         assertEquals(0, cache.reads)
+    }
+
+    @Test
+    fun rainviewer_repository_uses_only_its_fresh_provider_cache_until_refresh_time() = runTest {
+        val cached = CachedRadarMetadata(rainViewerMetadata, epoch - 9.seconds)
+        val api = FakeMetadataApi { rainViewerMetadata.copy(host = "https://new-tiles.example.test") }
+        val cache = MemoryCache(cached)
+        val repository = providerRepository(RadarProvider.RAINVIEWER, api, cache)
+        val observer = observe(repository)
+        runCurrent()
+
+        assertEquals(rainViewerMetadata, repository.state.value.metadata)
+        assertFalse(repository.state.value.isLoading)
+        assertFalse(repository.state.value.isStale)
+        assertEquals(0, api.calls)
+        assertEquals(listOf(RadarProvider.RAINVIEWER), cache.providersRead)
+
+        advanceTimeBy(999)
+        runCurrent()
+        assertEquals(0, api.calls)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, api.calls)
+        assertEquals("https://new-tiles.example.test", repository.state.value.metadata?.host)
+        observer.cancel()
+        runCurrent()
+    }
+
+    @Test
+    fun rainviewer_refresh_failure_retains_only_rainviewer_cached_metadata() = runTest {
+        val cached = CachedRadarMetadata(rainViewerMetadata, epoch - 1.hours)
+        val api = FakeMetadataApi { throw IOException("offline") }
+        val cache = MemoryCache(cached)
+        val repository = providerRepository(
+            RadarProvider.RAINVIEWER,
+            api,
+            cache,
+            policy.copy(maxRetries = 0)
+        )
+        val observer = observe(repository)
+        runCurrent()
+
+        assertEquals(1, api.calls)
+        assertEquals(rainViewerMetadata, repository.state.value.metadata)
+        assertTrue(repository.state.value.isStale)
+        assertTrue(repository.state.value.error is IOException)
+        assertEquals(listOf(RadarProvider.RAINVIEWER), cache.providersRead)
+        observer.cancel()
+        runCurrent()
+    }
+
+    @Test
+    fun rainviewer_transient_http_failures_retry_and_recover() = runTest {
+        for (status in listOf(429, 503)) {
+            val api = FakeMetadataApi { call ->
+                if (call == 1) throw RainViewerRadarApiException("temporary", status)
+                rainViewerMetadata
+            }
+            val repository = providerRepository(RadarProvider.RAINVIEWER, api)
+            val observer = observe(repository)
+            runCurrent()
+            assertTrue(repository.state.value.isLoading)
+
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertEquals(2, api.calls)
+            assertEquals(rainViewerMetadata, repository.state.value.metadata)
+            assertNull(repository.state.value.error)
+            observer.cancel()
+            runCurrent()
+        }
+    }
+
+    @Test
+    fun repository_rejects_metadata_from_the_wrong_provider_without_retry_or_cache_write() = runTest {
+        val api = FakeMetadataApi { metadata }
+        val cache = MemoryCache()
+        val repository = providerRepository(RadarProvider.RAINVIEWER, api, cache)
+        val observer = observe(repository)
+        runCurrent()
+
+        assertEquals(1, api.calls)
+        assertTrue(repository.state.value.error is IllegalStateException)
+        assertNull(repository.state.value.metadata)
+        assertEquals(0, cache.writes)
+        observer.cancel()
+        runCurrent()
+    }
+
+    @Test
+    fun rainviewer_metadata_acquires_the_shared_budget_hook_for_each_attempt() = runTest {
+        val acquisitions = mutableListOf<RadarProvider>()
+        val api = FakeMetadataApi { call ->
+            if (call == 1) throw IOException("retry")
+            rainViewerMetadata
+        }
+        val repository = RadarMetadataRepository(
+            provider = RadarProvider.RAINVIEWER,
+            api = api,
+            cache = MemoryCache(),
+            scope = backgroundScope,
+            policy = policy,
+            now = { epoch },
+            dispatcher = StandardTestDispatcher(testScheduler),
+            requestBudget = RadarRequestBudget { acquisitions += it }
+        )
+        val observer = observe(repository)
+        runCurrent()
+        advanceTimeBy(100)
+        runCurrent()
+
+        assertEquals(listOf(RadarProvider.RAINVIEWER, RadarProvider.RAINVIEWER), acquisitions)
+        assertEquals(rainViewerMetadata, repository.state.value.metadata)
+        observer.cancel()
+        runCurrent()
+    }
+
+    @Test
+    fun last_rainviewer_observer_cancels_its_request_without_starting_librewxr_work() = runTest {
+        var cancelled = false
+        val rainApi = FakeMetadataApi {
+            try {
+                awaitCancellation()
+            } finally {
+                cancelled = true
+            }
+        }
+        val libreApi = FakeMetadataApi { metadata }
+        val rainRepository = providerRepository(RadarProvider.RAINVIEWER, rainApi)
+        val libreRepository = providerRepository(RadarProvider.LIBREWXR, libreApi)
+        val observer = observe(rainRepository)
+        runCurrent()
+
+        assertEquals(1, rainApi.calls)
+        assertEquals(0, libreApi.calls)
+        observer.cancel()
+        runCurrent()
+        advanceTimeBy(60_000)
+        runCurrent()
+
+        assertTrue(cancelled)
+        assertEquals(1, rainApi.calls)
+        assertEquals(0, libreApi.calls)
+        assertNull(rainRepository.state.value.error)
     }
 
     @Test
@@ -409,7 +558,8 @@ class RadarRepositoryTest {
         val failure = IOException("offline")
         val api = FakeApi { call -> if (call == 1) metadata else throw failure }
         val cache = object : RadarMetadataCacheStore {
-            override suspend fun get(): CachedRadarMetadata? = throw IOException("read failed")
+            override suspend fun get(provider: RadarProvider): CachedRadarMetadata? =
+                throw IOException("read failed")
             override suspend fun put(entry: CachedRadarMetadata) { throw IOException("write failed") }
         }
         val repository = repository(api, cache, policy.copy(maxRetries = 0))
@@ -432,7 +582,8 @@ class RadarRepositoryTest {
     fun in_memory_cache_survives_observer_restart_even_if_persistence_is_unavailable() = runTest {
         val api = FakeApi { metadata }
         val cache = object : RadarMetadataCacheStore {
-            override suspend fun get(): CachedRadarMetadata? = throw IOException("read failed")
+            override suspend fun get(provider: RadarProvider): CachedRadarMetadata? =
+                throw IOException("read failed")
             override suspend fun put(entry: CachedRadarMetadata) { throw IOException("write failed") }
         }
         val repository = repository(api, cache)
@@ -474,7 +625,7 @@ class RadarRepositoryTest {
             val cancellation = CancellationException("cache cancelled")
             var writes = 0
             val cache = object : RadarMetadataCacheStore {
-                override suspend fun get(): CachedRadarMetadata? {
+                override suspend fun get(provider: RadarProvider): CachedRadarMetadata? {
                     if (cancelRead) throw cancellation
                     return null
                 }
@@ -564,6 +715,22 @@ class RadarRepositoryTest {
         api, cache, backgroundScope, policy, now, StandardTestDispatcher(testScheduler)
     )
 
+    private fun TestScope.providerRepository(
+        provider: RadarProvider,
+        api: RadarMetadataApi,
+        cache: RadarMetadataCacheStore = MemoryCache(),
+        policy: RadarRefreshPolicy = RadarRepositoryTest.policy,
+        now: () -> Instant = { epoch + testScheduler.currentTime.milliseconds }
+    ) = RadarMetadataRepository(
+        provider = provider,
+        api = api,
+        cache = cache,
+        scope = backgroundScope,
+        policy = policy,
+        now = now,
+        dispatcher = StandardTestDispatcher(testScheduler)
+    )
+
     private fun assertFailure(expected: Exception, actual: Exception?) {
         // Coroutine stacktrace recovery can copy exceptions across suspension boundaries.
         assertEquals(expected.javaClass, actual?.javaClass)
@@ -581,12 +748,21 @@ class RadarRepositoryTest {
         override suspend fun metadata(): LibreWxrRadarMetadata = response(++calls)
     }
 
+    private class FakeMetadataApi(
+        private val response: suspend (Int) -> RadarMetadata
+    ) : RadarMetadataApi {
+        var calls = 0
+        override suspend fun metadata(): RadarMetadata = response(++calls)
+    }
+
     private class MemoryCache(var entry: CachedRadarMetadata? = null) : RadarMetadataCacheStore {
         var reads = 0
         var writes = 0
-        override suspend fun get(): CachedRadarMetadata? {
+        val providersRead = mutableListOf<RadarProvider>()
+        override suspend fun get(provider: RadarProvider): CachedRadarMetadata? {
             reads++
-            return entry
+            providersRead += provider
+            return entry?.takeIf { it.provider == provider }
         }
         override suspend fun put(entry: CachedRadarMetadata) {
             writes++
@@ -602,6 +778,18 @@ class RadarRepositoryTest {
                 LibreWxrRadarFrame(1_793_563_200L, "/v2/radar/1793563200", LibreWxrRadarFrameType.OBSERVED),
                 LibreWxrRadarFrame(1_793_563_800L, "/v2/radar/1793563800", LibreWxrRadarFrameType.FORECAST)
             )
+        )
+        val rainViewerMetadata = RadarMetadata(
+            host = "https://tilecache.rainviewer.com",
+            frames = listOf(
+                LibreWxrRadarFrame(
+                    1_793_563_200L,
+                    "/v2/radar/1793563200",
+                    LibreWxrRadarFrameType.OBSERVED,
+                    RadarProvider.RAINVIEWER
+                )
+            ),
+            provider = RadarProvider.RAINVIEWER
         )
         val newMetadata = metadata.copy(host = "https://tiles.librewxr.example.test")
         val policy = RadarRefreshPolicy(

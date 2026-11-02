@@ -3,14 +3,12 @@ package net.droopia.hluweather.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
-import java.io.IOException
 import net.droopia.hluweather.data.model.RadarMetadata
 
-interface RainViewerRadarApi {
-    suspend fun metadata(): RadarMetadata
-}
+interface RainViewerRadarApi : RadarMetadataApi
 
-class RainViewerRadarApiException(message: String, val statusCode: Int? = null) : IOException(message)
+class RainViewerRadarApiException(message: String, statusCode: Int? = null) :
+    RadarApiException(message, statusCode)
 
 class KtorRainViewerRadarApi(
     private val client: HttpClient,

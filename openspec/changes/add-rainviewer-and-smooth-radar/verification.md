@@ -14,3 +14,11 @@
   - [API transition summary](https://www.rainviewer.com/api/transition-faq.html): states nowcast and other color schemes were discontinued January 1, 2026, native maximum zoom is 7, and the service limit is 100 requests per IP per minute.
 - Distribution eligibility remains unresolved; no permission beyond the terms above is assumed. The RainViewer request budget is not implemented by this adapter and remains for the later shared-loader task.
 - Passed focused Google debug unit tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `RainViewerRadarApiTest`, `LibreWxrRadarApiTest`, `RadarModelsTest`, and `WeatherMapRadarTest` — 30 tests, 0 failures, 0 errors. These cover past-only/no-nowcast parsing, empty and malformed metadata, invalid and negative timestamps, HTTPS/path validation, HTTP failures, exact tile options/zoom limits, and LibreWXR forecast preservation.
+
+## Task 1.3 — provider-scoped repository and cache
+
+- Passed focused Google debug unit tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `RadarMetadataCacheTest`, `RadarRepositoryTest`, `HluWeatherApplicationTest`, `LibreWxrRadarApiTest`, and `RainViewerRadarApiTest` — 58 tests, 0 failures, 0 errors.
+- Cache tests cover validated legacy LibreWXR migration to the new scoped envelope without deleting the old key, distinct provider keys/isolation, invalid timestamps/hosts/paths, corrupt and unsupported-schema entries, envelope/frame provider mismatches, empty frames, and wrong preference types.
+- Repository/application tests cover freshness, cached fallback after failures, bounded transient retries/timeouts, cancellation when the last observer leaves, a RainViewer-specific budget injection hook per request attempt, and lazy wiring for both providers without collecting the unselected repository.
+- Passed `git diff --check` with no output.
+- The application currently injects `RadarRequestBudget.None`; task 3.2 must provide and share the concrete RainViewer metadata/tile budget. No rate limiter was implemented here.

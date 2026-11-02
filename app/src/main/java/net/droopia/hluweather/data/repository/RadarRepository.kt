@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeoutOrNull
 import net.droopia.hluweather.data.cache.CachedRadarMetadata
 import net.droopia.hluweather.data.cache.RadarMetadataCacheStore
-import net.droopia.hluweather.data.network.LibreWxrRadarApi
-import net.droopia.hluweather.data.network.LibreWxrRadarApiException
 import net.droopia.hluweather.data.model.RadarMetadata
+import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarProviderDescriptors
+import net.droopia.hluweather.data.network.LibreWxrRadarApi
+import net.droopia.hluweather.data.network.RadarApiException
+import net.droopia.hluweather.data.network.RadarMetadataApi
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -38,6 +41,14 @@ interface RadarRepository {
     val state: StateFlow<RadarMetadataState>
 }
 
+fun interface RadarRequestBudget {
+    suspend fun acquire(provider: RadarProvider)
+
+    companion object {
+        val None = RadarRequestBudget { }
+    }
+}
+
 data class RadarRefreshPolicy(
     val refreshInterval: Duration = 5.minutes,
     val requestTimeout: Duration = 15.seconds,
@@ -54,13 +65,15 @@ data class RadarRefreshPolicy(
     }
 }
 
-class LibreWxrRadarRepository(
-    private val api: LibreWxrRadarApi,
+class RadarMetadataRepository(
+    private val provider: RadarProvider,
+    private val api: RadarMetadataApi,
     private val cache: RadarMetadataCacheStore,
     scope: CoroutineScope,
     private val policy: RadarRefreshPolicy = RadarRefreshPolicy(),
     private val now: () -> Instant = { Clock.System.now() },
-    dispatcher: CoroutineDispatcher = Dispatchers.IO
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val requestBudget: RadarRequestBudget = RadarRequestBudget.None
 ) : RadarRepository {
     // The shared upstream has one writer, even across observer stop/start transitions.
     private var lastSuccessful: CachedRadarMetadata? = null
@@ -76,7 +89,7 @@ class LibreWxrRadarRepository(
 
     private fun observeMetadata(): Flow<RadarMetadataState> = flow {
         var cached = lastSuccessful ?: try {
-            cache.get()
+            cache.get(provider)?.takeIf { it.matchesProvider() }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -95,7 +108,7 @@ class LibreWxrRadarRepository(
         while (true) {
             emit(cached.toState(isLoading = true, error = failure))
             val fresh = try {
-                CachedRadarMetadata(fetchWithRetry(), now())
+                CachedRadarMetadata(fetchWithRetry(), now(), provider)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -123,11 +136,16 @@ class LibreWxrRadarRepository(
     private suspend fun fetchWithRetry(): RadarMetadata {
         var retries = 0
         var retryDelay = policy.initialRetryDelay
+        val providerName = RadarProviderDescriptors[provider].displayName
         while (true) {
             try {
+                requestBudget.acquire(provider)
                 val metadata = withTimeoutOrNull(policy.requestTimeout) { api.metadata() }
-                    ?: throw IOException("LibreWXR radar metadata request timed out")
-                check(metadata.frames.isNotEmpty()) { "LibreWXR radar metadata contains no frames" }
+                    ?: throw IOException("$providerName radar metadata request timed out")
+                check(metadata.provider == provider && metadata.frames.all { it.provider == provider }) {
+                    "$providerName radar metadata provider does not match its request"
+                }
+                check(metadata.frames.isNotEmpty()) { "$providerName radar metadata contains no frames" }
                 return metadata
             } catch (error: CancellationException) {
                 throw error
@@ -141,11 +159,16 @@ class LibreWxrRadarRepository(
     }
 
     private fun Exception.isTransient(): Boolean = when (this) {
-        is LibreWxrRadarApiException -> statusCode == 408 || statusCode == 429 ||
+        is RadarApiException -> statusCode == 408 || statusCode == 429 ||
             statusCode in 500..599
         is IOException -> true
         else -> false
     }
+
+    private fun CachedRadarMetadata.matchesProvider(): Boolean =
+        provider == this@RadarMetadataRepository.provider &&
+            metadata.provider == this@RadarMetadataRepository.provider &&
+            metadata.frames.all { it.provider == this@RadarMetadataRepository.provider }
 
     private fun CachedRadarMetadata.remainingFreshness(): Duration {
         val age = now() - fetchedAt
@@ -167,3 +190,22 @@ class LibreWxrRadarRepository(
         error = error
     )
 }
+
+class LibreWxrRadarRepository(
+    api: LibreWxrRadarApi,
+    cache: RadarMetadataCacheStore,
+    scope: CoroutineScope,
+    policy: RadarRefreshPolicy = RadarRefreshPolicy(),
+    now: () -> Instant = { Clock.System.now() },
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    requestBudget: RadarRequestBudget = RadarRequestBudget.None
+) : RadarRepository by RadarMetadataRepository(
+    provider = RadarProvider.LIBREWXR,
+    api = api,
+    cache = cache,
+    scope = scope,
+    policy = policy,
+    now = now,
+    dispatcher = dispatcher,
+    requestBudget = requestBudget
+)
