@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -158,6 +161,34 @@ class HourlyForecastTest {
 
         composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
         assertHourlyHeadersDoNotOverlap()
+    }
+
+    @Test
+    fun reusable_selector_reveals_external_selection_at_both_ends_without_callback() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val selectedDay = mutableIntStateOf(0)
+        var callbacks = 0
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                Box(Modifier.width(320.dp).fillMaxHeight()) {
+                    HourlyForecast(
+                        forecast = forecast,
+                        selectedDayIndex = selectedDay.intValue,
+                        onDaySelected = { callbacks++ },
+                        now = forecast.hourly.first().time
+                    )
+                }
+            }
+        }
+
+        for (dayIndex in listOf(6, 0)) {
+            composeRule.runOnIdle { selectedDay.intValue = dayIndex }
+            composeRule.waitForIdle()
+            val chip = composeRule.onNodeWithTag("hourly_day_chip_$dayIndex")
+                .assertIsSelected().assertIsDisplayed().fetchSemanticsNode()
+            assertTrue(chip.boundsInRoot.width >= chip.size.width - 1f)
+        }
+        assertTrue("Revealing a selected chip must not invoke navigation", callbacks == 0)
     }
 
     @Test

@@ -4,7 +4,7 @@
 
 ## 2. Scroll-synchronized date selector
 
-- [ ] 2.1 [high] Synchronize the selected date chip with the first visible table date, reveal the active chip in the horizontal selector, and preserve chip-tap navigation without scroll feedback; test manual scrolling across dates, dates near both ends, chip selection, timezone boundaries, and no snap-back in focused Hourly screen tests.
+- [x] 2.1 [high] Synchronize the selected date chip with the first visible table date, reveal the active chip in the horizontal selector, and preserve chip-tap navigation without scroll feedback; test manual scrolling across dates, dates near both ends, chip selection, timezone boundaries, and no snap-back in focused Hourly screen tests.
 
 ## 3. Precipitation unit presentation
 

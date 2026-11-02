@@ -19,6 +19,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipe
 import androidx.compose.material3.Text
@@ -300,6 +301,100 @@ class WeatherScreenTest {
         composeRule.waitForIdle()
 
         assertEquals(1, viewModel.state.value.selectedDayIndex)
+    }
+
+    @Test
+    fun scrolling_between_dates_reveals_selected_chips_without_vertical_snap_back() {
+        val now = Instant.fromEpochSeconds(0L)
+        val viewModel = renderWeather(baseTime = now)
+        val table = viewModel.state.value.forecast!!.toHourlyTableData(now)
+        val scroll = composeRule.onNodeWithTag("weather_scroll")
+
+        for (dayIndex in listOf(1, 6, 0)) {
+            val hourIndex = table.firstHourIndexForDay(dayIndex)!! + 8
+            scroll.performScrollToIndex(2 + hourIndex)
+            composeRule.waitForIdle()
+
+            assertEquals(dayIndex, viewModel.state.value.selectedDayIndex)
+            assertChipFullyVisible(dayIndex)
+            val position = scroll.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+            composeRule.mainClock.advanceTimeBy(2_000)
+            composeRule.waitForIdle()
+            assertEquals(
+                "Visibility selection must not navigate back to the first hour",
+                position,
+                scroll.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(),
+                0.01f
+            )
+            composeRule.onAllNodesWithTag("hourly_day_start_$dayIndex").assertCountEquals(0)
+        }
+
+        scroll.performTouchInput {
+            swipe(start = Offset(200f, 600f), end = Offset(200f, 400f), durationMillis = 500)
+        }
+        composeRule.waitForIdle()
+        assertChipFullyVisible(0)
+        composeRule.onNodeWithTag("hourly_day_chip_1").performClick()
+        composeRule.waitForIdle()
+        assertChipFullyVisible(1)
+        composeRule.onNodeWithTag("hourly_selected_day_1").assertIsDisplayed()
+    }
+
+    @Test
+    fun swiping_across_a_date_boundary_updates_selection_without_jumping_to_day_start() {
+        val now = Instant.fromEpochSeconds(0L)
+        val viewModel = renderWeather(baseTime = now)
+        val table = viewModel.state.value.forecast!!.toHourlyTableData(now)
+        val nextDayStart = table.firstHourIndexForDay(1)!!
+        val scroll = composeRule.onNodeWithTag("weather_scroll")
+        scroll.performScrollToIndex(2 + nextDayStart - 2)
+        composeRule.waitForIdle()
+        assertChipFullyVisible(0)
+
+        scroll.performTouchInput {
+            swipe(
+                start = Offset(centerX, height * 0.8f),
+                end = Offset(centerX, height * 0.4f),
+                durationMillis = 500
+            )
+        }
+        composeRule.waitForIdle()
+        assertEquals(1, viewModel.state.value.selectedDayIndex)
+        assertChipFullyVisible(1)
+        composeRule.onAllNodesWithTag("hourly_day_start_1").assertCountEquals(0)
+        val position = scroll.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        composeRule.mainClock.advanceTimeBy(2_000)
+        composeRule.waitForIdle()
+        assertEquals(position, scroll.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 0.01f)
+    }
+
+    @Test
+    fun forecast_timezone_boundary_controls_selection_during_manual_scroll() {
+        val now = Instant.parse("2026-09-02T00:00:00Z")
+        val forecast = buildMockForecast(Svilajnac, now).copy(timezone = "America/New_York")
+        val table = forecast.toHourlyTableData(now)
+        val firstDay = table.days.first()
+        val nextDay = table.days[1]
+        assertTrue(firstDay.dayIndex < 0)
+        assertEquals("2026-09-01", firstDay.date.toString())
+        assertEquals("2026-09-02", nextDay.date.toString())
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(provider: WeatherProvider, location: ActiveLocation) =
+                ForecastLoad(forecast)
+            override suspend fun clearCache() = Unit
+        }, Svilajnac)
+        renderWeather(viewModel, now)
+
+        val scroll = composeRule.onNodeWithTag("weather_scroll")
+        scroll.performScrollToIndex(2 + table.firstHourIndexForDay(firstDay.dayIndex)!!)
+        composeRule.waitForIdle()
+        assertChipFullyVisible(firstDay.dayIndex)
+
+        scroll.performScrollToIndex(2 + table.firstHourIndexForDay(nextDay.dayIndex)!! + 3)
+        composeRule.waitForIdle()
+        assertChipFullyVisible(nextDay.dayIndex)
+        assertEquals(nextDay.dayIndex, viewModel.state.value.selectedDayIndex)
+        composeRule.onAllNodesWithTag("hourly_day_start_${nextDay.dayIndex}").assertCountEquals(0)
     }
 
     @Test
@@ -808,6 +903,15 @@ class WeatherScreenTest {
             hasTestTag("current_metric_feels_like") and
                 hasAnyDescendant(hasText(title, substring = false))
         ).assertIsDisplayed()
+    }
+
+    private fun assertChipFullyVisible(dayIndex: Int) {
+        val chip = composeRule.onNodeWithTag("hourly_day_chip_$dayIndex")
+            .assertIsSelected().assertIsDisplayed().fetchSemanticsNode()
+        val strip = composeRule.onNodeWithTag("hourly_day_strip").fetchSemanticsNode().boundsInRoot
+        val bounds = chip.boundsInRoot
+        assertTrue("Selected chip must be fully visible", bounds.width >= chip.size.width - 1f)
+        assertTrue(bounds.left >= strip.left - 1f && bounds.right <= strip.right + 1f)
     }
 
     private fun assertHourlyHeadersDoNotOverlap() {

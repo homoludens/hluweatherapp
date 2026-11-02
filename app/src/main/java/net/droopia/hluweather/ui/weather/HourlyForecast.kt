@@ -26,12 +26,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -179,16 +184,38 @@ internal fun HourlyDaySelector(
     onDaySelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
+    val chipCoordinates = remember { mutableMapOf<LocalDate, LayoutCoordinates>() }
+    val stripCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+
+    LaunchedEffect(selectedDayDate, tableData.days) {
+        withFrameNanos { }
+        val strip = stripCoordinates[0]?.takeIf { it.isAttached }
+            ?: return@LaunchedEffect
+        val chip = chipCoordinates[selectedDayDate]?.takeIf { it.isAttached }
+            ?: return@LaunchedEffect
+        val stripLeft = strip.positionInRoot().x
+        val chipLeft = chip.positionInRoot().x
+        val adjustment = when {
+            chipLeft < stripLeft -> chipLeft - stripLeft
+            chipLeft + chip.size.width > stripLeft + strip.size.width ->
+                chipLeft + chip.size.width - stripLeft - strip.size.width
+            else -> 0f
+        }
+        scrollState.scrollTo((scrollState.value + adjustment.toInt()).coerceIn(0, scrollState.maxValue))
+    }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { stripCoordinates[0] = it }
             .testTag("hourly_day_strip"),
         shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier
-                .horizontalScroll(rememberScrollState())
+                .horizontalScroll(scrollState)
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -197,7 +224,8 @@ internal fun HourlyDaySelector(
                     dayIndex = day.dayIndex,
                     text = day.date.dayText(displayZone),
                     selected = day.date == selectedDayDate,
-                    onClick = { onDaySelected(day.dayIndex) }
+                    onClick = { onDaySelected(day.dayIndex) },
+                    modifier = Modifier.onGloballyPositioned { chipCoordinates[day.date] = it }
                 )
             }
         }
@@ -209,12 +237,13 @@ private fun DayChip(
     dayIndex: Int,
     text: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .testTag("hourly_day_chip_$dayIndex")
             .selectable(
                 selected = selected,
