@@ -73,6 +73,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
@@ -88,6 +89,7 @@ fun SettingsScreen(
     state: SettingsUiState,
     onBackClick: () -> Unit,
     onProviderChange: (WeatherProvider) -> Unit,
+    onRadarProviderChange: (RadarProvider) -> Unit = {},
     onProviderInfoClick: (WeatherProvider) -> Unit,
     onPlaceSearchProviderChange: (PlaceSearchProvider) -> Unit,
     onTrackMeChange: (Boolean) -> Unit,
@@ -156,6 +158,34 @@ fun SettingsScreen(
                     tag = "settings_provider_met_no",
                     onInfoClick = { onProviderInfoClick(WeatherProvider.MET_NO) },
                     onClick = { onProviderChange(WeatherProvider.MET_NO) }
+                )
+            }
+        }
+
+        item {
+            SettingsCard {
+                SectionHeader(
+                    icon = Icons.Outlined.WaterDrop,
+                    title = "Radar Provider",
+                    subtitle = "Choose your radar imagery source"
+                )
+                HorizontalDivider()
+                ProviderRow(
+                    title = "LibreWXR",
+                    subtitle = "LibreWXR precipitation radar",
+                    selected = state.radarProvider == RadarProvider.LIBREWXR,
+                    tag = "settings_radar_provider_librewxr",
+                    selectionRole = Role.RadioButton,
+                    onClick = { onRadarProviderChange(RadarProvider.LIBREWXR) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ProviderRow(
+                    title = "RainViewer",
+                    subtitle = "RainViewer precipitation radar",
+                    selected = state.radarProvider == RadarProvider.RAINVIEWER,
+                    tag = "settings_radar_provider_rainviewer",
+                    selectionRole = Role.RadioButton,
+                    onClick = { onRadarProviderChange(RadarProvider.RAINVIEWER) }
                 )
             }
         }
@@ -532,12 +562,13 @@ private fun ProviderRow(
     tag: String,
     recommended: Boolean = false,
     onInfoClick: (() -> Unit)? = null,
+    selectionRole: Role = Role.Tab,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .selectable(selected = selected, role = selectionRole, onClick = onClick)
             .testTag(tag)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically

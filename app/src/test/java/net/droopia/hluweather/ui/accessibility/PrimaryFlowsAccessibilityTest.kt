@@ -109,7 +109,7 @@ class PrimaryFlowsAccessibilityTest {
             .assertIsOff()
             .assertSwitchRole()
             .assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(6)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(7)
         composeRule.onNodeWithText("Weather alerts")
             .assertHasClickAction()
             .assertIsOff()
@@ -151,7 +151,7 @@ class PrimaryFlowsAccessibilityTest {
             .assertHasClickAction()
             .assertButtonRole()
             .assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(7)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(8)
         composeRule.onNodeWithText("Clear cache")
             .assertHasClickAction()
             .assertButtonRole()
@@ -185,7 +185,7 @@ class PrimaryFlowsAccessibilityTest {
             }
         }
 
-        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(4)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(5)
         listOf(
             "settings_temperature_celsius",
             "settings_temperature_fahrenheit",
@@ -268,10 +268,10 @@ class PrimaryFlowsAccessibilityTest {
         }
 
         val settings = composeRule.onNodeWithTag("settings_scroll")
-        settings.performScrollToIndex(4)
+        settings.performScrollToIndex(5)
         assertBoundsWithin(settings, "Precipitation")
         assertBoundsWithin(settings, "in")
-        settings.performScrollToIndex(6)
+        settings.performScrollToIndex(7)
         assertBoundsWithin(settings, "Best effort; delivery may be delayed by Android.")
         assertBoundsWithin(settings, "Thunderstorm alerts only")
     }
@@ -310,7 +310,7 @@ class PrimaryFlowsAccessibilityTest {
 
         assertEquals(1f, capturedFontScale, 0f)
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(6)
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(7)
         composeRule.onNodeWithText("Thunderstorm alerts only").assertIsDisplayed()
     }
 

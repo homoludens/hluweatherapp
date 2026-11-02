@@ -28,3 +28,9 @@
 - Passed focused Google debug unit tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `SettingsRepositoryTest` and `SettingsViewModelTest` — 47 tests, 0 failures, 0 errors, 0 skipped.
 - Repository/view-model coverage verifies RainViewer persistence across repository reload, LibreWXR fallback for missing/invalid/wrongly typed values, preservation of forecast provider/radar visibility and unrelated preferences, an early provider selection surviving settings hydration and being saved, and the setter's independence from visibility and forecast-provider state.
 - Passed `git diff --check` with no output.
+
+## Task 2.2 — Settings radar-provider selector
+
+- Passed focused Google debug Compose tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `SettingsScreenTest` and `PrimaryFlowsAccessibilityTest` — 27 tests, 0 failures, 0 errors, 0 skipped.
+- `SettingsScreenTest` verifies separate Radar Provider labels, LibreWXR/RainViewer choices and tags, selected radio semantics, one callback per choice change, and independence from forecast-provider changes. Accessibility tests verify existing Settings touch targets and layout remain usable after adding the section.
+- Passed `git diff --check` with no output.

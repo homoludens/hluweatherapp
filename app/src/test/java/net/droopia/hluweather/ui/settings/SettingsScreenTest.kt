@@ -25,6 +25,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -75,13 +76,17 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithText("Customize your weather experience").assertIsDisplayed()
         composeRule.onNodeWithText("Weather Provider").assertIsDisplayed()
+        scrollTo(3)
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("Locations").assertIsDisplayed()
-        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
         scrollTo(4)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
+        scrollTo(5)
         composeRule.onNodeWithText("Units").assertIsDisplayed()
-        scrollTo(6)
-        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
         scrollTo(7)
+        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
+        scrollTo(8)
         composeRule.onNodeWithText("Data & Cache").assertIsDisplayed()
     }
 
@@ -102,7 +107,7 @@ class SettingsScreenTest {
             }
         )
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_hourly_column_weather_icon").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_hourly_column_weather_text").performClick()
         composeRule.onNodeWithTag("settings_hourly_column_weather_icon").performClick()
@@ -132,7 +137,7 @@ class SettingsScreenTest {
             }
         )
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_hourly_column_european_aqi").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("settings_hourly_column_pm2_5").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("settings_hourly_column_pm10").assertIsDisplayed().performClick()
@@ -167,7 +172,7 @@ class SettingsScreenTest {
             }
         )
 
-        scrollTo(5)
+        scrollTo(6)
         composeRule.onNodeWithTag("settings_hourly_column_precipitation_probability")
             .assertIsDisplayed()
         composeRule.onNodeWithText("Precipitation probability").assertIsDisplayed()
@@ -183,7 +188,7 @@ class SettingsScreenTest {
 
         renderSettings(onWindDirectionDisplayChange = { selected = it })
 
-        scrollTo(4)
+        scrollTo(5)
         composeRule.onNodeWithTag("settings_wind_direction_eight_point").performClick()
 
         assertEquals(WindDirectionDisplay.EIGHT_POINT, selected)
@@ -215,7 +220,7 @@ class SettingsScreenTest {
     fun notifications_show_best_effort_summary_time_without_trip_alerts() {
         renderSettings()
 
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithText("Daily summary time").assertIsDisplayed()
         composeRule.onNodeWithText("08:00").assertIsDisplayed()
         composeRule.onNodeWithText("Best effort; delivery may be delayed by Android.").assertIsDisplayed()
@@ -228,7 +233,7 @@ class SettingsScreenTest {
         var selectedTime: LocalTime? = null
         renderSettings(onDailySummaryTimeChange = { selectedTime = it })
 
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithTag("settings_daily_summary_time").performClick()
 
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -243,7 +248,7 @@ class SettingsScreenTest {
     fun summary_time_row_exposes_one_merged_action() {
         renderSettings()
 
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithTag("settings_daily_summary_time")
             .assertHasClickAction()
             .assertContentDescriptionEquals("Daily summary time, 08:00")
@@ -259,7 +264,7 @@ class SettingsScreenTest {
             onOpenNotificationSettings = { settingsClicks++ }
         )
 
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithText("Notifications are blocked").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_notification_permission").performClick()
 
@@ -278,11 +283,71 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("MET.no").performClick()
         composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
+        scrollTo(4)
         composeRule.onNodeWithTag("settings_theme_dark").performClick()
         composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
 
         assertEquals(WeatherProvider.MET_NO, state.value.provider)
         assertEquals(ThemeMode.DARK, state.value.themeMode)
+    }
+
+    @Test
+    fun radar_provider_selector_reports_each_choice_and_is_independent_from_weather_provider() {
+        val state = mutableStateOf(
+            testSettingsState.copy(
+                provider = WeatherProvider.MET_NO,
+                radarProvider = RadarProvider.LIBREWXR
+            )
+        )
+        val radarChanges = mutableListOf<RadarProvider>()
+        val weatherChanges = mutableListOf<WeatherProvider>()
+
+        renderSettings(
+            state = { state.value },
+            onProviderChange = { provider ->
+                weatherChanges += provider
+                state.value = state.value.copy(provider = provider)
+            },
+            onRadarProviderChange = { provider ->
+                radarChanges += provider
+                state.value = state.value.copy(radarProvider = provider)
+            }
+        )
+
+        composeRule.onNodeWithText("Radar Provider").assertIsDisplayed()
+        composeRule.onNodeWithText("Choose your radar imagery source").assertIsDisplayed()
+        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
+        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_radar_provider_librewxr")
+            .assertIsSelected()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        composeRule.onNodeWithTag("settings_radar_provider_rainviewer")
+            .assertIsDisplayed()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
+
+        composeRule.onNodeWithTag("settings_radar_provider_rainviewer").performClick()
+
+        assertEquals(listOf(RadarProvider.RAINVIEWER), radarChanges)
+        assertEquals(emptyList<WeatherProvider>(), weatherChanges)
+        assertEquals(RadarProvider.RAINVIEWER, state.value.radarProvider)
+        assertEquals(WeatherProvider.MET_NO, state.value.provider)
+        composeRule.onNodeWithTag("settings_radar_provider_rainviewer").assertIsSelected()
+
+        composeRule.onNodeWithTag("settings_radar_provider_librewxr").performClick()
+
+        assertEquals(
+            listOf(RadarProvider.RAINVIEWER, RadarProvider.LIBREWXR),
+            radarChanges
+        )
+        assertEquals(WeatherProvider.MET_NO, state.value.provider)
+        composeRule.onNodeWithTag("settings_radar_provider_librewxr").assertIsSelected()
+
+        composeRule.onNodeWithTag("settings_provider_open_meteo").performClick()
+
+        assertEquals(listOf(WeatherProvider.OPEN_METEO), weatherChanges)
+        assertEquals(RadarProvider.LIBREWXR, state.value.radarProvider)
+        composeRule.onNodeWithTag("settings_radar_provider_librewxr").assertIsSelected()
     }
 
     @Test
@@ -298,7 +363,7 @@ class SettingsScreenTest {
         )
 
         composeRule.onNodeWithTag("settings_provider_met_no").performClick()
-        scrollTo(8)
+        scrollTo(9)
         composeRule.onNodeWithTag("settings_place_search_open_meteo").performClick()
         composeRule.onNodeWithTag("settings_place_search_open_meteo").assertIsSelected()
 
@@ -310,7 +375,7 @@ class SettingsScreenTest {
     fun location_search_provider_rows_have_no_dead_info_action() {
         renderSettings()
 
-        scrollTo(8)
+        scrollTo(9)
 
         composeRule.onNodeWithContentDescription("Information about Photon").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Information about Open-Meteo").assertDoesNotExist()
@@ -342,11 +407,17 @@ class SettingsScreenTest {
         )
 
         composeRule.onNodeWithTag("settings_provider_met_no").assertIsSelected()
+        scrollTo(4)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("settings_theme_dark").assertIsSelected()
+        scrollTo(5)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("settings_temperature_fahrenheit").assertIsSelected()
         composeRule.onNodeWithTag("settings_wind_mph").assertIsSelected()
         composeRule.onNodeWithTag("settings_distance_miles").assertIsSelected()
         composeRule.onNodeWithTag("settings_precipitation_inch").assertIsSelected()
+        scrollTo(3)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("settings_location_belgrade").assertIsSelected()
     }
 
@@ -379,21 +450,21 @@ class SettingsScreenTest {
         )
 
         composeRule.onNodeWithTag("settings_track_me").performClick()
-        scrollTo(4)
+        scrollTo(5)
         composeRule.onNodeWithText("°F").performClick()
         composeRule.onNodeWithText("mph").performClick()
         composeRule.onNodeWithText("mi").performClick()
         composeRule.onNodeWithText("in").performClick()
 
-        scrollTo(6)
+        scrollTo(7)
         composeRule.onNodeWithTag("settings_weather_alerts").performClick()
         composeRule.onNodeWithTag("settings_daily_summary").performClick()
 
-        scrollTo(2)
+        scrollTo(3)
         composeRule.onNodeWithTag("settings_location_belgrade").performClick()
         composeRule.onNodeWithContentDescription("Location options Belgrade").performClick()
         composeRule.onNodeWithText("Add Location").performClick()
-        scrollTo(7)
+        scrollTo(8)
         composeRule.onNodeWithText("Clear cache").performClick()
 
         assertEquals(true, trackMe)
@@ -423,7 +494,7 @@ class SettingsScreenTest {
     fun about_privacy_policy_opens_the_published_page() {
         renderSettings()
 
-        scrollTo(9)
+        scrollTo(10)
         composeRule.onNodeWithText("About").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_privacy_policy")
             .assertIsDisplayed()
@@ -440,6 +511,7 @@ class SettingsScreenTest {
         state: () -> SettingsUiState = { testSettingsState },
         onBackClick: () -> Unit = {},
         onProviderChange: (WeatherProvider) -> Unit = {},
+        onRadarProviderChange: (RadarProvider) -> Unit = {},
         onProviderInfoClick: (WeatherProvider) -> Unit = {},
         onPlaceSearchProviderChange: (PlaceSearchProvider) -> Unit = {},
         onTrackMeChange: (Boolean) -> Unit = {},
@@ -469,6 +541,7 @@ class SettingsScreenTest {
                         state = state(),
                         onBackClick = onBackClick,
                         onProviderChange = onProviderChange,
+                        onRadarProviderChange = onRadarProviderChange,
                         onProviderInfoClick = onProviderInfoClick,
                         onPlaceSearchProviderChange = onPlaceSearchProviderChange,
                         onTrackMeChange = onTrackMeChange,
