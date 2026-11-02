@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.LocalTime
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -79,6 +80,24 @@ class SettingsViewModelTest {
 
         assertTrue(viewModel.state.value.radarEnabled)
         assertTrue(repository.saved?.radarEnabled ?: false)
+    }
+
+    @Test
+    fun selecting_radar_provider_preserves_visibility_and_forecast_provider() = runTest {
+        val repository = InMemorySettingsRepository(
+            PersistedSettings(provider = WeatherProvider.MET_NO, radarEnabled = false)
+        )
+        val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
+
+        viewModel.setRadarProvider(RadarProvider.RAINVIEWER)
+        advanceUntilIdle()
+
+        assertEquals(RadarProvider.RAINVIEWER, viewModel.state.value.radarProvider)
+        assertFalse(viewModel.state.value.radarEnabled)
+        assertEquals(WeatherProvider.MET_NO, viewModel.state.value.provider)
+        assertEquals(RadarProvider.RAINVIEWER, repository.saved?.radarProvider)
+        assertFalse(repository.saved?.radarEnabled ?: true)
+        assertEquals(WeatherProvider.MET_NO, repository.saved?.provider)
     }
 
     @Test
@@ -227,16 +246,22 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(repository, InMemoryLocationRepository())
 
         viewModel.setTheme(ThemeMode.LIGHT)
+        viewModel.setRadarProvider(RadarProvider.RAINVIEWER)
         repository.snapshot.complete(
             PersistedSettings(
+                provider = WeatherProvider.MET_NO,
                 themeMode = ThemeMode.DARK,
                 temperatureUnit = TemperatureUnit.FAHRENHEIT,
                 windDirectionDisplay = WindDirectionDisplay.EIGHT_POINT,
-                hourlyTableColumns = setOf(HourlyTableColumn.WIND_SPEED)
+                hourlyTableColumns = setOf(HourlyTableColumn.WIND_SPEED),
+                radarEnabled = false
             )
         )
 
         assertEquals(ThemeMode.LIGHT, viewModel.state.value.themeMode)
+        assertEquals(RadarProvider.RAINVIEWER, viewModel.state.value.radarProvider)
+        assertFalse(viewModel.state.value.radarEnabled)
+        assertEquals(WeatherProvider.MET_NO, viewModel.state.value.provider)
         assertEquals(TemperatureUnit.FAHRENHEIT, viewModel.state.value.temperatureUnit)
         assertEquals(WindDirectionDisplay.EIGHT_POINT, viewModel.state.value.windDirectionDisplay)
         assertEquals(
@@ -244,6 +269,9 @@ class SettingsViewModelTest {
             viewModel.state.value.hourlyTableColumns
         )
         assertEquals(ThemeMode.LIGHT, repository.saved?.themeMode)
+        assertEquals(RadarProvider.RAINVIEWER, repository.saved?.radarProvider)
+        assertFalse(repository.saved?.radarEnabled ?: true)
+        assertEquals(WeatherProvider.MET_NO, repository.saved?.provider)
         assertEquals(
             setOf(HourlyTableColumn.WIND_SPEED),
             repository.saved?.hourlyTableColumns

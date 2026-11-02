@@ -6,7 +6,7 @@
 
 ## 2. Persisted Provider Selection
 
-- [ ] 2.1 [low] Add the LibreWXR-defaulted radar-provider preference, Settings UI state, and a single settings view-model setter independent of radar visibility and forecast provider. Verify repository/view-model tests for restart round-trip, missing/invalid/wrongly typed values, settings-load/save races, and preservation of unrelated preferences.
+- [x] 2.1 [low] Add the LibreWXR-defaulted radar-provider preference, Settings UI state, and a single settings view-model setter independent of radar visibility and forecast provider. Verify repository/view-model tests for restart round-trip, missing/invalid/wrongly typed values, settings-load/save races, and preservation of unrelated preferences.
 - [ ] 2.2 [low] Add an accessible Radar provider selector in Settings following existing section/row patterns, with clear LibreWXR/RainViewer labels and test tags. Verify focused Compose tests for the selected radio state, exactly one callback per change, and independence from the forecast-provider controls.
 - [ ] 2.3 [low] Add the same provider choices to map layers and thread the shared preference/setter through navigation and screen parameters. Verify focused layer/navigation tests show both controls stay synchronized, work while radar is disabled without toggling it, and preserve opacity, visibility, basemap, and location controls; live data switching is completed by 4.2 and 5.1.
 

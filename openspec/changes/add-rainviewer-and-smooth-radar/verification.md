@@ -22,3 +22,9 @@
 - Repository/application tests cover freshness, cached fallback after failures, bounded transient retries/timeouts, cancellation when the last observer leaves, a RainViewer-specific budget injection hook per request attempt, and lazy wiring for both providers without collecting the unselected repository.
 - Passed `git diff --check` with no output.
 - The application currently injects `RadarRequestBudget.None`; task 3.2 must provide and share the concrete RainViewer metadata/tile budget. No rate limiter was implemented here.
+
+## Task 2.1 — persisted radar-provider selection
+
+- Passed focused Google debug unit tests with `ANDROID_HOME=/home/homoludens/Android/Sdk` and `ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk`: `:app:testGoogleDebugUnitTest` for `SettingsRepositoryTest` and `SettingsViewModelTest` — 47 tests, 0 failures, 0 errors, 0 skipped.
+- Repository/view-model coverage verifies RainViewer persistence across repository reload, LibreWXR fallback for missing/invalid/wrongly typed values, preservation of forecast provider/radar visibility and unrelated preferences, an early provider selection surviving settings hydration and being saved, and the setter's independence from visibility and forecast-provider state.
+- Passed `git diff --check` with no output.

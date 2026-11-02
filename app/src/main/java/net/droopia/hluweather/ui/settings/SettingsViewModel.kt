@@ -17,6 +17,7 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.repository.WeatherRepository
@@ -82,6 +83,10 @@ class SettingsViewModel(
                             radarEnabled = current.value(
                                 PersistedSetting.RADAR_ENABLED,
                                 persisted.radarEnabled
+                            ),
+                            radarProvider = current.value(
+                                PersistedSetting.RADAR_PROVIDER,
+                                persisted.radarProvider
                             ),
                             weatherAlerts = current.value(
                                 PersistedSetting.WEATHER_ALERTS,
@@ -189,6 +194,10 @@ class SettingsViewModel(
         updateSettings(PersistedSetting.RADAR_ENABLED) { it.copy(radarEnabled = enabled) }
     }
 
+    fun setRadarProvider(provider: RadarProvider) {
+        updateSettings(PersistedSetting.RADAR_PROVIDER) { it.copy(radarProvider = provider) }
+    }
+
     fun setHourlyTableColumn(column: HourlyTableColumn, enabled: Boolean) {
         updateSettings(PersistedSetting.HOURLY_TABLE_COLUMNS) { state ->
             state.copy(
@@ -256,6 +265,7 @@ class SettingsViewModel(
             PersistedSetting.DISTANCE_UNIT -> distanceUnit
             PersistedSetting.PRECIPITATION_UNIT -> precipitationUnit
             PersistedSetting.RADAR_ENABLED -> radarEnabled
+            PersistedSetting.RADAR_PROVIDER -> radarProvider
             PersistedSetting.WEATHER_ALERTS -> weatherAlerts
             PersistedSetting.DAILY_SUMMARY -> dailySummary
             PersistedSetting.DAILY_SUMMARY_TIME -> dailySummaryTime
@@ -306,6 +316,7 @@ private fun PersistedSettings.toUiState(
         distanceUnit = distanceUnit,
         precipitationUnit = precipitationUnit,
         radarEnabled = radarEnabled,
+        radarProvider = radarProvider,
         weatherAlerts = weatherAlerts,
         dailySummary = dailySummary,
         dailySummaryTime = dailySummaryTime,
@@ -324,6 +335,7 @@ private fun SettingsUiState.toPersistedSettings() = PersistedSettings(
     distanceUnit = distanceUnit,
     precipitationUnit = precipitationUnit,
     radarEnabled = radarEnabled,
+    radarProvider = radarProvider,
     weatherAlerts = weatherAlerts,
     dailySummary = dailySummary,
     dailySummaryTime = dailySummaryTime,
@@ -347,6 +359,7 @@ private enum class PersistedSetting {
     DISTANCE_UNIT,
     PRECIPITATION_UNIT,
     RADAR_ENABLED,
+    RADAR_PROVIDER,
     WEATHER_ALERTS,
     DAILY_SUMMARY,
     DAILY_SUMMARY_TIME,

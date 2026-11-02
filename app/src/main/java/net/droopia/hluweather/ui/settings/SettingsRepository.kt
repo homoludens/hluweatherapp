@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.datetime.LocalTime
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
@@ -31,6 +32,7 @@ data class PersistedSettings(
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val radarEnabled: Boolean = true,
+    val radarProvider: RadarProvider = RadarProvider.LIBREWXR,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
     val dailySummaryTime: LocalTime = LocalTime(8, 0),
@@ -72,6 +74,7 @@ class DataStoreSettingsRepository(
                 distanceUnit = preferences.enum(distanceUnitKey, defaults.distanceUnit),
                 precipitationUnit = preferences.enum(precipitationUnitKey, defaults.precipitationUnit),
                 radarEnabled = preferences.getBooleanOrNull(radarEnabledKey) ?: defaults.radarEnabled,
+                radarProvider = preferences.enum(radarProviderKey, defaults.radarProvider),
                 weatherAlerts = if (preferences[weatherAlertsMigrationKey] == true) {
                     preferences.getBooleanOrNull(weatherAlertsKey) ?: defaults.weatherAlerts
                 } else {
@@ -109,6 +112,7 @@ class DataStoreSettingsRepository(
             preferences[distanceUnitKey] = settings.distanceUnit.name
             preferences[precipitationUnitKey] = settings.precipitationUnit.name
             preferences[radarEnabledKey] = settings.radarEnabled
+            preferences[radarProviderKey] = settings.radarProvider.name
             preferences[weatherAlertsKey] = settings.weatherAlerts
             preferences[weatherAlertsMigrationKey] = true
             preferences[dailySummaryKey] = settings.dailySummary
@@ -166,6 +170,7 @@ private val windDirectionDisplayKey = stringPreferencesKey("settings.wind_direct
 private val distanceUnitKey = stringPreferencesKey("settings.distance_unit")
 private val precipitationUnitKey = stringPreferencesKey("settings.precipitation_unit")
 private val radarEnabledKey = booleanPreferencesKey("settings.radar_enabled")
+private val radarProviderKey = stringPreferencesKey("settings.radar_provider")
 private val weatherAlertsKey = booleanPreferencesKey("settings.weather_alerts")
 private val weatherAlertsMigrationKey = booleanPreferencesKey("settings.weather_alerts_migrated")
 private val dailySummaryKey = booleanPreferencesKey("settings.daily_summary")

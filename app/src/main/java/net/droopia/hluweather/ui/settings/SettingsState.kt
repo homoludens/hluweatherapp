@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.settings
 
 import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
@@ -72,6 +73,7 @@ data class SettingsUiState(
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     val radarEnabled: Boolean = true,
+    val radarProvider: RadarProvider = RadarProvider.LIBREWXR,
     val weatherAlerts: Boolean = false,
     val dailySummary: Boolean = false,
     val dailySummaryTime: LocalTime = LocalTime(8, 0),

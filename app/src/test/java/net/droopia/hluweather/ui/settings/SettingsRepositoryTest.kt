@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalTime
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.repository.PlaceSearchProvider
 import net.droopia.hluweather.data.model.ThemeMode
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -115,6 +116,55 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun radar_provider_defaults_to_librewxr_for_missing_invalid_and_wrongly_typed_values() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val repository = DataStoreSettingsRepository(dataStore)
+        val radarProviderKey = stringPreferencesKey("settings.radar_provider")
+
+        assertEquals(RadarProvider.LIBREWXR, repository.settings.first().radarProvider)
+
+        dataStore.edit { it[radarProviderKey] = "UNKNOWN" }
+        assertEquals(RadarProvider.LIBREWXR, repository.settings.first().radarProvider)
+
+        dataStore.edit {
+            it.remove(radarProviderKey)
+            it[booleanPreferencesKey("settings.radar_provider")] = true
+        }
+        assertEquals(RadarProvider.LIBREWXR, repository.settings.first().radarProvider)
+    }
+
+    @Test
+    fun radar_provider_survives_repository_reload() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+
+        DataStoreSettingsRepository(dataStore).save(
+            PersistedSettings(
+                provider = WeatherProvider.MET_NO,
+                radarEnabled = false,
+                radarProvider = RadarProvider.RAINVIEWER
+            )
+        )
+
+        val reloadedSettings = DataStoreSettingsRepository(dataStore).settings.first()
+
+        assertEquals(RadarProvider.RAINVIEWER, reloadedSettings.radarProvider)
+        assertEquals(WeatherProvider.MET_NO, reloadedSettings.provider)
+        assertFalse(reloadedSettings.radarEnabled)
+        assertEquals(
+            RadarProvider.RAINVIEWER.name,
+            dataStore.data.first()[stringPreferencesKey("settings.radar_provider")]
+        )
+    }
+
+    @Test
     fun enabled_radar_visibility_is_explicitly_persisted() = runTest {
         val file = temporaryFolder.newFile("settings.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(
@@ -162,6 +212,32 @@ class SettingsRepositoryTest {
         repository.save(beforeSave.copy(radarEnabled = false))
 
         assertEquals(beforeSave.copy(radarEnabled = false), repository.settings.first())
+        assertEquals("keep me", dataStore.data.first()[unrelatedKey])
+    }
+
+    @Test
+    fun radar_provider_save_preserves_other_settings_and_unrelated_preferences() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val unrelatedKey = stringPreferencesKey("unrelated.preference")
+        dataStore.edit {
+            it[stringPreferencesKey("settings.provider")] = WeatherProvider.MET_NO.name
+            it[booleanPreferencesKey("settings.radar_enabled")] = false
+            it[stringPreferencesKey("settings.theme_mode")] = ThemeMode.DARK.name
+            it[unrelatedKey] = "keep me"
+        }
+        val repository = DataStoreSettingsRepository(dataStore)
+        val beforeSave = repository.settings.first()
+
+        repository.save(beforeSave.copy(radarProvider = RadarProvider.RAINVIEWER))
+
+        assertEquals(
+            beforeSave.copy(radarProvider = RadarProvider.RAINVIEWER),
+            repository.settings.first()
+        )
         assertEquals("keep me", dataStore.data.first()[unrelatedKey])
     }
 
