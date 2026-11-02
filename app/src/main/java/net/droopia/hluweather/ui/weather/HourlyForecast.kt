@@ -55,6 +55,7 @@ import net.droopia.hluweather.data.airQualityIndexText
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.particulateMatterText
 import net.droopia.hluweather.data.precipitationText
+import net.droopia.hluweather.data.precipitationValueText
 import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.data.windDirectionText
 import net.droopia.hluweather.data.windSpeedText
@@ -102,6 +103,7 @@ fun HourlyForecast(
                 displayZone = displayZone,
                 onDaySelected = onDaySelected,
                 columns = hourlyTableColumns,
+                precipitationUnit = precipitationUnit,
             )
         }
         itemsIndexed(
@@ -154,6 +156,7 @@ internal fun HourlyTableStickyHeader(
     displayZone: ZoneId,
     onDaySelected: (Int) -> Unit,
     columns: Set<HourlyTableColumn>,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     dayStripModifier: Modifier = Modifier,
     columnHeaderModifier: Modifier = Modifier.padding(horizontal = 16.dp)
 ) {
@@ -171,6 +174,7 @@ internal fun HourlyTableStickyHeader(
         )
         ForecastColumnHeader(
             columns = columns,
+            precipitationUnit = precipitationUnit,
             modifier = columnHeaderModifier
         )
     }
@@ -289,6 +293,7 @@ internal fun HourlyDateBoundary(
 @Composable
 internal fun ForecastColumnHeader(
     columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
+    precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -309,7 +314,7 @@ internal fun ForecastColumnHeader(
         HourlyTableColumn.entries
             .filter { it != HourlyTableColumn.TIME && it in columns }
             .forEach { column ->
-            ForecastCell(column.header, column.weight)
+            ForecastCell(column.header(precipitationUnit), column.weight)
             }
     }
 }
@@ -409,7 +414,7 @@ internal fun ForecastRow(
                         column = column
                     )
                     HourlyTableColumn.PRECIPITATION -> ForecastValue(
-                        text = weather.precipitation.precipitationText(precipitationUnit).tableValueText(),
+                        text = weather.precipitation.precipitationValueText(precipitationUnit).tableValueText(),
                         column = column
                     )
                     HourlyTableColumn.PRECIPITATION_PROBABILITY -> ForecastValue(
@@ -484,15 +489,14 @@ private fun RowScope.ForecastValue(
     )
 }
 
-private val HourlyTableColumn.header: String
-    get() = when (this) {
+private fun HourlyTableColumn.header(precipitationUnit: PrecipitationUnit): String = when (this) {
         HourlyTableColumn.TIME -> "Time"
         HourlyTableColumn.WEATHER_ICON -> "Icon"
         HourlyTableColumn.WEATHER_TEXT -> "Weather"
         HourlyTableColumn.TEMPERATURE -> "Temp."
         HourlyTableColumn.DEW_POINT -> "Dew point"
         HourlyTableColumn.RELATIVE_HUMIDITY -> "Hum."
-        HourlyTableColumn.PRECIPITATION -> "Precip."
+        HourlyTableColumn.PRECIPITATION -> "Precip. (${precipitationUnit.symbol})"
         HourlyTableColumn.PRECIPITATION_PROBABILITY -> "Precip. %"
         HourlyTableColumn.WIND_SPEED -> "Wind"
         HourlyTableColumn.WIND_DIRECTION -> "Dir."
@@ -501,6 +505,9 @@ private val HourlyTableColumn.header: String
         HourlyTableColumn.PM2_5 -> "PM2.5"
         HourlyTableColumn.PM10 -> "PM10"
     }
+
+private val PrecipitationUnit.symbol: String
+    get() = if (this == PrecipitationUnit.INCH) "in" else "mm"
 
 private val HourlyTableColumn.weight: Float
     get() = when (this) {

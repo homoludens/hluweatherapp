@@ -8,7 +8,7 @@
 
 ## 3. Precipitation unit presentation
 
-- [ ] 3.1 [low] Move the configured `mm`/`in` unit into the precipitation column heading and show converted numeric values without repeated unit suffixes while preserving precision and missing-value placeholders; test metric, inch, and missing values in focused Hourly UI tests.
+- [x] 3.1 [low] Move the configured `mm`/`in` unit into the precipitation column heading and show converted numeric values without repeated unit suffixes while preserving precision and missing-value placeholders; test metric, inch, and missing values in focused Hourly UI tests.
 
 ## 4. Integration verification
 

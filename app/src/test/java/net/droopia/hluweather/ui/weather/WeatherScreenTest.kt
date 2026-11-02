@@ -63,6 +63,7 @@ import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
+import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 import androidx.compose.material3.LocalContentColor
@@ -558,6 +559,32 @@ class WeatherScreenTest {
     }
 
     @Test
+    fun hourly_precipitation_heading_and_values_use_selected_unit() {
+        val baseForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val firstHour = baseForecast.hourly.first().copy(precipitation = 10.0)
+        val forecast = baseForecast.copy(hourly = listOf(firstHour))
+        val viewModel = WeatherViewModel(object : WeatherRepository {
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(forecast)
+
+            override suspend fun clearCache() = Unit
+        }, Svilajnac)
+
+        renderWeather(
+            viewModel,
+            now = firstHour.time,
+            hourlyTableColumns = setOf(HourlyTableColumn.PRECIPITATION),
+            precipitationUnit = PrecipitationUnit.INCH
+        )
+
+        composeRule.onNodeWithText("Precip. (in)").assertIsDisplayed()
+        composeRule.onNodeWithText("0.39").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("0.39 in").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
     fun switches_to_daily_content() {
         val viewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         viewModel.onForecastModeSelected(ForecastMode.DAILY)
@@ -951,7 +978,8 @@ class WeatherScreenTest {
     private fun renderWeather(
         viewModel: WeatherViewModel,
         now: Instant?,
-        hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns
+        hourlyTableColumns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
+        precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM
     ): WeatherViewModel {
 
         composeRule.setContent {
@@ -960,6 +988,7 @@ class WeatherScreenTest {
                     viewModel = viewModel,
                     onSettingsClick = {},
                     hourlyTableColumns = hourlyTableColumns,
+                    precipitationUnit = precipitationUnit,
                     now = now
                 )
             }

@@ -527,6 +527,7 @@ private fun HourlyWeatherContent(
                     displayZone = displayZone,
                     onDaySelected = ::onDayChipSelected,
                     columns = hourlyTableColumns,
+                    precipitationUnit = precipitationUnit,
                     dayStripModifier = Modifier.padding(
                         start = 16.dp,
                         end = 16.dp,

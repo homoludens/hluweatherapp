@@ -35,7 +35,7 @@ import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.percentText
-import net.droopia.hluweather.data.precipitationText
+import net.droopia.hluweather.data.precipitationValueText
 import net.droopia.hluweather.data.temperatureValueText
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
@@ -94,7 +94,7 @@ class HourlyForecastTest {
         composeRule.onNodeWithText("Temp.").assertIsDisplayed()
         composeRule.onNodeWithText("Dew point").assertIsDisplayed()
         composeRule.onNodeWithText("Hum.").assertIsDisplayed()
-        composeRule.onNodeWithText("Precip.").assertIsDisplayed()
+        composeRule.onNodeWithText("Precip. (mm)").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_day_start_0").assertIsDisplayed()
         composeRule.onNodeWithTag("hourly_table").assertIsDisplayed()
     }
@@ -215,10 +215,12 @@ class HourlyForecastTest {
 
     @Test
     fun renders_hourly_values_in_selected_units() {
-        val forecast = buildMockForecast(
+        val baseForecast = buildMockForecast(
             location = Svilajnac,
             baseTime = Instant.fromEpochSeconds(0L)
         )
+        val firstHour = baseForecast.hourly.first().copy(precipitation = 10.0)
+        val forecast = baseForecast.copy(hourly = listOf(firstHour))
 
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
@@ -234,7 +236,53 @@ class HourlyForecastTest {
         }
 
         composeRule.onAllNodesWithText("63°F").onFirst().assertIsDisplayed()
-        composeRule.onAllNodesWithText("0 in").onFirst().assertIsDisplayed()
+        composeRule.onNodeWithText("Precip. (in)").assertIsDisplayed()
+        composeRule.onNodeWithText("0.39").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("0.39 in").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun renders_metric_precipitation_without_unit_suffix() {
+        val baseForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val firstHour = baseForecast.hourly.first().copy(precipitation = 10.0)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = baseForecast.copy(hourly = listOf(firstHour)),
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    hourlyTableColumns = setOf(HourlyTableColumn.PRECIPITATION),
+                    now = firstHour.time
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Precip. (mm)").assertIsDisplayed()
+        composeRule.onNodeWithText("10").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("10 mm").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun missing_precipitation_keeps_placeholder_and_unit_in_header() {
+        val baseForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val firstHour = baseForecast.hourly.first().copy(precipitation = null)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = baseForecast.copy(hourly = listOf(firstHour)),
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    precipitationUnit = PrecipitationUnit.INCH,
+                    hourlyTableColumns = setOf(HourlyTableColumn.PRECIPITATION),
+                    now = firstHour.time
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Precip. (in)").assertIsDisplayed()
+        composeRule.onNodeWithText("-").assertIsDisplayed()
     }
 
     @Test
@@ -440,13 +488,15 @@ class HourlyForecastTest {
             }
         }
 
+        composeRule.onNodeWithText("Precip. (mm)").assertIsDisplayed()
+
         val bodyTexts = listOf(
             firstHour.time.hourText(ZoneId.of(forecast.timezone)),
             firstHour.condition.label(),
             firstHour.temperature.temperatureValueText(TemperatureUnit.CELSIUS),
             firstHour.dewPoint.temperatureValueText(TemperatureUnit.CELSIUS),
             firstHour.humidity.percentText(),
-            firstHour.precipitation.precipitationText(PrecipitationUnit.MM)
+            firstHour.precipitation.precipitationValueText(PrecipitationUnit.MM)
         )
 
         bodyTexts.forEach { text ->

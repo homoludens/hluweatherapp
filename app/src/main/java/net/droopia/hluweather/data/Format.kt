@@ -49,9 +49,14 @@ fun Double?.particulateMatterText(): String =
 
 fun Double?.precipitationText(unit: PrecipitationUnit): String =
     this?.let {
-        val precipitation = if (unit == PrecipitationUnit.INCH) it / 25.4 else it
-        "${precipitation.decimalText()} ${unit.symbol}"
+        "${it.convertedPrecipitation(unit).decimalText()} ${unit.symbol}"
     } ?: "—"
+
+fun Double?.precipitationValueText(unit: PrecipitationUnit): String =
+    this?.convertedPrecipitation(unit)?.decimalText() ?: "—"
+
+private fun Double.convertedPrecipitation(unit: PrecipitationUnit): Double =
+    if (unit == PrecipitationUnit.INCH) this / 25.4 else this
 
 fun Double?.windSpeedText(unit: WindUnit): String =
     this?.let {
