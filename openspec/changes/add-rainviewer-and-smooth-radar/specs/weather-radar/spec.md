@@ -86,12 +86,12 @@ Radar requests SHALL use reasonable timeouts, bounded exponential retry for tran
 
 ## ADDED Requirements
 
-### Requirement: Continuous radar frame handoff
-For timeline scrubbing and playback within the same provider and loaded map style, the app SHALL retain the last successfully rendered radar frame until the latest requested replacement is ready for the current viewport, then use a render-ready handoff or short transition without an intentional blank interval or visible opacity flash. A fixed delay or receipt of metadata alone SHALL NOT count as readiness. Rapid selection changes SHALL converge to the most recent request; superseded loads SHALL NOT replace newer selections. Failed, timed-out, or rate-limited requests SHALL preserve the last good frame with an unobtrusive pending/error indication and an accurate displayed-time label. Before any frame has loaded, ordinary loading/empty states are permitted. Disabling radar SHALL remove all radar imagery even during a handoff.
+### Requirement: Best-effort continuous radar frame handoff
+For timeline scrubbing and playback within the same provider and loaded map style, the app SHALL attempt to retain the last successfully rendered radar frame while the latest replacement is loading. The intended handoff SHALL be gated by current-viewport tile coverage, staging installation, and a subsequent available map-wide `FrameRendered(Full)` event. A fixed delay or metadata alone SHALL NOT count as readiness. The pinned MapLibre Compose 0.16 event is not a per-source or per-revision acknowledgment and cannot prove that staging tiles were delivered or drawn; therefore this is a best-effort gate, not a guarantee of uninterrupted imagery. A temporary basemap-only interval or opacity discontinuity may occur under this known race; this limitation is accepted for this change and deferred to future work, and behavior SHALL NOT be described as universally blink-free. Rapid selection changes SHALL converge to the most recent request; superseded loads SHALL NOT replace newer selections. Failed, timed-out, or rate-limited requests SHALL preserve the last good frame where the existing failure path does so, with an unobtrusive pending/error indication and an accurate displayed-time label. Before any frame has loaded, ordinary loading/empty states are permitted. Disabling radar SHALL remove all radar imagery even during a handoff.
 
 #### Scenario: Scrub to an uncached frame
 - **WHEN** the user selects a time whose current-viewport radar tiles are not ready
-- **THEN** the current radar stays visible while the replacement loads and is replaced only when ready, without a clear-map flash between the frames
+- **THEN** the renderer attempts to keep the current radar visible while coverage and staging are pending and uses the coverage, staging-installation, and subsequent map-wide Full-event gate for handoff; a temporary basemap-only interval remains an accepted limitation because the event does not acknowledge that this source's tiles were drawn
 
 #### Scenario: Superseded frame finishes late
 - **WHEN** the user selects frame B then frame C and B finishes after C is requested

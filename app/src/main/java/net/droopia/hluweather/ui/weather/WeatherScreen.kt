@@ -33,6 +33,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -74,6 +75,8 @@ import net.droopia.hluweather.ui.map.WeatherMap
 import net.droopia.hluweather.ui.map.RadarMapOverlay
 import net.droopia.hluweather.ui.map.RadarPlaybackViewModel
 import net.droopia.hluweather.ui.map.WeatherMapRadarConfig
+import net.droopia.hluweather.ui.map.WeatherRadarResources
+import net.droopia.hluweather.HluWeatherApplication
 
 private const val WEATHER_HEADER_KEY = "weather_header"
 private const val HOURLY_HEADER_KEY = "hourly_header"
@@ -276,14 +279,22 @@ fun WeatherScreen(
                                             darkTheme,
                                             onRecenterClick
                                         )
-                                    } else {
-                                        WeatherMap(
+                                     } else {
+                                         val application = LocalContext.current.applicationContext as? HluWeatherApplication
+                                         val radarResources = remember(application) {
+                                             application?.let {
+                                                 WeatherRadarResources(it.radarTileRegistry, it.radarTileLoader, it.radarMapResourceProvider)
+                                             }
+                                         }
+                                         WeatherMap(
                                             locations = state.locations,
                                             activeLocationId = location.id.takeUnless { it == "current" },
                                             center = GeoPoint(location.latitude, location.longitude),
                                             darkTheme = darkTheme,
                                             fitLocations = true,
-                                            radar = selectedRadar,
+                                             radar = selectedRadar,
+                                             radarResources = radarResources,
+                                             radarProvider = radarProvider,
                                             collapsedAttributionInitially = true,
                                             recenterTopPadding = 72.dp,
                                             onLocationClick = viewModel::selectLocation,

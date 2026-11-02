@@ -2,6 +2,7 @@ package net.droopia.hluweather.data.network
 
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
 import kotlinx.io.files.Path
@@ -19,6 +20,15 @@ class RadarMapResourceProvider(
     private val loader: RadarTileLoader,
     private val scheduler: RadarNetworkScheduler
 ) : MapResourceProvider {
+    private val observationLock = Any()
+    private val observations = mutableSetOf<RadarNativeTileObservation>()
+
+    /** Records native demand failures separately from app-side coverage and memory-cache hits. */
+    fun observeNativeTiles(keys: Collection<RadarTileKey>): RadarNativeTileObservation =
+        RadarNativeTileObservation(keys.toSet()) { observation ->
+            synchronized(observationLock) { observations.remove(observation) }
+        }.also { synchronized(observationLock) { observations.add(it) } }
+
     override fun accepts(request: MapResourceRequest): Boolean =
         (request.kind == MapResourceKind.Tile || request.kind == MapResourceKind.Unknown) &&
             registry.isRadarUrl(request.url)
@@ -36,7 +46,7 @@ class RadarMapResourceProvider(
             ?: return MapResourceLoad.Failed(MapResourceError.Other, "Unknown or unsupported radar tile")
         // Native priorData cannot report whether the original response was no-store. Only the
         // app LRU retains cacheable bodies and their validators for conditional requests.
-        return try {
+        val result = try {
             val payload = loader.load(
                 key,
                 // NetworkOnly excludes MapLibre's ambient cache; this provider's own fresh,
@@ -68,7 +78,29 @@ class RadarMapResourceProvider(
                 } else null
             )
         }
+        // Cache-only misses are a normal native fallback to network, not failed coverage.
+        if (request.loadingMethod != MapResourceLoadRequest.LoadingMethod.CacheOnly) {
+            synchronized(observationLock) {
+                observations.forEach { it.record(key, result is MapResourceLoad.Failed) }
+            }
+        }
+        return result
     }
+}
+
+/** One native slot's observation; closing it is idempotent. */
+class RadarNativeTileObservation internal constructor(
+    private val keys: Set<RadarTileKey>,
+    private val release: (RadarNativeTileObservation) -> Unit
+) : AutoCloseable {
+    private val failures = ConcurrentHashMap.newKeySet<RadarTileKey>()
+    internal fun record(key: RadarTileKey, failed: Boolean) {
+        if (key in keys) {
+            if (failed) failures.add(key) else failures.remove(key)
+        }
+    }
+    val hasFailures: Boolean get() = failures.isNotEmpty()
+    override fun close() = release(this)
 }
 
 /** Options for the map owner in task 4.1; ordinary picker/route maps keep their default runtime. */

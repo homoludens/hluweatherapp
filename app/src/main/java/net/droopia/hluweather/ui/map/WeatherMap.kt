@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.isTraversalGroup
@@ -53,13 +55,17 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.network.radarMapRuntimeOptions
 import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.interaction.ClickResult
 import org.maplibre.compose.interaction.MapInteractions
 import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.DefaultMapRuntime
 import org.maplibre.compose.map.StyleLoadState
+import org.maplibre.compose.map.createMapRuntime
 import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.overlay.AttributionDefaults
 import org.maplibre.compose.overlay.AttributionLinks
@@ -237,6 +243,9 @@ fun WeatherMap(
     darkTheme: Boolean,
     modifier: Modifier = Modifier,
     radar: WeatherMapRadarConfig? = null,
+    radarResources: WeatherRadarResources? = null,
+    radarProvider: RadarProvider? = radar?.frame?.provider,
+    onRadarDisplayChanged: (RadarDisplayState) -> Unit = {},
     recenterTopPadding: Dp = 16.dp,
     onLocationClick: (WeatherLocation) -> Unit = {},
     onMapClick: (GeoPoint) -> Unit = {},
@@ -259,14 +268,21 @@ fun WeatherMap(
             zoom = 11.0
         )
     }
+    val cacheDirectory = LocalContext.current.cacheDir
+    val radarRuntime = remember(radarResources, cacheDirectory) {
+        radarResources?.let { createMapRuntime(radarMapRuntimeOptions(cacheDirectory, it.provider)) }
+    }
     val mapState = rememberMapState(
+        runtime = radarRuntime ?: DefaultMapRuntime.instance,
         baseStyle = BaseStyle.Uri(mapStyleUrl(darkTheme)),
         initialCameraPosition = CameraPosition(
             target = viewport.center.toPosition(),
             zoom = viewport.zoom
         )
-    ) {
-        WeatherMapRadar(radar)
+    )
+    DisposableEffect(radarRuntime) { onDispose { radarRuntime?.close() } }
+    if (radarResources != null) {
+        WeatherRadarRenderer(mapState, radarResources, radar, radarProvider, onRadarDisplayChanged)
     }
     val scope = rememberCoroutineScope()
     val markers = remember(locations, activeLocationId) {

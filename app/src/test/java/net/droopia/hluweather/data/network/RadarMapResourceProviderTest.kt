@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.data.model.RadarFrame
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarTileCoordinate
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -90,6 +91,36 @@ class RadarMapResourceProviderTest {
             loadingMethod = MapResourceLoadRequest.LoadingMethod.NetworkOnly,
             storagePolicy = MapResourceLoadRequest.StoragePolicy.Volatile)) is MapResourceLoad.Bytes)
         assertEquals(1, attempts)
+    }
+
+    @Test
+    fun nativeObservationDistinguishesCacheMissFailureAndValidNoContent() = runTest {
+        val registry = RadarTileRegistry()
+        val source = registry.register("https://tiles.example.test", frame())
+        val key = source.tile(RadarTileCoordinate(2, 1, 1))
+        val url = source.template.replace("{z}", "2").replace("{x}", "1").replace("{y}", "1")
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        var failure = true
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { _, _ ->
+            if (failure) RadarTileHttpResult(404, RadarTilePayload(null, 100_000))
+            else RadarTileHttpResult(204, RadarTilePayload(null, 100_000))
+        }, { testScheduler.currentTime })
+        val provider = RadarMapResourceProvider(registry, loader, scheduler)
+        val observation = provider.observeNativeTiles(listOf(key))
+        val unrelated = provider.observeNativeTiles(listOf(source.tile(RadarTileCoordinate(2, 2, 1))))
+        assertTrue(provider.load(MapResourceLoadRequest(url, MapResourceKind.Tile,
+            loadingMethod = MapResourceLoadRequest.LoadingMethod.CacheOnly,
+            storagePolicy = MapResourceLoadRequest.StoragePolicy.Volatile)) is MapResourceLoad.Failed)
+        assertFalse(observation.hasFailures)
+        assertTrue(provider.load(volatileRequest(url)) is MapResourceLoad.Failed)
+        assertTrue(observation.hasFailures)
+        assertFalse(unrelated.hasFailures)
+        failure = false
+        assertTrue(provider.load(volatileRequest(url)) is MapResourceLoad.NoContent)
+        assertFalse(observation.hasFailures)
+        observation.close()
+        observation.close()
+        unrelated.close()
     }
 
     @Test
