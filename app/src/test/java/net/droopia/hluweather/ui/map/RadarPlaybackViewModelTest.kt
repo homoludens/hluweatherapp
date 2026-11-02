@@ -20,166 +20,334 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.resetMain
-import net.droopia.hluweather.data.network.LibreWxrRadarFrame
-import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
-import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarFrameIdentity
+import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarMetadata
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.repository.RadarRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RadarPlaybackViewModelTest {
     @Test
-    fun selects_latest_observation_and_reconciles_selection_by_timestamp_on_refresh() = runTest {
+    fun selects_latest_observation_and_reconciles_selection_on_metadata_refresh() = runTest {
         val repository = TestRadarRepository(backgroundScope)
-        withViewModel(repository) { viewModel ->
-            val observed1 = frame("2026-11-01T20:00:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val observed2 = frame("2026-11-01T20:10:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val forecast = frame("2026-11-01T20:20:00Z", LibreWxrRadarFrameType.FORECAST)
+        withViewModel(repositories(repository)) { viewModel ->
+            val observed1 = frame("2026-11-01T20:00:00Z")
+            val observed2 = frame("2026-11-01T20:10:00Z")
+            val forecast = frame("2026-11-01T20:20:00Z", RadarFrameType.FORECAST)
 
             viewModel.setVisible(true)
             repository.publish(metadata(observed1, observed2, forecast))
             runCurrent()
 
-            assertEquals(observed2.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(observed2, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
+            acknowledge(viewModel)
             viewModel.selectFrame(forecast.timestampSeconds)
-            assertEquals(forecast.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
+            assertFalse(viewModel.state.value.isPlaying)
 
-            val laterObserved = frame("2026-11-01T20:30:00Z", LibreWxrRadarFrameType.OBSERVED)
+            val laterObserved = frame("2026-11-01T20:30:00Z")
             repository.publish(metadata(observed1, observed2, forecast, laterObserved))
             runCurrent()
-            assertEquals(forecast.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
 
             repository.publish(metadata(observed1, observed2, laterObserved))
             runCurrent()
-            assertEquals(laterObserved.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(laterObserved, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
         }
     }
 
     @Test
-    fun labels_selected_frame_in_injected_local_zone_and_classifies_forecast_offset() = runTest {
+    fun labels_requested_forecast_in_local_time_with_offset_from_latest_observation() = runTest {
         val repository = TestRadarRepository(backgroundScope)
-        withViewModel(repository, timeZone = { ZoneId.of("Europe/Belgrade") }) { viewModel ->
-            val observed = frame("2026-11-01T20:10:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val forecast = frame("2026-11-01T20:25:00Z", LibreWxrRadarFrameType.FORECAST)
+        withViewModel(repositories(repository), timeZone = { ZoneId.of("Europe/Belgrade") }) { viewModel ->
+            val observed = frame("2026-11-01T20:10:00Z")
+            val forecast = frame("2026-11-01T20:25:00Z", RadarFrameType.FORECAST)
             viewModel.setVisible(true)
             repository.publish(metadata(observed, forecast))
             runCurrent()
 
-            assertEquals(LibreWxrRadarFrameType.OBSERVED, viewModel.state.value.selectedFrameType)
-            assertEquals("Observed", viewModel.state.value.selectedFrameTypeLabel)
-            assertEquals("Sun, Nov 1, 2026 • 21:10", viewModel.state.value.selectedFrameTimeLabel)
+            assertEquals(RadarFrameType.OBSERVED, viewModel.state.value.requestedFrameType)
+            assertEquals("Observed", viewModel.state.value.requestedFrameTypeLabel)
+            assertEquals("Sun, Nov 1, 2026 • 21:10", viewModel.state.value.requestedFrameTimeLabel)
             assertNull(viewModel.state.value.forecastOffsetLabel)
 
             viewModel.selectFrame(forecast.timestampSeconds)
-            assertEquals(LibreWxrRadarFrameType.FORECAST, viewModel.state.value.selectedFrameType)
-            assertEquals("Forecast", viewModel.state.value.selectedFrameTypeLabel)
-            assertEquals("Sun, Nov 1, 2026 • 21:25", viewModel.state.value.selectedFrameTimeLabel)
+            assertEquals(RadarFrameType.FORECAST, viewModel.state.value.requestedFrameType)
+            assertEquals("Forecast", viewModel.state.value.requestedFrameTypeLabel)
+            assertEquals("Sun, Nov 1, 2026 • 21:25", viewModel.state.value.requestedFrameTimeLabel)
             assertEquals(900L, viewModel.state.value.forecastOffsetSeconds)
             assertEquals("+15 min", viewModel.state.value.forecastOffsetLabel)
         }
     }
 
     @Test
-    fun observations_without_forecasts_and_empty_metadata_have_no_invented_forecast_labels() = runTest {
-        val repository = TestRadarRepository(backgroundScope)
-        withViewModel(repository) { viewModel ->
-            val observed = frame("2026-11-01T20:00:00Z", LibreWxrRadarFrameType.OBSERVED)
+    fun empty_and_past_only_metadata_do_not_invent_forecasts_or_observations() = runTest {
+        val libre = TestRadarRepository(backgroundScope)
+        val rainViewer = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(libre, rainViewer)) { viewModel ->
             viewModel.setVisible(true)
-            repository.publish(metadata(observed))
+            val observation = frame("2026-11-01T20:00:00Z", provider = RadarProvider.LIBREWXR)
+            libre.publish(metadata(observation))
             runCurrent()
+            assertEquals(listOf(observation), viewModel.state.value.observedFrames)
+            assertTrue(viewModel.state.value.forecastFrames.isEmpty())
+            assertNull(viewModel.state.value.forecastOffsetLabel)
 
-            assertEquals(listOf(observed), viewModel.state.value.observedFrames)
+            viewModel.selectProvider(RadarProvider.RAINVIEWER)
+            val past = frame("2026-11-01T20:05:00Z", provider = RadarProvider.RAINVIEWER)
+            rainViewer.publish(metadata(RadarProvider.RAINVIEWER, past))
+            runCurrent()
+            assertEquals(past, viewModel.state.value.requestedFrame)
             assertTrue(viewModel.state.value.forecastFrames.isEmpty())
             assertFalse(viewModel.state.value.hasForecastFrames)
-            assertEquals("Observed", viewModel.state.value.selectedFrameTypeLabel)
-            assertNull(viewModel.state.value.forecastOffsetLabel)
 
-            repository.publish(metadata())
+            rainViewer.publish(metadata(RadarProvider.RAINVIEWER))
             runCurrent()
             assertTrue(viewModel.state.value.frames.isEmpty())
-            assertNull(viewModel.state.value.selectedFrame)
-            assertNull(viewModel.state.value.selectedFrameTimeLabel)
-            assertNull(viewModel.state.value.selectedFrameTypeLabel)
-            assertNull(viewModel.state.value.forecastOffsetLabel)
-            viewModel.play()
-            assertFalse(viewModel.state.value.isPlaying)
+            assertNull(viewModel.state.value.requestedFrame)
+            assertNull(viewModel.state.value.requestedFrameTimeLabel)
+
+            rainViewer.publish(metadata(
+                RadarProvider.RAINVIEWER,
+                frame("2026-11-01T20:10:00Z", RadarFrameType.FORECAST, RadarProvider.RAINVIEWER)
+            ))
+            runCurrent()
+            assertNull(viewModel.state.value.latestObservedTimestampSeconds)
+            assertNull(viewModel.state.value.requestedFrame)
+            assertEquals(1, viewModel.state.value.forecastFrames.size)
         }
     }
 
     @Test
-    fun playback_advances_every_600_milliseconds_and_loops_over_available_frames() = runTest {
+    fun playback_waits_for_each_display_ack_and_does_not_starve_a_slow_frame() = runTest {
         val repository = TestRadarRepository(backgroundScope)
-        withViewModel(repository) { viewModel ->
-            val observed1 = frame("2026-11-01T20:00:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val observed2 = frame("2026-11-01T20:10:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val forecast = frame("2026-11-01T20:20:00Z", LibreWxrRadarFrameType.FORECAST)
+        withViewModel(repositories(repository)) { viewModel ->
+            val observed1 = frame("2026-11-01T20:00:00Z")
+            val observed2 = frame("2026-11-01T20:10:00Z")
+            val forecast = frame("2026-11-01T20:20:00Z", RadarFrameType.FORECAST)
             viewModel.setVisible(true)
             repository.publish(metadata(observed1, observed2, forecast))
             runCurrent()
-            viewModel.play()
+            acknowledge(viewModel)
 
+            viewModel.play()
+            runCurrent()
             advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS - 1)
             runCurrent()
-            assertEquals(observed2.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(observed2, viewModel.state.value.requestedFrame)
 
             advanceTimeBy(1)
             runCurrent()
-            assertEquals(forecast.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
-
-            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS)
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS * 10)
             runCurrent()
-            assertEquals(observed1.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
+            assertEquals(observed2, viewModel.state.value.displayedFrame)
+            assertTrue(viewModel.state.value.isPlaying)
 
+            acknowledge(viewModel)
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS - 1)
+            runCurrent()
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(observed1, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
             viewModel.pause()
-            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS * 2)
-            runCurrent()
-            assertEquals(observed1.timestampSeconds, viewModel.state.value.selectedFrame?.timestampSeconds)
-            assertFalse(viewModel.state.value.isPlaying)
         }
     }
 
     @Test
-    fun leaving_map_cancels_repository_collection_and_playback() = runTest {
+    fun failed_frame_pauses_and_play_retries_without_losing_the_displayed_frame() = runTest {
         val repository = TestRadarRepository(backgroundScope)
-        withViewModel(repository) { viewModel ->
-            val observed1 = frame("2026-11-01T20:00:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val observed2 = frame("2026-11-01T20:10:00Z", LibreWxrRadarFrameType.OBSERVED)
-            val forecast = frame("2026-11-01T20:20:00Z", LibreWxrRadarFrameType.FORECAST)
+        withViewModel(repositories(repository)) { viewModel ->
+            val observed = frame("2026-11-01T20:00:00Z")
+            val forecast = frame("2026-11-01T20:10:00Z", RadarFrameType.FORECAST)
+            viewModel.setVisible(true)
+            repository.publish(metadata(observed, forecast))
+            runCurrent()
+            acknowledge(viewModel)
+
+            viewModel.play()
+            runCurrent()
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS)
+            runCurrent()
+            val requested = requireNotNull(viewModel.state.value.requestedFrameIdentity)
+            viewModel.onDisplayChanged(
+                RadarDisplayState(
+                    requested = requested,
+                    displayed = viewModel.state.value.displayedFrameIdentity,
+                    pending = false,
+                    error = "tile request failed"
+                )
+            )
+
+            assertFalse(viewModel.state.value.isPlaying)
+            assertFalse(viewModel.state.value.isPending)
+            assertEquals("tile request failed", viewModel.state.value.displayError)
+            assertEquals(observed, viewModel.state.value.displayedFrame)
+            val retryToken = viewModel.state.value.displayRetryToken
+
+            viewModel.play()
+            assertTrue(viewModel.state.value.isPlaying)
+            assertTrue(viewModel.state.value.isPending)
+            assertNull(viewModel.state.value.displayError)
+            assertEquals(retryToken + 1, viewModel.state.value.displayRetryToken)
+            acknowledge(viewModel)
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS)
+            runCurrent()
+            assertEquals(observed, viewModel.state.value.requestedFrame)
+        }
+    }
+
+    @Test
+    fun provider_switch_clears_old_state_and_guards_coincident_timestamps_and_late_callbacks() = runTest {
+        val libre = TestRadarRepository(backgroundScope)
+        val rainViewer = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(libre, rainViewer)) { viewModel ->
+            val libreFrame = frame("2026-11-01T20:00:00Z", provider = RadarProvider.LIBREWXR)
+            val rainFrame = frame("2026-11-01T20:00:00Z", provider = RadarProvider.RAINVIEWER)
+            viewModel.setVisible(true)
+            libre.publish(metadata(libreFrame))
+            runCurrent()
+            acknowledge(viewModel)
+            viewModel.play()
+
+            viewModel.selectProvider(RadarProvider.RAINVIEWER)
+            assertFalse(viewModel.state.value.isPlaying)
+            assertNull(viewModel.state.value.metadata)
+            assertNull(viewModel.state.value.requestedFrame)
+            assertNull(viewModel.state.value.displayedFrame)
+            runCurrent()
+            assertEquals(0, libre.activeCollectors)
+            assertEquals(1, rainViewer.activeCollectors)
+
+            rainViewer.publish(metadata(RadarProvider.RAINVIEWER, rainFrame))
+            runCurrent()
+            val rainIdentity = requireNotNull(viewModel.state.value.requestedFrameIdentity)
+            assertEquals(RadarProvider.RAINVIEWER, rainIdentity.provider)
+            assertEquals(libreFrame.timestampSeconds, rainIdentity.timestampSeconds)
+            assertTrue(viewModel.state.value.isPending)
+
+            viewModel.onDisplayChanged(
+                RadarDisplayState(
+                    requested = libreFrame.identity(libre.currentMetadataHost),
+                    displayed = libreFrame.identity(libre.currentMetadataHost),
+                    pending = false
+                )
+            )
+            libre.publish(metadata(frame("2026-11-01T20:30:00Z", provider = RadarProvider.LIBREWXR)))
+            runCurrent()
+
+            assertEquals(RadarProvider.RAINVIEWER, viewModel.state.value.selectedProvider)
+            assertEquals(rainFrame, viewModel.state.value.requestedFrame)
+            assertEquals(rainIdentity, viewModel.state.value.requestedFrameIdentity)
+            assertNull(viewModel.state.value.displayedFrame)
+        }
+    }
+
+    @Test
+    fun late_same_provider_render_ack_is_ignored_after_metadata_changes_the_request() = runTest {
+        val repository = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(repository)) { viewModel ->
+            val first = frame("2026-11-01T20:00:00Z")
+            val second = frame("2026-11-01T20:10:00Z")
+            viewModel.setVisible(true)
+            repository.publish(metadata(first))
+            runCurrent()
+            val oldIdentity = requireNotNull(viewModel.state.value.requestedFrameIdentity)
+
+            repository.publish(metadata(second))
+            runCurrent()
+            val newIdentity = requireNotNull(viewModel.state.value.requestedFrameIdentity)
+            assertNotEquals(oldIdentity, newIdentity)
+            viewModel.onDisplayChanged(
+                RadarDisplayState(oldIdentity, oldIdentity, pending = false)
+            )
+
+            assertEquals(newIdentity, viewModel.state.value.requestedFrameIdentity)
+            assertNull(viewModel.state.value.displayedFrameIdentity)
+            assertTrue(viewModel.state.value.isPending)
+        }
+    }
+
+    @Test
+    fun leaving_map_cancels_collection_and_playback_and_ignores_late_display_callbacks() = runTest {
+        val repository = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(repository)) { viewModel ->
+            val observed1 = frame("2026-11-01T20:00:00Z")
+            val observed2 = frame("2026-11-01T20:10:00Z")
+            val forecast = frame("2026-11-01T20:20:00Z", RadarFrameType.FORECAST)
             repository.publish(metadata(observed1, observed2, forecast))
 
             viewModel.setVisible(true)
             runCurrent()
             assertEquals(1, repository.activeCollectors)
+            acknowledge(viewModel)
             viewModel.play()
             advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS)
             runCurrent()
-            val selectedBeforeLeaving = viewModel.state.value.selectedFrame?.timestampSeconds
-            assertEquals(forecast.timestampSeconds, selectedBeforeLeaving)
+            val selectedBeforeLeaving = viewModel.state.value.requestedFrame
+            val identityBeforeLeaving = viewModel.state.value.requestedFrameIdentity
 
             viewModel.setVisible(false)
             runCurrent()
             assertEquals(0, repository.activeCollectors)
             assertFalse(viewModel.state.value.isVisible)
             assertFalse(viewModel.state.value.isPlaying)
+            assertNull(viewModel.state.value.displayedFrame)
 
+            identityBeforeLeaving?.let { identity ->
+                viewModel.onDisplayChanged(RadarDisplayState(identity, identity, pending = false))
+            }
             advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS * 2)
             runCurrent()
-            assertEquals(selectedBeforeLeaving, viewModel.state.value.selectedFrame?.timestampSeconds)
+            assertEquals(selectedBeforeLeaving, viewModel.state.value.requestedFrame)
             assertEquals(0, repository.activeCollectors)
         }
     }
 
+    @Test
+    fun changing_provider_while_hidden_does_not_collect_until_map_becomes_visible() = runTest {
+        val libre = TestRadarRepository(backgroundScope)
+        val rainViewer = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(libre, rainViewer)) { viewModel ->
+            val rainFrame = frame("2026-11-01T20:00:00Z", provider = RadarProvider.RAINVIEWER)
+
+            viewModel.selectProvider(RadarProvider.RAINVIEWER)
+            runCurrent()
+            assertEquals(0, libre.activeCollectors)
+            assertEquals(0, rainViewer.activeCollectors)
+            rainViewer.publish(metadata(RadarProvider.RAINVIEWER, rainFrame))
+            runCurrent()
+            assertNull(viewModel.state.value.metadata)
+
+            viewModel.setVisible(true)
+            runCurrent()
+            assertEquals(0, libre.activeCollectors)
+            assertEquals(1, rainViewer.activeCollectors)
+            assertEquals(rainFrame, viewModel.state.value.requestedFrame)
+        }
+    }
+
     private suspend fun TestScope.withViewModel(
-        repository: RadarRepository,
+        repositories: Map<RadarProvider, RadarRepository>,
         timeZone: () -> ZoneId = { ZoneId.of("UTC") },
         test: suspend TestScope.(RadarPlaybackViewModel) -> Unit
     ) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = RadarPlaybackViewModel(repository, timeZone)
+        val viewModel = RadarPlaybackViewModel(repositories, timeZone)
         try {
             test(viewModel)
         } finally {
@@ -189,19 +357,55 @@ class RadarPlaybackViewModelTest {
         }
     }
 
-    private fun frame(timestamp: String, type: LibreWxrRadarFrameType): LibreWxrRadarFrame {
+    private fun TestScope.repositories(
+        libre: TestRadarRepository,
+        rainViewer: TestRadarRepository = TestRadarRepository(backgroundScope)
+    ): Map<RadarProvider, RadarRepository> = mapOf(
+        RadarProvider.LIBREWXR to libre,
+        RadarProvider.RAINVIEWER to rainViewer
+    )
+
+    private fun frame(
+        timestamp: String,
+        type: RadarFrameType = RadarFrameType.OBSERVED,
+        provider: RadarProvider = RadarProvider.LIBREWXR
+    ): RadarFrame {
         val seconds = java.time.Instant.parse(timestamp).epochSecond
-        return LibreWxrRadarFrame(seconds, "/v2/radar/$seconds", type)
+        return RadarFrame(
+            timestampSeconds = seconds,
+            path = "/v2/radar/$seconds",
+            type = type,
+            provider = provider
+        )
     }
 
-    private fun metadata(vararg frames: LibreWxrRadarFrame) = LibreWxrRadarMetadata(
-        host = "https://api.librewxr.net",
+    private fun metadata(vararg frames: RadarFrame) = metadata(RadarProvider.LIBREWXR, *frames)
+
+    private fun metadata(provider: RadarProvider, vararg frames: RadarFrame) = RadarMetadata.normalized(
+        provider = provider,
+        host = if (provider == RadarProvider.RAINVIEWER) {
+            "https://tiles.rainviewer.example.test"
+        } else {
+            "https://tiles.librewxr.example.test"
+        },
         frames = frames.toList()
     )
+
+    private fun acknowledge(
+        viewModel: RadarPlaybackViewModel,
+        requested: RadarFrameIdentity? = viewModel.state.value.requestedFrameIdentity,
+        displayed: RadarFrameIdentity? = requested
+    ) {
+        viewModel.onDisplayChanged(
+            RadarDisplayState(requested = requested, displayed = displayed, pending = displayed != requested)
+        )
+    }
 
     private class TestRadarRepository(scope: CoroutineScope) : RadarRepository {
         private val updates = MutableStateFlow(RadarMetadataState())
         var activeCollectors = 0
+            private set
+        var currentMetadataHost: String = "https://tiles.librewxr.example.test"
             private set
 
         override val state: StateFlow<RadarMetadataState> = updates
@@ -213,7 +417,8 @@ class RadarPlaybackViewModelTest {
                 RadarMetadataState()
             )
 
-        fun publish(metadata: LibreWxrRadarMetadata) {
+        fun publish(metadata: RadarMetadata) {
+            currentMetadataHost = metadata.host
             updates.value = RadarMetadataState(metadata = metadata, isLoading = false)
         }
     }
