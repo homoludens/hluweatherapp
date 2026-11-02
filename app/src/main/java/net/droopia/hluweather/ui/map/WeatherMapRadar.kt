@@ -5,8 +5,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import java.net.URISyntaxException
 import kotlin.time.Duration
-import net.droopia.hluweather.data.network.LibreWxrRadarFrame
-import net.droopia.hluweather.data.network.LibreWxrRadarTileUrlBuilder
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarProviderDescriptors
+import net.droopia.hluweather.data.network.RadarTileUrlBuilder
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.layers.Anchor
 import org.maplibre.compose.layers.RasterLayer
@@ -17,7 +18,6 @@ import org.maplibre.compose.util.MaplibreComposable
 
 internal const val WEATHER_RADAR_SOURCE_ID = "weather_radar_source"
 internal const val WEATHER_RADAR_LAYER_ID = "weather_radar_layer"
-internal const val WEATHER_RADAR_TILE_SIZE = 256
 
 /**
  * Explicit opt-in for the main Map destination. Pass null when hidden or no frame is available.
@@ -26,21 +26,18 @@ internal const val WEATHER_RADAR_TILE_SIZE = 256
 @Immutable
 data class WeatherMapRadarConfig(
     val host: String,
-    val frame: LibreWxrRadarFrame,
+    val frame: RadarFrame,
     val opacity: Float = 0.75f
 )
 
 internal fun weatherRadarTileTemplate(radar: WeatherMapRadarConfig?): String? {
     if (radar == null || !radar.opacity.isFinite()) return null
     return try {
-        LibreWxrRadarTileUrlBuilder.buildTemplate(
+        val descriptor = RadarProviderDescriptors[radar.frame.provider]
+        RadarTileUrlBuilder.buildTemplate(
+            descriptor = descriptor,
             host = radar.host,
-            path = radar.frame.path,
-            size = WEATHER_RADAR_TILE_SIZE,
-            color = 2,
-            smooth = true,
-            snow = true,
-            extension = "png"
+            path = radar.frame.path
         )
     } catch (_: IllegalArgumentException) {
         null
@@ -58,7 +55,8 @@ private val radarAnchor = Anchor.Below { it.type == "symbol" }
 @MaplibreComposable
 internal fun WeatherMapRadar(radar: WeatherMapRadarConfig? = null) {
     if (radar == null || !radar.opacity.isFinite()) return
-    val template = remember(radar.host, radar.frame.path) {
+    val descriptor = RadarProviderDescriptors[radar.frame.provider]
+    val template = remember(radar.host, radar.frame.path, radar.frame.provider) {
         weatherRadarTileTemplate(radar)
     } ?: return
 
@@ -66,14 +64,14 @@ internal fun WeatherMapRadar(radar: WeatherMapRadarConfig? = null) {
     // the template changes, retaining their IDs. Opacity is a paint-only update. Keeping these in
     // rememberMapState's style content lets MapLibre reattach once per loaded style generation and
     // reject outgoing-generation work; never key/recreate the map or run a separate reload job.
-    val source = remember(template) {
+    val source = remember(template, descriptor.tileOptions.size, descriptor.nativeMaxZoom) {
         RasterTileSource(
             id = WEATHER_RADAR_SOURCE_ID,
             tiles = listOf(template),
-            tileSize = WEATHER_RADAR_TILE_SIZE,
+            tileSize = descriptor.tileOptions.size,
             options = TileSetOptions(
-                minZoom = 0,
-                maxZoom = 12,
+                minZoom = descriptor.nativeMinZoom,
+                maxZoom = descriptor.nativeMaxZoom,
                 tileCoordinateSystem = TileCoordinateSystem.XYZ
             )
         )

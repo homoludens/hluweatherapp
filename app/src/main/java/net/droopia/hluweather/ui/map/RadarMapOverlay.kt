@@ -47,7 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
+import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.repository.RadarMetadataState
 
 private val RadarObservedColor = Color(0xFF27835A)
@@ -223,13 +223,13 @@ private fun RadarTimeline(
     }.coerceAtLeast(0)
     val selectedType = playbackState.selectedFrameType
     val badgeColor = when (selectedType) {
-        LibreWxrRadarFrameType.OBSERVED -> MaterialTheme.colorScheme.tertiaryContainer
-        LibreWxrRadarFrameType.FORECAST -> MaterialTheme.colorScheme.primaryContainer
+        RadarFrameType.OBSERVED -> MaterialTheme.colorScheme.tertiaryContainer
+        RadarFrameType.FORECAST -> MaterialTheme.colorScheme.primaryContainer
         null -> MaterialTheme.colorScheme.surfaceVariant
     }
     val badgeTextColor = when (selectedType) {
-        LibreWxrRadarFrameType.OBSERVED -> MaterialTheme.colorScheme.onTertiaryContainer
-        LibreWxrRadarFrameType.FORECAST -> MaterialTheme.colorScheme.onPrimaryContainer
+        RadarFrameType.OBSERVED -> MaterialTheme.colorScheme.onTertiaryContainer
+        RadarFrameType.FORECAST -> MaterialTheme.colorScheme.onPrimaryContainer
         null -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val status = when {
@@ -343,7 +343,7 @@ private fun RadarTimeline(
                     )
 
                     val latestObservedIndex = frames.indexOfLast {
-                        it.type == LibreWxrRadarFrameType.OBSERVED
+                        it.type == RadarFrameType.OBSERVED
                     }
                     if (latestObservedIndex >= 0) {
                         val markerFraction = if (frames.size <= 1) {

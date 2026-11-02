@@ -16,7 +16,7 @@ import net.droopia.hluweather.data.cache.CachedRadarMetadata
 import net.droopia.hluweather.data.cache.RadarMetadataCacheStore
 import net.droopia.hluweather.data.network.LibreWxrRadarApi
 import net.droopia.hluweather.data.network.LibreWxrRadarApiException
-import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
+import net.droopia.hluweather.data.model.RadarMetadata
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -25,7 +25,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 data class RadarMetadataState(
-    val metadata: LibreWxrRadarMetadata? = null,
+    val metadata: RadarMetadata? = null,
     val fetchedAt: Instant? = null,
     val isLoading: Boolean = true,
     /** A refresh failed, the snapshot expired, or its fetch time is in the future. */
@@ -120,7 +120,7 @@ class LibreWxrRadarRepository(
         }
     }
 
-    private suspend fun fetchWithRetry(): LibreWxrRadarMetadata {
+    private suspend fun fetchWithRetry(): RadarMetadata {
         var retries = 0
         var retryDelay = policy.initialRetryDelay
         while (true) {

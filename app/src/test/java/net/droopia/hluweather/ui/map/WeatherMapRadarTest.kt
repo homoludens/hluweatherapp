@@ -27,6 +27,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.network.LibreWxrRadarFrame
 import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
 import org.junit.Assert.assertEquals
@@ -88,6 +89,27 @@ class WeatherMapRadarTest {
             // No layer maxZoom=12: let MapLibre overzoom native XYZ tiles while panning/zooming.
             assertEquals(24f, layer.value["maxzoom"]?.jsonPrimitive?.float)
             assertEquals(0.75f, layer.value["paint"]?.jsonObject?.get("raster-opacity")?.jsonPrimitive?.float)
+        } finally {
+            content.close()
+        }
+    }
+
+    @Test
+    fun rainviewer_raster_uses_its_descriptor_tile_options_and_native_zoom_limit() = runTest {
+        val engine = RecordingStyle()
+        val rainViewerRadar = radar().copy(
+            frame = radar().frame.copy(provider = RadarProvider.RAINVIEWER)
+        )
+        val content = RadarComposition(this, engine, rainViewerRadar)
+        try {
+            val revision: DesiredStyleRevision = content.flush()
+            val source = revision.sources.single() as SourceDefinition.Json
+
+            assertEquals(7, source.value["maxzoom"]?.jsonPrimitive?.int)
+            assertEquals(
+                "https://tiles.example.test/v2/radar/100/256/{z}/{x}/{y}/2/1_1.png",
+                source.value["tiles"]?.jsonArray?.single()?.jsonPrimitive?.content
+            )
         } finally {
             content.close()
         }

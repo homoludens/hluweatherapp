@@ -1,8 +1,54 @@
 package net.droopia.hluweather.data.network
 
 import java.net.URI
+import net.droopia.hluweather.data.model.RadarProviderDescriptor
+import net.droopia.hluweather.data.model.RadarTileOptions
 
-object LibreWxrRadarTileUrlBuilder {
+// Builds the shared public tile URL shape used by both radar providers.
+object RadarTileUrlBuilder {
+    fun build(
+        descriptor: RadarProviderDescriptor,
+        host: String,
+        path: String,
+        zoom: Int,
+        x: Int,
+        y: Int
+    ): String {
+        require(zoom in descriptor.nativeMinZoom..descriptor.nativeMaxZoom) {
+            "Zoom must be between ${descriptor.nativeMinZoom} and ${descriptor.nativeMaxZoom}"
+        }
+        val options = descriptor.tileOptions
+        return build(
+            host = host,
+            path = path,
+            size = options.size,
+            zoom = zoom,
+            x = x,
+            y = y,
+            color = options.color,
+            smooth = options.smooth,
+            snow = options.snow,
+            extension = options.extension
+        )
+    }
+
+    fun buildTemplate(
+        descriptor: RadarProviderDescriptor,
+        host: String,
+        path: String
+    ): String = buildTemplate(host, path, descriptor.tileOptions)
+
+    fun buildTemplate(host: String, path: String, options: RadarTileOptions): String =
+        buildTemplate(
+            host = host,
+            path = path,
+            size = options.size,
+            color = options.color,
+            smooth = options.smooth,
+            snow = options.snow,
+            extension = options.extension
+        )
+
     fun build(
         host: String,
         path: String,
@@ -92,4 +138,38 @@ object LibreWxrRadarTileUrlBuilder {
 
     private const val MIN_ZOOM = 0
     private const val MAX_ZOOM = 12
+}
+
+/** Source compatibility for code that used the original LibreWXR-named URL utility. */
+object LibreWxrRadarTileUrlBuilder {
+    fun build(
+        host: String,
+        path: String,
+        size: Int,
+        zoom: Int,
+        x: Int,
+        y: Int,
+        color: Int,
+        smooth: Boolean,
+        snow: Boolean,
+        extension: String
+    ): String = RadarTileUrlBuilder.build(
+        host, path, size, zoom, x, y, color, smooth, snow, extension
+    )
+
+    fun buildTemplate(
+        host: String,
+        path: String,
+        size: Int,
+        color: Int,
+        smooth: Boolean,
+        snow: Boolean,
+        extension: String
+    ): String = RadarTileUrlBuilder.buildTemplate(
+        host, path, size, color, smooth, snow, extension
+    )
+
+    internal fun validateHost(host: String) = RadarTileUrlBuilder.validateHost(host)
+
+    internal fun validateFramePath(path: String) = RadarTileUrlBuilder.validateFramePath(path)
 }

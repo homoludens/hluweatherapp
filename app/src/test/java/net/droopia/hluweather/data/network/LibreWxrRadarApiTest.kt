@@ -13,8 +13,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
+import net.droopia.hluweather.data.model.RadarProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LibreWxrRadarApiTest {
@@ -34,6 +36,8 @@ class LibreWxrRadarApiTest {
         assertEquals("api.librewxr.net", request.url.host)
         assertEquals("/public/weather-maps.json", request.url.encodedPath)
         assertEquals("https://tiles.example-cdn.test", metadata.host)
+        assertEquals(RadarProvider.LIBREWXR, metadata.provider)
+        assertTrue(metadata.frames.all { it.provider == RadarProvider.LIBREWXR })
         assertEquals(
             listOf(1_793_556_600L, 1_793_563_200L),
             metadata.observedFrames.map { it.timestampSeconds }

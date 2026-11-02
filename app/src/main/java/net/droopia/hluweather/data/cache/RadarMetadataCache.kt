@@ -8,12 +8,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
-import net.droopia.hluweather.data.network.LibreWxrRadarTileUrlBuilder
+import net.droopia.hluweather.data.model.RadarMetadata
+import net.droopia.hluweather.data.network.RadarTileUrlBuilder
 import kotlin.time.Instant
 
 data class CachedRadarMetadata(
-    val metadata: LibreWxrRadarMetadata,
+    val metadata: RadarMetadata,
     val fetchedAt: Instant
 )
 
@@ -29,8 +29,8 @@ class RadarMetadataCache(private val dataStore: DataStore<Preferences>) : RadarM
         return try {
             val serialized = preferences[entryKey] ?: return null
             val entry = json.decodeFromString<CacheEntry>(serialized)
-            LibreWxrRadarTileUrlBuilder.validateHost(entry.metadata.host)
-            entry.metadata.frames.forEach { LibreWxrRadarTileUrlBuilder.validateFramePath(it.path) }
+            RadarTileUrlBuilder.validateHost(entry.metadata.host)
+            entry.metadata.frames.forEach { RadarTileUrlBuilder.validateFramePath(it.path) }
             if (entry.metadata.frames.isEmpty()) return null
             CachedRadarMetadata(entry.metadata, Instant.parse(entry.fetchedAt))
         } catch (_: SerializationException) {
@@ -48,7 +48,7 @@ class RadarMetadataCache(private val dataStore: DataStore<Preferences>) : RadarM
     }
 
     @Serializable
-    private data class CacheEntry(val metadata: LibreWxrRadarMetadata, val fetchedAt: String)
+    private data class CacheEntry(val metadata: RadarMetadata, val fetchedAt: String)
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true }

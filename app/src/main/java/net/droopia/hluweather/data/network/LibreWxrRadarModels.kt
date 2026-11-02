@@ -3,63 +3,44 @@ package net.droopia.hluweather.data.network
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import net.droopia.hluweather.data.model.RadarColorScheme
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarMetadata
+import net.droopia.hluweather.data.model.RadarProvider
 
-@Serializable
-enum class LibreWxrRadarFrameType {
-    OBSERVED,
-    FORECAST
-}
-
-@Serializable
-data class LibreWxrRadarFrame(
-    val timestampSeconds: Long,
-    val path: String,
-    val type: LibreWxrRadarFrameType
-)
-
-@Serializable
-data class LibreWxrRadarColorScheme(
-    val id: Int,
-    val name: String
-)
-
-@Serializable
-data class LibreWxrRadarMetadata(
-    val host: String,
-    val frames: List<LibreWxrRadarFrame>,
-    val colorSchemes: List<LibreWxrRadarColorScheme> = emptyList()
-) {
-    val observedFrames: List<LibreWxrRadarFrame>
-        get() = frames.filter { it.type == LibreWxrRadarFrameType.OBSERVED }
-
-    val forecastFrames: List<LibreWxrRadarFrame>
-        get() = frames.filter { it.type == LibreWxrRadarFrameType.FORECAST }
-}
+typealias LibreWxrRadarFrameType = RadarFrameType
+typealias LibreWxrRadarFrame = RadarFrame
+typealias LibreWxrRadarColorScheme = RadarColorScheme
+typealias LibreWxrRadarMetadata = RadarMetadata
 
 private val radarMetadataJson = Json { ignoreUnknownKeys = true }
 
-fun parseLibreWxrRadarMetadata(json: String): LibreWxrRadarMetadata {
+fun parseLibreWxrRadarMetadata(json: String): RadarMetadata {
     val response = radarMetadataJson.decodeFromString<LibreWxrWeatherMapsDto>(json)
-    LibreWxrRadarTileUrlBuilder.validateHost(response.host)
+    RadarTileUrlBuilder.validateHost(response.host)
 
     val observedFrames = response.radar.past.map { frame ->
-        LibreWxrRadarTileUrlBuilder.validateFramePath(frame.path)
-        LibreWxrRadarFrame(
+        RadarTileUrlBuilder.validateFramePath(frame.path)
+        RadarFrame(
             timestampSeconds = frame.time,
             path = frame.path,
-            type = LibreWxrRadarFrameType.OBSERVED
+            type = RadarFrameType.OBSERVED,
+            provider = RadarProvider.LIBREWXR
         )
     }
     val forecastFrames = response.radar.nowcast.map { frame ->
-        LibreWxrRadarTileUrlBuilder.validateFramePath(frame.path)
-        LibreWxrRadarFrame(
+        RadarTileUrlBuilder.validateFramePath(frame.path)
+        RadarFrame(
             timestampSeconds = frame.time,
             path = frame.path,
-            type = LibreWxrRadarFrameType.FORECAST
+            type = RadarFrameType.FORECAST,
+            provider = RadarProvider.LIBREWXR
         )
     }
 
-    return LibreWxrRadarMetadata(
+    return RadarMetadata.normalized(
+        provider = RadarProvider.LIBREWXR,
         host = response.host,
         frames = observedFrames + forecastFrames,
         colorSchemes = response.radar.colorSchemes.orEmpty()
@@ -76,7 +57,7 @@ private data class LibreWxrWeatherMapsDto(
 private data class LibreWxrRadarDto(
     val past: List<LibreWxrRadarFrameDto>,
     val nowcast: List<LibreWxrRadarFrameDto>,
-    val colorSchemes: List<LibreWxrRadarColorScheme>? = null
+    val colorSchemes: List<RadarColorScheme>? = null
 )
 
 @Serializable

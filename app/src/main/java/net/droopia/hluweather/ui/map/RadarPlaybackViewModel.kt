@@ -16,9 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.dateTimeText
-import net.droopia.hluweather.data.network.LibreWxrRadarFrame
-import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
-import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.repository.RadarRepository
 import kotlin.time.Instant
@@ -28,22 +28,22 @@ internal const val RADAR_PLAYBACK_INTERVAL_MILLIS = 600L
 data class RadarPlaybackState(
     val isVisible: Boolean = false,
     val metadataState: RadarMetadataState = RadarMetadataState(),
-    val metadata: LibreWxrRadarMetadata? = null,
-    val frames: List<LibreWxrRadarFrame> = emptyList(),
-    val selectedFrame: LibreWxrRadarFrame? = null,
+    val metadata: RadarMetadata? = null,
+    val frames: List<RadarFrame> = emptyList(),
+    val selectedFrame: RadarFrame? = null,
     val latestObservedTimestampSeconds: Long? = null,
     val selectedFrameTimeLabel: String? = null,
-    val selectedFrameType: LibreWxrRadarFrameType? = null,
+    val selectedFrameType: RadarFrameType? = null,
     val selectedFrameTypeLabel: String? = null,
     val forecastOffsetSeconds: Long? = null,
     val forecastOffsetLabel: String? = null,
     val isPlaying: Boolean = false
 ) {
-    val observedFrames: List<LibreWxrRadarFrame>
-        get() = frames.filter { it.type == LibreWxrRadarFrameType.OBSERVED }
+    val observedFrames: List<RadarFrame>
+        get() = frames.filter { it.type == RadarFrameType.OBSERVED }
 
-    val forecastFrames: List<LibreWxrRadarFrame>
-        get() = frames.filter { it.type == LibreWxrRadarFrameType.FORECAST }
+    val forecastFrames: List<RadarFrame>
+        get() = frames.filter { it.type == RadarFrameType.FORECAST }
 
     val hasForecastFrames: Boolean
         get() = forecastFrames.isNotEmpty()
@@ -120,11 +120,11 @@ class RadarPlaybackViewModel(
             return
         }
 
-        val frames = metadata.frames.sortedBy(LibreWxrRadarFrame::timestampSeconds)
+        val frames = metadata.frames.sortedBy(RadarFrame::timestampSeconds)
         val latestObserved = frames
             .asSequence()
-            .filter { it.type == LibreWxrRadarFrameType.OBSERVED }
-            .maxByOrNull(LibreWxrRadarFrame::timestampSeconds)
+            .filter { it.type == RadarFrameType.OBSERVED }
+            .maxByOrNull(RadarFrame::timestampSeconds)
         val retainedSelection = current.selectedFrame?.timestampSeconds?.let { timestamp ->
             frames.firstOrNull { it.timestampSeconds == timestamp }
         }
@@ -159,10 +159,10 @@ class RadarPlaybackViewModel(
     }
 
     private fun RadarPlaybackState.withSelectedFrame(
-        frame: LibreWxrRadarFrame?
+        frame: RadarFrame?
     ): RadarPlaybackState {
         val offsetSeconds = if (
-            frame?.type == LibreWxrRadarFrameType.FORECAST && latestObservedTimestampSeconds != null
+            frame?.type == RadarFrameType.FORECAST && latestObservedTimestampSeconds != null
         ) {
             frame.timestampSeconds - latestObservedTimestampSeconds
         } else {
@@ -175,8 +175,8 @@ class RadarPlaybackViewModel(
             },
             selectedFrameType = frame?.type,
             selectedFrameTypeLabel = when (frame?.type) {
-                LibreWxrRadarFrameType.OBSERVED -> "Observed"
-                LibreWxrRadarFrameType.FORECAST -> "Forecast"
+                RadarFrameType.OBSERVED -> "Observed"
+                RadarFrameType.FORECAST -> "Forecast"
                 null -> null
             },
             forecastOffsetSeconds = offsetSeconds,
