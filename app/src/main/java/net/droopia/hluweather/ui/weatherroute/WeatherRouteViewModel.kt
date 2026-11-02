@@ -60,6 +60,8 @@ import net.droopia.hluweather.data.weatherroute.summarizeTripWeather
 
 enum class RouteEndpointSlot { START, END }
 
+data class RouteMapRequest(val generation: Long, val completed: Boolean = false)
+
 data class WeatherRouteUiState(
     val start: RouteEndpoint? = null,
     val end: RouteEndpoint? = null,
@@ -80,7 +82,8 @@ data class WeatherRouteUiState(
     val departureOffsetHours: Int = 0,
     val snapshot: RouteWeatherSnapshot? = null,
     val summary: TripWeatherSummary? = null,
-    val warnings: List<TripWeatherWarning> = emptyList()
+    val warnings: List<TripWeatherWarning> = emptyList(),
+    val routeMapRequest: RouteMapRequest? = null
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -238,6 +241,7 @@ class WeatherRouteViewModel(
     fun onDepartureOffsetChanged(offsetHours: Int) {
         val offset = offsetHours.coerceIn(DEPARTURE_OFFSET_RANGE)
         val generation = ++calculationGeneration
+        clearRouteMapRequest()
         cancelActiveWork()
         cancelDepartureRefresh()
         val current = _state.value
@@ -321,7 +325,8 @@ class WeatherRouteViewModel(
         _state.update { it.copy(selectedSampleIndex = index) }
     }
 
-    fun calculate() {
+    fun calculate(navigateToResult: Boolean = false): Long? {
+        clearRouteMapRequest()
         val snapshot = _state.value
         val speed = snapshot.speedText.toIntOrNull()
         val validationError = when {
@@ -331,8 +336,9 @@ class WeatherRouteViewModel(
             else -> null
         }
         if (validationError != null) {
+            invalidateCalculation()
             showRouteError(validationError)
-            return
+            return null
         }
 
         val generation = ++calculationGeneration
@@ -352,7 +358,8 @@ class WeatherRouteViewModel(
                 selectedSampleIndex = null,
                 snapshot = null,
                 summary = null,
-                warnings = emptyList()
+                warnings = emptyList(),
+                routeMapRequest = if (navigateToResult) RouteMapRequest(generation) else null
             )
         }
 
@@ -396,14 +403,21 @@ class WeatherRouteViewModel(
                 }
             } finally {
                 if (generation == calculationGeneration) {
-                    _state.update { it.copy(isCalculating = false) }
+                    _state.update {
+                        it.copy(
+                            isCalculating = false,
+                            routeMapRequest = it.routeMapRequest?.takeIf { request -> request.completed }
+                        )
+                    }
                     activeWorkJob = null
                 }
             }
         }
+        return generation.takeIf { navigateToResult }
     }
 
     fun retryWeather() {
+        clearRouteMapRequest()
         val current = _state.value.result ?: return
         val wasResultOutdated = _state.value.isResultOutdated
         val generation = ++calculationGeneration
@@ -492,7 +506,9 @@ class WeatherRouteViewModel(
                         summary = summarizeTripWeather(result.samples),
                         warnings = findTripWeatherWarnings(result.samples),
                         weatherError = weatherErrorMessage(error),
-                        isResultOutdated = false
+                        isResultOutdated = false,
+                        routeMapRequest = it.routeMapRequest?.takeIf { request -> request.generation == generation }
+                            ?.copy(completed = true)
                     )
                 }
             }
@@ -582,7 +598,10 @@ class WeatherRouteViewModel(
                 warnings = findTripWeatherWarnings(enriched),
                 routeError = null,
                 weatherError = if (covered) null else "Weather unavailable",
-                isResultOutdated = isResultOutdated
+                isResultOutdated = isResultOutdated,
+                routeMapRequest = it.routeMapRequest?.let { request ->
+                    if (request.generation == generation) request.copy(completed = true) else request
+                }
             )
         }
     }
@@ -641,8 +660,17 @@ class WeatherRouteViewModel(
             it.copy(
                 isCalculating = false,
                 isRetryingWeather = false,
-                isResultOutdated = it.result != null
+                isResultOutdated = it.result != null,
+                routeMapRequest = null
             )
+        }
+    }
+
+    fun clearRouteMapRequest(generation: Long? = null) {
+        _state.update {
+            if (generation == null || it.routeMapRequest?.generation == generation) {
+                it.copy(routeMapRequest = null)
+            } else it
         }
     }
 

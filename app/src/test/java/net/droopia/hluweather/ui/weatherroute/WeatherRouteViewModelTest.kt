@@ -656,6 +656,64 @@ class WeatherRouteViewModelTest {
     }
 
     @Test
+    fun explicit_map_request_tracks_equal_success_weather_failure_and_consumption() = runTest {
+        val weather = FakeRouteWeatherSource()
+        val viewModel = viewModel(weather = weather)
+        chooseEndpoints(viewModel)
+
+        val first = viewModel.calculate(navigateToResult = true)!!
+        advanceUntilIdle()
+        val result = viewModel.state.value.result
+        assertEquals(RouteMapRequest(first, completed = true), viewModel.state.value.routeMapRequest)
+        viewModel.clearRouteMapRequest(first)
+        assertNull(viewModel.state.value.routeMapRequest)
+        val second = viewModel.calculate(navigateToResult = true)!!
+        advanceUntilIdle()
+        assertEquals(result, viewModel.state.value.result)
+        assertTrue(second != first)
+        assertEquals(RouteMapRequest(second, completed = true), viewModel.state.value.routeMapRequest)
+        viewModel.clearRouteMapRequest(first)
+        assertEquals(RouteMapRequest(second, completed = true), viewModel.state.value.routeMapRequest)
+
+        weather.failure = IllegalStateException("weather down")
+        val third = viewModel.calculate(navigateToResult = true)!!
+        advanceUntilIdle()
+        assertEquals(RouteMapRequest(third, completed = true), viewModel.state.value.routeMapRequest)
+        assertEquals("Weather unavailable", viewModel.state.value.weatherError)
+        viewModel.retryWeather()
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.routeMapRequest)
+    }
+
+    @Test
+    fun map_request_is_cleared_by_failure_supersession_invalidation_and_departure() = runTest {
+        val first = CompletableDeferred<DrivingRoute>()
+        val second = CompletableDeferred<DrivingRoute>()
+        val third = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = SequencedRoutingSource(listOf(first, second, third)))
+        chooseEndpoints(viewModel)
+        val firstGeneration = viewModel.calculate(navigateToResult = true)!!
+        assertEquals(RouteMapRequest(firstGeneration), viewModel.state.value.routeMapRequest)
+        val secondGeneration = viewModel.calculate(navigateToResult = true)!!
+        assertEquals(RouteMapRequest(secondGeneration), viewModel.state.value.routeMapRequest)
+        first.complete(route())
+        advanceUntilIdle()
+        assertEquals(RouteMapRequest(secondGeneration), viewModel.state.value.routeMapRequest)
+        second.completeExceptionally(IllegalStateException("routing down"))
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.routeMapRequest)
+
+        viewModel.calculate(navigateToResult = true)
+        viewModel.onDepartureOffsetChanged(2)
+        third.complete(route())
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.routeMapRequest)
+        viewModel.onSpeedChanged("39")
+        assertNull(viewModel.calculate(navigateToResult = true))
+        assertNull(viewModel.state.value.routeMapRequest)
+    }
+
+    @Test
     fun endpoint_speed_and_search_changes_invalidate_route_work() = runTest {
         val pendingRequests = List(3) { CompletableDeferred<DrivingRoute>() }
         val route = SequencedRoutingSource(
@@ -834,7 +892,7 @@ class WeatherRouteViewModelTest {
         val viewModel = viewModel(route = BlockingRoutingSource(cancellationObserved))
         chooseEndpoints(viewModel)
 
-        viewModel.calculate()
+        viewModel.calculate(navigateToResult = true)
         runCurrent()
         viewModel.viewModelScope.cancel()
         advanceUntilIdle()
@@ -842,6 +900,7 @@ class WeatherRouteViewModelTest {
         assertTrue(cancellationObserved.isCompleted)
         assertFalse(viewModel.state.value.isCalculating)
         assertNull(viewModel.state.value.routeError)
+        assertNull(viewModel.state.value.routeMapRequest)
     }
 
     @Test

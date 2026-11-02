@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsNode
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
 import java.util.TimeZone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlin.time.Instant
@@ -228,6 +233,7 @@ class WeatherRouteScreenTest {
 
         composeRule.onNodeWithTag("trip_show_weather").performClick()
         composeRule.waitForIdle()
+        assertMapAtTop()
 
         composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(5)
         composeRule.onNodeWithTag("route_summary").assertIsDisplayed()
@@ -235,6 +241,139 @@ class WeatherRouteScreenTest {
             .performScrollTo()
             .assertTextContains("Weather unavailable")
         composeRule.onNodeWithTag("route_weather_retry").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun explicit_immediate_and_equal_recalculation_scroll_once_and_manual_changes_do_not() {
+        val viewModel = viewModel().also { chooseEndpoints(it) }
+        render(viewModel)
+
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        val first = viewModel.state.value.result
+        scrollToTop()
+        composeRule.runOnIdle { viewModel.selectSample(0) }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        assertEquals(first, viewModel.state.value.result)
+        scrollToTop()
+        composeRule.runOnIdle { viewModel.onDepartureOffsetChanged(1) }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.runOnIdle { viewModel.retryWeather() }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    @Test
+    fun delayed_result_waits_and_scrolls_only_after_matching_completion() {
+        val deferred = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = ScreenDeferredRoutingSource(deferred)).also { chooseEndpoints(it) }
+        render(viewModel)
+
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.runOnIdle { deferred.complete(screenRoute()) }
+        assertMapAtTop()
+        scrollToTop()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    @Test
+    fun delayed_recalculation_does_not_scroll_to_retained_old_result() {
+        val deferred = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = ScreenRecalculatingRoutingSource(deferred)).also { chooseEndpoints(it) }
+        render(viewModel)
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        scrollToTop()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.runOnIdle { deferred.complete(screenRoute()) }
+        assertMapAtTop()
+    }
+
+    @Test
+    fun changing_departure_cancels_pending_recalculation_without_scrolling_on_refresh() {
+        val deferred = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = ScreenRecalculatingRoutingSource(deferred)).also { chooseEndpoints(it) }
+        render(viewModel)
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        scrollToTop()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.runOnIdle { viewModel.onDepartureOffsetChanged(2) }
+        composeRule.runOnIdle { deferred.complete(screenRoute()) }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    @Test
+    fun invalid_and_failed_recalculation_do_not_scroll_to_previous_result() {
+        val routing = ScreenSwitchableRoutingSource()
+        val viewModel = viewModel(route = routing).also { chooseEndpoints(it) }
+        render(viewModel)
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        scrollToTop()
+
+        composeRule.runOnIdle { viewModel.onSpeedChanged("39") }
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_error").assertTextContains("Speed must", substring = true)
+        composeRule.runOnIdle {
+            viewModel.onSpeedChanged("80")
+            routing.failure = true
+        }
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.onNodeWithTag("route_error").assertTextContains("Routing failed")
+    }
+
+    @Test
+    fun stale_completion_after_invalidation_and_screen_recreation_never_scrolls() {
+        val deferred = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = ScreenDeferredRoutingSource(deferred)).also { chooseEndpoints(it) }
+        val visible = mutableStateOf(true)
+        render(viewModel, visible = visible)
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.runOnIdle { viewModel.onSpeedChanged("90") }
+        composeRule.runOnIdle { deferred.complete(screenRoute()) }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.runOnIdle { visible.value = false }
+        composeRule.runOnIdle { visible.value = true }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    @Test
+    fun leaving_during_request_or_after_consumption_does_not_replay_scroll() {
+        val deferred = CompletableDeferred<DrivingRoute>()
+        val viewModel = viewModel(route = ScreenDeferredRoutingSource(deferred)).also { chooseEndpoints(it) }
+        val visible = mutableStateOf(true)
+        render(viewModel, visible = visible)
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        composeRule.runOnIdle { visible.value = false }
+        composeRule.runOnIdle { deferred.complete(screenRoute()) }
+        composeRule.runOnIdle { visible.value = true }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+        composeRule.onNodeWithTag("trip_show_weather").performClick()
+        assertMapAtTop()
+        composeRule.runOnIdle { visible.value = false }
+        composeRule.runOnIdle { visible.value = true }
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    private fun scrollToTop() {
+        composeRule.onNodeWithTag("weather_route_content").performScrollToIndex(0)
+        composeRule.onNodeWithTag("route_start_search").assertIsDisplayed()
+    }
+
+    private fun assertMapAtTop() {
+        composeRule.onNodeWithTag("weather_route_map").assertIsDisplayed()
+        val map = composeRule.onNodeWithTag("weather_route_map").getUnclippedBoundsInRoot()
+        val content = composeRule.onNodeWithTag("weather_route_content").getUnclippedBoundsInRoot()
+        // The list may reach its end before the map can align exactly with the top.
+        assertTrue("Map $map should be visible near the content top $content",
+            map.top >= content.top && map.top - content.top < 50.dp && map.bottom <= content.bottom)
     }
 
     @Test
@@ -275,11 +414,12 @@ class WeatherRouteScreenTest {
 
     private fun render(
         viewModel: WeatherRouteViewModel,
-        precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM
+        precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+        visible: androidx.compose.runtime.State<Boolean> = mutableStateOf(true)
     ) {
         composeRule.setContent {
             HluWeatherTheme(darkTheme = false) {
-                WeatherRouteScreen(
+                if (visible.value) WeatherRouteScreen(
                     viewModel = viewModel,
                     savedLocations = listOf(start, end),
                     darkTheme = false,
@@ -359,6 +499,35 @@ private class ScreenFakeRoutingSource(
             providerDurationSeconds = 3_600.0
         )
     }
+}
+
+private fun screenRoute() = DrivingRoute(
+    providerName = "OSRM",
+    polyline = listOf(GeoPoint(45.6495, 13.7768), GeoPoint(44.8176, 20.4633)),
+    distanceMeters = 80_000.0,
+    providerDurationSeconds = 3_600.0
+)
+
+private class ScreenDeferredRoutingSource(private val result: CompletableDeferred<DrivingRoute>) : RoutingSource {
+    override val providerName = "OSRM"
+    override suspend fun route(start: GeoPoint, end: GeoPoint): DrivingRoute =
+        withContext(NonCancellable) { result.await() }
+}
+
+private class ScreenSwitchableRoutingSource : RoutingSource {
+    override val providerName = "OSRM"
+    var failure = false
+    override suspend fun route(start: GeoPoint, end: GeoPoint): DrivingRoute {
+        if (failure) error("routing down")
+        return screenRoute()
+    }
+}
+
+private class ScreenRecalculatingRoutingSource(private val result: CompletableDeferred<DrivingRoute>) : RoutingSource {
+    override val providerName = "OSRM"
+    private var calls = 0
+    override suspend fun route(start: GeoPoint, end: GeoPoint): DrivingRoute =
+        if (calls++ == 0) screenRoute() else withContext(NonCancellable) { result.await() }
 }
 
 private class ScreenFakeRouteWeatherSource(

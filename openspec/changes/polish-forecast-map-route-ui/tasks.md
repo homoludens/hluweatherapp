@@ -9,7 +9,7 @@
 
 ## 3. Route result navigation
 
-- [ ] 3.1 [high] Add a one-shot scroll to the stable route-map item for the current explicit “Show trip weather” request, including recalculation and valid routes with weather errors, while clearing pending requests on failure, cancellation, supersession or leaving the screen; run focused route screen/state tests for immediate and delayed completion, equal results, invalid/routing failures, stale results, manual scrolling, sample/departure changes, weather retry and screen recreation.
+- [x] 3.1 [high] Add a one-shot scroll to the stable route-map item for the current explicit “Show trip weather” request, including recalculation and valid routes with weather errors, while clearing pending requests on failure, cancellation, supersession or leaving the screen; run focused route screen/state tests for immediate and delayed completion, equal results, invalid/routing failures, stale results, manual scrolling, sample/departure changes, weather retry and screen recreation.
 
 ## 4. Integration verification
 

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -40,7 +42,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -56,6 +65,8 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import net.droopia.hluweather.data.distanceText
 import net.droopia.hluweather.data.model.DrivingRoute
 import net.droopia.hluweather.data.model.GeoPoint
@@ -103,6 +114,31 @@ fun WeatherRouteScreen(
         }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val currentState by rememberUpdatedState(state)
+    val listState = rememberLazyListState()
+    var pendingRequest by remember(viewModel) { mutableStateOf<Long?>(null) }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.clearRouteMapRequest() }
+    }
+    LaunchedEffect(viewModel, pendingRequest) {
+        val generation = pendingRequest ?: return@LaunchedEffect
+        viewModel.state.collectLatest { latest ->
+            val request = latest.routeMapRequest
+            if (request?.generation != generation) {
+                pendingRequest = null
+            } else if (request.completed) {
+                val index = snapshotFlow {
+                    val keys = routeItemKeys(currentState)
+                    if (currentState.routeMapRequest == request &&
+                        listState.layoutInfo.totalItemsCount == keys.size
+                    ) keys.indexOf(ROUTE_MAP_KEY) else -1
+                }.first { it >= 0 }
+                listState.scrollToItem(index)
+                viewModel.clearRouteMapRequest(generation)
+                pendingRequest = null
+            }
+        }
+    }
     WeatherRouteScreenContent(
         state = state,
         savedLocations = savedLocations,
@@ -118,13 +154,14 @@ fun WeatherRouteScreen(
         onSavedLocationSelected = viewModel::selectSavedLocation,
         onCurrentLocationSelected = viewModel::selectCurrentLocation,
         onMapEndpointSelected = viewModel::selectMapEndpoint,
-        onCalculate = viewModel::calculate,
+        onCalculate = { pendingRequest = viewModel.calculate(navigateToResult = true) },
         onDepartureOffsetChanged = viewModel::onDepartureOffsetChanged,
         onSpeedChanged = viewModel::onSpeedChanged,
-        onRetry = viewModel::calculate,
+        onRetry = { viewModel.calculate() },
         onRetryWeather = viewModel::retryWeather,
         onSampleSelected = viewModel::selectSample,
         mapContent = mapContent,
+        listState = listState,
         modifier = modifier
     )
 }
@@ -153,6 +190,7 @@ private fun WeatherRouteScreenContent(
     onRetryWeather: () -> Unit,
     onSampleSelected: (Int?) -> Unit,
     mapContent: @Composable (WeatherRouteResult, Int?, Boolean, (Int) -> Unit) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
     val timeZone = TimeZone.currentSystemDefault()
@@ -194,6 +232,7 @@ private fun WeatherRouteScreenContent(
                 .padding(paddingValues)
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -201,7 +240,7 @@ private fun WeatherRouteScreenContent(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-            item {
+            item(key = "route_locations") {
                 TripLocationsCard {
                     RouteEndpointPicker(
                         state = state,
@@ -232,13 +271,13 @@ private fun WeatherRouteScreenContent(
                     )
                 }
             }
-            item {
+            item(key = "route_speed") {
                 SpeedControl(
                     speed = speed,
                     onSpeedChanged = { onSpeedChanged(it.roundToInt().toString()) }
                 )
             }
-            item {
+            item(key = "route_departure") {
                 StartTimeControl(
                     offsetHours = state.departureOffsetHours,
                     selectedDeparture = selectedDeparture,
@@ -249,7 +288,7 @@ private fun WeatherRouteScreenContent(
 
             val result = state.result
             if (result != null && state.isResultOutdated) {
-                item {
+                item(key = "route_outdated") {
                     Text(
                         text = "Result outdated. Calculate again to use the updated inputs.",
                         color = MaterialTheme.colorScheme.error,
@@ -258,7 +297,7 @@ private fun WeatherRouteScreenContent(
                     )
                 }
             } else if (result != null) {
-                item {
+                item(key = ROUTE_MAP_KEY) {
                     Card(
                         shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -267,7 +306,7 @@ private fun WeatherRouteScreenContent(
                         mapContent(result, state.selectedSampleIndex, darkTheme) { onSampleSelected(it) }
                     }
                 }
-                item {
+                item(key = "route_table") {
                     WeatherRouteTable(
                         result = result,
                         selectedSampleIndex = state.selectedSampleIndex,
@@ -281,8 +320,8 @@ private fun WeatherRouteScreenContent(
                         modifier = Modifier.fillMaxWidth().testTag("weather_route_table")
                     )
                 }
-                item { RouteSummary(result, distanceUnit) }
-                item {
+                item(key = "route_summary") { RouteSummary(result, distanceUnit) }
+                item(key = "route_weather_error") {
                     InlineWeatherError(
                         error = state.weatherError,
                         isRetrying = state.isRetryingWeather,
@@ -334,6 +373,15 @@ private fun WeatherRouteScreenContent(
         }
     }
 }
+
+private const val ROUTE_MAP_KEY = "route_map"
+
+private fun routeItemKeys(state: WeatherRouteUiState): List<String> =
+    listOf("route_locations", "route_speed", "route_departure") + when {
+        state.result == null -> emptyList()
+        state.isResultOutdated -> listOf("route_outdated")
+        else -> listOf(ROUTE_MAP_KEY, "route_table", "route_summary", "route_weather_error")
+    }
 
 @Preview(
     showBackground = true,
