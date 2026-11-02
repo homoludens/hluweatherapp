@@ -270,9 +270,14 @@ class WeatherScreenTest {
 
     @Test
     fun hourly_screen_renders_rows_from_the_next_day_without_switching_tables() {
-        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+        val now = Instant.fromEpochSeconds(0L)
+        val viewModel = renderWeather(baseTime = now)
+        val forecast = viewModel.state.value.forecast!!
+        val nextDayBoundaryIndex = 2 + forecast.toHourlyTableData(now = now)
+            .firstItemIndexForDay(1)!!
 
-        composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(28)
+        composeRule.onNodeWithTag("weather_scroll")
+            .performScrollToIndex(nextDayBoundaryIndex)
 
         composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
     }
@@ -435,20 +440,26 @@ class WeatherScreenTest {
     }
 
     @Test
-    fun sticky_day_strip_precedes_sticky_column_header() {
-        renderWeather(baseTime = Instant.fromEpochSeconds(0L))
+    fun sticky_day_strip_and_column_header_remain_separated_at_top_and_across_date_boundary() {
+        val viewModel = renderWeather(baseTime = Instant.fromEpochSeconds(0L))
 
-        val initialDayStrip = composeRule.onNodeWithTag("hourly_day_strip")
-            .fetchSemanticsNode().boundsInRoot
-        val initialColumnHeader = composeRule.onNodeWithTag("hourly_column_header")
-            .fetchSemanticsNode().boundsInRoot
-        assertTrue(initialDayStrip.top <= initialColumnHeader.top)
+        assertHourlyHeadersDoNotOverlap()
 
         composeRule.onNodeWithTag("weather_scroll").performScrollToIndex(20)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
-        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
+        assertHourlyHeadersDoNotOverlap()
+
+        val forecast = viewModel.state.value.forecast!!
+        val nextDayBoundaryIndex = 2 + forecast.toHourlyTableData(
+            now = Instant.fromEpochSeconds(0L)
+        ).firstItemIndexForDay(1)!!
+        composeRule.onNodeWithTag("weather_scroll")
+            .performScrollToIndex(nextDayBoundaryIndex)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
+        assertHourlyHeadersDoNotOverlap()
     }
 
     @Test
@@ -797,6 +808,22 @@ class WeatherScreenTest {
             hasTestTag("current_metric_feels_like") and
                 hasAnyDescendant(hasText(title, substring = false))
         ).assertIsDisplayed()
+    }
+
+    private fun assertHourlyHeadersDoNotOverlap() {
+        composeRule.onAllNodesWithTag("hourly_day_strip").assertCountEquals(1)
+        composeRule.onAllNodesWithTag("hourly_column_header").assertCountEquals(1)
+        composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
+
+        val dayStrip = composeRule.onNodeWithTag("hourly_day_strip")
+            .fetchSemanticsNode().boundsInRoot
+        val columnHeader = composeRule.onNodeWithTag("hourly_column_header")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "Date strip bottom ${dayStrip.bottom} must not overlap column header top ${columnHeader.top}",
+            dayStrip.bottom <= columnHeader.top
+        )
     }
 
     private fun renderWeather(

@@ -1,12 +1,10 @@
 package net.droopia.hluweather.ui.weather
 
 import android.Manifest
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,10 +76,8 @@ import net.droopia.hluweather.ui.map.WeatherMapRadarConfig
 
 private const val WEATHER_HEADER_KEY = "weather_header"
 private const val HOURLY_HEADER_KEY = "hourly_header"
-private const val HOURLY_DAYS_KEY = "hourly_days"
 private val hourlyListPrefixKeys = listOf(
     WEATHER_HEADER_KEY,
-    HOURLY_DAYS_KEY,
     HOURLY_HEADER_KEY
 )
 
@@ -431,9 +426,6 @@ private fun HourlyWeatherContent(
     val displayZone = ZoneId.of(forecast.timezone)
     val tableNow = rememberWeatherNow(forecast.timezone, now)
     val scope = rememberCoroutineScope()
-    val isCollapsed by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 }
-    }
     val tableData = remember(forecast, tableNow) {
         forecast.toHourlyTableData(now = tableNow)
     }
@@ -528,26 +520,19 @@ private fun HourlyWeatherContent(
                 )
             }
 
-            stickyHeader(key = HOURLY_DAYS_KEY) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                ) {
-                    HourlyDaySelector(
-                        tableData = tableData,
-                        selectedDayDate = selectedTableDay?.date,
-                        displayZone = displayZone,
-                        onDaySelected = ::onDayChipSelected
-                    )
-                }
-            }
-
             stickyHeader(key = HOURLY_HEADER_KEY) {
-                ForecastColumnHeader(
+                HourlyTableStickyHeader(
+                    tableData = tableData,
+                    selectedDayDate = selectedTableDay?.date,
+                    displayZone = displayZone,
+                    onDaySelected = ::onDayChipSelected,
                     columns = hourlyTableColumns,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    dayStripModifier = Modifier.padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        bottom = 16.dp
+                    ),
+                    columnHeaderModifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
@@ -588,25 +573,6 @@ private fun HourlyWeatherContent(
                         )
                     }
                 }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = isCollapsed,
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
-                HourlyDaySelector(
-                    tableData = tableData,
-                    selectedDayDate = selectedTableDay?.date,
-                    displayZone = displayZone,
-                    onDaySelected = ::onDayChipSelected,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
             }
         }
 

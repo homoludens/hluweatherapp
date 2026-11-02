@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -90,17 +91,12 @@ fun HourlyForecast(
         state = listState
     ) {
         stickyHeader {
-            HourlyDaySelector(
+            HourlyTableStickyHeader(
                 tableData = tableData,
                 selectedDayDate = selectedDayDate,
                 displayZone = displayZone,
-                onDaySelected = onDaySelected
-            )
-        }
-        stickyHeader {
-            ForecastColumnHeader(
+                onDaySelected = onDaySelected,
                 columns = hourlyTableColumns,
-                modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
         itemsIndexed(
@@ -143,6 +139,35 @@ fun HourlyForecast(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun HourlyTableStickyHeader(
+    tableData: HourlyTableData,
+    selectedDayDate: LocalDate?,
+    displayZone: ZoneId,
+    onDaySelected: (Int) -> Unit,
+    columns: Set<HourlyTableColumn>,
+    dayStripModifier: Modifier = Modifier,
+    columnHeaderModifier: Modifier = Modifier.padding(horizontal = 16.dp)
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        HourlyDaySelector(
+            tableData = tableData,
+            selectedDayDate = selectedDayDate,
+            displayZone = displayZone,
+            onDaySelected = onDaySelected,
+            modifier = dayStripModifier
+        )
+        ForecastColumnHeader(
+            columns = columns,
+            modifier = columnHeaderModifier
+        )
     }
 }
 

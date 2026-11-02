@@ -125,7 +125,7 @@ class HourlyForecastTest {
     }
 
     @Test
-    fun column_header_remains_sticky_after_scrolling_past_day_strip() {
+    fun sticky_headers_remain_separated_at_top_and_across_date_boundary() {
         val forecast = buildMockForecast(
             location = Svilajnac,
             baseTime = Instant.fromEpochSeconds(0L)
@@ -142,9 +142,22 @@ class HourlyForecastTest {
             }
         }
 
-        composeRule.onNodeWithTag("hourly_table").performScrollToIndex(20)
+        assertHourlyHeadersDoNotOverlap()
 
-        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_table").performScrollToIndex(20)
+        composeRule.waitForIdle()
+
+        assertHourlyHeadersDoNotOverlap()
+
+        val nextDayBoundaryIndex = 1 + forecast.toHourlyTableData(
+            now = forecast.hourly.first().time
+        ).firstItemIndexForDay(1)!!
+        composeRule.onNodeWithTag("hourly_table")
+            .performScrollToIndex(nextDayBoundaryIndex)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("hourly_day_boundary_1").assertIsDisplayed()
+        assertHourlyHeadersDoNotOverlap()
     }
 
     @Test
@@ -425,5 +438,19 @@ class HourlyForecastTest {
             val color = Color(it)
             color.red > 0.6f && color.green > 0.6f && color.blue > 0.6f
         }
+    }
+
+    private fun assertHourlyHeadersDoNotOverlap() {
+        composeRule.onNodeWithTag("hourly_day_strip").assertIsDisplayed()
+        composeRule.onNodeWithTag("hourly_column_header").assertIsDisplayed()
+
+        val dayStrip = composeRule.onNodeWithTag("hourly_day_strip")
+            .fetchSemanticsNode().boundsInRoot
+        val columnHeader = composeRule.onNodeWithTag("hourly_column_header")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "Date strip bottom ${dayStrip.bottom} must not overlap column header top ${columnHeader.top}",
+            dayStrip.bottom <= columnHeader.top
+        )
     }
 }
