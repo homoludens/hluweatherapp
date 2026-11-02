@@ -1,9 +1,18 @@
 package net.droopia.hluweather.ui.map
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.shrinkOut
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,20 +26,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
@@ -42,8 +61,15 @@ import org.maplibre.compose.interaction.MapInteractions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.StyleLoadState
 import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.overlay.AttributionDefaults
+import org.maplibre.compose.overlay.AttributionLinks
+import org.maplibre.compose.overlay.DisappearingCompassButton
+import org.maplibre.compose.overlay.DisappearingScaleBar
+import org.maplibre.compose.overlay.MapOverlayScope
+import org.maplibre.compose.overlay.MaplibreLogo
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
+import org.maplibre.compose.overlay.attributions
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
@@ -215,7 +241,8 @@ fun WeatherMap(
     onLocationClick: (WeatherLocation) -> Unit = {},
     onMapClick: (GeoPoint) -> Unit = {},
     onCameraIdle: (GeoPoint) -> Unit = {},
-    onRecenterClick: () -> Unit = {}
+    onRecenterClick: () -> Unit = {},
+    collapsedAttributionInitially: Boolean = false
 ) {
     val viewport = if (fitLocations) {
         weatherMapViewport(
@@ -308,7 +335,18 @@ fun WeatherMap(
                 }
             }
         ) {
-            include(MapOverlay.Default)
+            if (collapsedAttributionInitially) {
+                DisappearingScaleBar(
+                    metersPerDp = mapState.viewport?.metersPerDpAtTarget ?: 0.0,
+                    zoom = mapState.cameraPosition.zoom,
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
+                DisappearingCompassButton(modifier = Modifier.align(Alignment.TopEnd))
+                MaplibreLogo(Modifier.align(Alignment.BottomStart))
+                CollapsedFirstAttributionButton(Modifier.align(Alignment.BottomEnd))
+            } else {
+                include(MapOverlay.Default)
+            }
             markers.forEach { marker ->
                 Surface(
                     modifier = Modifier
@@ -365,6 +403,112 @@ fun WeatherMap(
                     .testTag("weather_map_error"),
                 color = MaterialTheme.colorScheme.error
             )
+        }
+    }
+}
+
+@Composable
+private fun MapOverlayScope.CollapsedFirstAttributionButton(modifier: Modifier = Modifier) {
+    val mapStyle = style
+    val attributions by remember(mapStyle) { derivedStateOf { mapStyle.attributions() } }
+    val isGestureMoving =
+        mapState.isCameraMoving && mapState.cameraMoveReason == CameraMoveReason.GESTURE
+    WeatherMapAttributionControl(
+        attributions = attributions,
+        isGestureMoving = isGestureMoving,
+        modifier = modifier
+    )
+}
+
+@Composable
+internal fun WeatherMapAttributionControl(
+    attributions: List<String>,
+    isGestureMoving: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(isGestureMoving) {
+        if (isGestureMoving) expanded = false
+    }
+    if (attributions.isEmpty()) return
+
+    val attributionStyle =
+        if (expanded) AttributionDefaults.expandedStyle() else AttributionDefaults.collapsedStyle()
+    val containerColor by animateColorAsState(attributionStyle.containerColor)
+    val contentColor by animateColorAsState(attributionStyle.contentColor)
+    val shadowElevation by animateDpAsState(attributionStyle.shadowElevation)
+    val layoutDirection = LocalLayoutDirection.current
+    val controlLayoutDirection = if (layoutDirection == LayoutDirection.Ltr) {
+        LayoutDirection.Rtl
+    } else {
+        LayoutDirection.Ltr
+    }
+
+    Box(
+        modifier
+            .shadow(shadowElevation, attributionStyle.shape, clip = false)
+            .then(
+                attributionStyle.border?.let { Modifier.border(it, attributionStyle.shape) }
+                    ?: Modifier
+            )
+            .background(containerColor, attributionStyle.shape)
+            .clip(attributionStyle.shape)
+            // Keep map drags from starting underneath the expanded attribution panel.
+            .pointerInput(Unit) {}
+            .semantics { isTraversalGroup = true }
+            .testTag("weather_map_attribution")
+    ) {
+        CompositionLocalProvider(LocalLayoutDirection provides controlLayoutDirection) {
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = { expanded = !expanded }
+                        )
+                        .semantics {
+                            contentDescription = if (expanded) {
+                                "Hide basemap information"
+                            } else {
+                                "Show basemap information"
+                            }
+                        }
+                        .testTag("weather_map_attribution_toggle"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = AttributionDefaults.icon(),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        colorFilter = ColorFilter.tint(AttributionDefaults.ContentColor)
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = expanded,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    enter = expandIn(expandFrom = Alignment.CenterStart),
+                    exit = shrinkOut(shrinkTowards = Alignment.CenterStart)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 0.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+                            .testTag("weather_map_attribution_links")
+                    ) {
+                        CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                            AttributionLinks(
+                                attributions = attributions,
+                                textStyle = attributionStyle.textStyle.copy(color = contentColor)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

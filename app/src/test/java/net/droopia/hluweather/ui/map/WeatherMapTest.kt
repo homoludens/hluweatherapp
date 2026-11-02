@@ -3,10 +3,15 @@ package net.droopia.hluweather.ui.map
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.LinkAnnotation
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -192,4 +197,59 @@ class WeatherMapTest {
         composeRule.onNodeWithContentDescription("Recenter map")
             .assertContentDescriptionEquals("Recenter map")
     }
+
+    @Test
+    fun map_attribution_starts_collapsed_opens_style_links_and_can_be_closed() {
+        composeRule.setContent {
+            WeatherMapAttributionControl(
+                attributions = listOf(
+                    "<a href=\"https://tiles.example.test/credits\">Example map credit</a>"
+                )
+            )
+        }
+
+        composeRule.onNodeWithTag("weather_map_attribution_toggle")
+            .assertHasClickAction()
+            .assertContentDescriptionEquals("Show basemap information")
+        composeRule.onNodeWithText("Example map credit").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("weather_map_attribution_toggle").performClick()
+
+        val creditText = composeRule.onNodeWithText("Example map credit", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .single()
+        val creditLink = creditText.getLinkAnnotations(0, creditText.length).single().item
+        assertTrue(creditLink is LinkAnnotation.Url)
+        assertEquals("https://tiles.example.test/credits", (creditLink as LinkAnnotation.Url).url)
+        composeRule.onNodeWithTag("weather_map_attribution_toggle")
+            .assertContentDescriptionEquals("Hide basemap information")
+
+        composeRule.onNodeWithTag("weather_map_attribution_toggle").performClick()
+
+        composeRule.onNodeWithText("Example map credit").assertDoesNotExist()
+        composeRule.onNodeWithTag("weather_map_attribution_toggle")
+            .assertContentDescriptionEquals("Show basemap information")
+    }
+
+    @Test
+    fun only_the_main_map_opts_into_collapsed_first_attribution() {
+        val mapSource = mainSource("ui/map/WeatherMap.kt")
+
+        assertTrue(mapSource.contains("collapsedAttributionInitially: Boolean = false"))
+        assertTrue(mapSource.contains("if (collapsedAttributionInitially)"))
+        assertTrue(mapSource.contains("include(MapOverlay.Default)"))
+        assertTrue(mapSource.contains("DisappearingScaleBar("))
+        assertTrue(mapSource.contains("DisappearingCompassButton("))
+        assertTrue(mapSource.contains("MaplibreLogo("))
+        assertTrue(mapSource.contains("mapStyle.attributions()"))
+        assertTrue(mainSource("ui/weather/WeatherScreen.kt").contains("collapsedAttributionInitially = true"))
+        assertFalse(mainSource("ui/locationpicker/LocationPickerScreen.kt").contains("collapsedAttributionInitially = true"))
+        assertFalse(mainSource("ui/weatherroute/RouteEndpointPicker.kt").contains("collapsedAttributionInitially = true"))
+    }
+
+    private fun mainSource(path: String): String =
+        File("app/src/main/java/net/droopia/hluweather/$path").takeIf { it.isFile }
+            ?.readText() ?: File("src/main/java/net/droopia/hluweather/$path").readText()
 }

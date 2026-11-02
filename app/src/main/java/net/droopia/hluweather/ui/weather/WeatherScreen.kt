@@ -286,6 +286,7 @@ fun WeatherScreen(
                                             darkTheme = darkTheme,
                                             fitLocations = true,
                                             radar = selectedRadar,
+                                            collapsedAttributionInitially = true,
                                             recenterTopPadding = 72.dp,
                                             onLocationClick = viewModel::selectLocation,
                                             onRecenterClick = onRecenterClick
