@@ -63,6 +63,7 @@ import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
@@ -74,6 +75,7 @@ import net.droopia.hluweather.ui.settings.WindDirectionDisplay
 import net.droopia.hluweather.ui.map.WeatherMap
 import net.droopia.hluweather.ui.map.RadarMapOverlay
 import net.droopia.hluweather.ui.map.RadarPlaybackViewModel
+import net.droopia.hluweather.ui.map.RadarPlaybackState
 import net.droopia.hluweather.ui.map.WeatherMapRadarConfig
 import net.droopia.hluweather.ui.map.WeatherRadarResources
 import net.droopia.hluweather.HluWeatherApplication
@@ -103,6 +105,7 @@ fun WeatherScreen(
     onRadarEnabledChange: (Boolean) -> Unit = {},
     radarProvider: RadarProvider = RadarProvider.LIBREWXR,
     onRadarProviderChange: (RadarProvider) -> Unit = {},
+    mainMapDestinationVisible: Boolean = true,
     radarPlaybackViewModel: RadarPlaybackViewModel = viewModel(factory = RadarPlaybackViewModel.Factory),
     now: Instant? = null,
     modifier: Modifier = Modifier,
@@ -136,10 +139,19 @@ fun WeatherScreen(
         }
     }
 
-    val radarShouldBeVisible = state.forecastMode == ForecastMode.MAP &&
+    val radarShouldBeVisible = mainMapDestinationVisible && state.forecastMode == ForecastMode.MAP &&
         radarEnabled &&
         forecast != null &&
         location != null
+    // This effect is declared before visibility so persisted Settings is applied first on entry.
+    LaunchedEffect(radarProvider, radarPlaybackViewModel, radarShouldBeVisible, lifecycleOwner) {
+        if (!radarShouldBeVisible ||
+            !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        ) {
+            radarPlaybackViewModel.setVisible(false)
+        }
+        radarPlaybackViewModel.selectProvider(radarProvider)
+    }
     LaunchedEffect(lifecycleOwner, radarShouldBeVisible, radarPlaybackViewModel) {
         if (radarShouldBeVisible) {
             lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -158,13 +170,27 @@ fun WeatherScreen(
         onDispose { radarPlaybackViewModel.setVisible(false) }
     }
 
+    val radarStateForProvider = if (radarState.selectedProvider == radarProvider) {
+        radarState
+    } else {
+        // Do not briefly show the outgoing provider's timeline while Settings is being applied.
+        RadarPlaybackState(
+            selectedProvider = radarProvider,
+            metadataState = RadarMetadataState(isLoading = radarShouldBeVisible)
+        )
+    }
     val selectedRadar = if (
-        radarShouldBeVisible && radarState.isVisible
+        radarShouldBeVisible && radarStateForProvider.isVisible
     ) {
-        val frame = radarState.selectedFrame
-        val host = radarState.metadata?.host
-        if (frame != null && host != null) {
-            WeatherMapRadarConfig(host = host, frame = frame, opacity = radarOpacity)
+        val metadata = radarStateForProvider.metadata
+        val frame = radarStateForProvider.requestedFrame?.takeIf { requested ->
+            requested.provider == radarProvider && metadata?.let { current ->
+                current.provider == radarProvider &&
+                    requested.identity(current.host) == radarStateForProvider.requestedFrameIdentity
+            } == true
+        }
+        if (frame != null && metadata != null) {
+            WeatherMapRadarConfig(host = metadata.host, frame = frame, opacity = radarOpacity)
         } else {
             null
         }
@@ -279,22 +305,37 @@ fun WeatherScreen(
                                             darkTheme,
                                             onRecenterClick
                                         )
-                                     } else {
-                                         val application = LocalContext.current.applicationContext as? HluWeatherApplication
-                                         val radarResources = remember(application) {
-                                             application?.let {
-                                                 WeatherRadarResources(it.radarTileRegistry, it.radarTileLoader, it.radarMapResourceProvider)
-                                             }
-                                         }
-                                         WeatherMap(
+                                    } else {
+                                        val application =
+                                            LocalContext.current.applicationContext as? HluWeatherApplication
+                                        val radarResources = remember(application) {
+                                            application?.let {
+                                                WeatherRadarResources(
+                                                    it.radarTileRegistry,
+                                                    it.radarTileLoader,
+                                                    it.radarMapResourceProvider
+                                                )
+                                            }
+                                        }
+                                        WeatherMap(
                                             locations = state.locations,
                                             activeLocationId = location.id.takeUnless { it == "current" },
                                             center = GeoPoint(location.latitude, location.longitude),
                                             darkTheme = darkTheme,
                                             fitLocations = true,
-                                             radar = selectedRadar,
-                                             radarResources = radarResources,
-                                             radarProvider = radarProvider,
+                                            radar = selectedRadar,
+                                            radarResources = radarResources,
+                                            radarProvider = radarProvider,
+                                            radarMetadata = radarStateForProvider.metadata,
+                                            radarRetryToken = radarStateForProvider.displayRetryToken,
+                                            onRadarDisplayChanged = { display ->
+                                                if (radarShouldBeVisible && radarStateForProvider.isVisible &&
+                                                    radarStateForProvider.selectedProvider == radarProvider &&
+                                                    lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                                                ) {
+                                                    radarPlaybackViewModel.onDisplayChanged(display)
+                                                }
+                                            },
                                             collapsedAttributionInitially = true,
                                             recenterTopPadding = 72.dp,
                                             onLocationClick = viewModel::selectLocation,
@@ -303,16 +344,22 @@ fun WeatherScreen(
                                     }
                                     RadarMapOverlay(
                                         enabled = radarEnabled,
-                                        onEnabledChange = onRadarEnabledChange,
+                                        onEnabledChange = { enabled ->
+                                            if (!enabled) radarPlaybackViewModel.setVisible(false)
+                                            onRadarEnabledChange(enabled)
+                                        },
                                         selectedProvider = radarProvider,
-                                        onProviderChange = onRadarProviderChange,
-                                        playbackState = radarState,
-                                        metadataState = radarState.metadataState,
+                                        onProviderChange = { provider ->
+                                            radarPlaybackViewModel.selectProvider(provider)
+                                            onRadarProviderChange(provider)
+                                        },
+                                        playbackState = radarStateForProvider,
+                                        metadataState = radarStateForProvider.metadataState,
                                         opacity = radarOpacity,
                                         onOpacityChange = { radarOpacity = it },
                                         onFrameSelected = radarPlaybackViewModel::selectFrame,
                                         onPlayPause = {
-                                            if (radarState.isPlaying) {
+                                            if (radarStateForProvider.isPlaying) {
                                                 radarPlaybackViewModel.pause()
                                             } else {
                                                 radarPlaybackViewModel.play()

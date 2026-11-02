@@ -3,6 +3,7 @@ package net.droopia.hluweather.ui.map
 import java.io.File
 import net.droopia.hluweather.data.model.RadarFrame
 import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,6 +33,45 @@ class WeatherMapRadarTest {
         listOf("ui/locationpicker/LocationPickerScreen.kt", "ui/weatherroute/RouteEndpointPicker.kt", "ui/weatherroute/WeatherRouteMap.kt")
             .forEach { assertFalse(source(it).contains("radarResources =")) }
         assertTrue(source("ui/weather/WeatherScreen.kt").contains("radarResources = radarResources"))
+    }
+
+    @Test
+    fun viewport_prefetch_requires_visible_matching_radar_and_metadata() {
+        val radar = config()
+        val metadata = RadarMetadata.normalized(
+            radar.frame.provider,
+            radar.host,
+            listOf(radar.frame)
+        )
+
+        assertTrue(shouldPlanRadarPrefetch(
+            radar, RadarProvider.LIBREWXR, metadata,
+            lifecycleStarted = true, styleReady = true, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            null, RadarProvider.LIBREWXR, metadata,
+            lifecycleStarted = true, styleReady = true, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            radar, RadarProvider.LIBREWXR, metadata,
+            lifecycleStarted = false, styleReady = true, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            radar, RadarProvider.LIBREWXR, metadata,
+            lifecycleStarted = true, styleReady = false, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            radar, RadarProvider.RAINVIEWER, metadata,
+            lifecycleStarted = true, styleReady = true, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            radar, RadarProvider.LIBREWXR, null,
+            lifecycleStarted = true, styleReady = true, hasViewport = true
+        ))
+        assertFalse(shouldPlanRadarPrefetch(
+            radar, RadarProvider.LIBREWXR, metadata,
+            lifecycleStarted = true, styleReady = true, hasViewport = false
+        ))
     }
 
     private fun config() = WeatherMapRadarConfig(

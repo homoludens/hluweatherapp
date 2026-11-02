@@ -37,8 +37,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import java.util.TimeZone
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +66,9 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.LocationMode
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarFrameType
+import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -75,6 +83,7 @@ import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.ui.map.RadarPlaybackViewModel
+import net.droopia.hluweather.ui.map.RadarDisplayState
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.defaultHourlyTableColumns
@@ -254,6 +263,7 @@ class WeatherScreenTest {
 
         assertEquals(RadarProvider.RAINVIEWER, provider.value)
         assertEquals(1, providerChanges)
+        assertEquals(RadarProvider.RAINVIEWER, radarViewModel.state.value.selectedProvider)
         assertFalse(enabled.value)
         assertFalse(radarViewModel.state.value.isVisible)
         assertEquals(0, repository.activeCollectors)
@@ -261,6 +271,116 @@ class WeatherScreenTest {
         composeRule.onNodeWithText("75%").assertIsDisplayed()
         composeRule.onNodeWithTag("test_basemap_attribution").assertIsDisplayed()
         composeRule.onNodeWithTag("test_map_location_control").assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_provider_is_synchronized_before_collection_and_layer_change_switches_live() {
+        val libreWxr = TrackingRadarRepository(RadarMetadataState())
+        val rainViewer = TrackingRadarRepository(RadarMetadataState())
+        radarRepositories += libreWxr
+        radarRepositories += rainViewer
+        val radarViewModel = RadarPlaybackViewModel(
+            mapOf(
+                RadarProvider.LIBREWXR to libreWxr,
+                RadarProvider.RAINVIEWER to rainViewer
+            )
+        )
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        weatherViewModel.onForecastModeSelected(ForecastMode.MAP)
+        val provider = mutableStateOf(RadarProvider.RAINVIEWER)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                WeatherScreen(
+                    viewModel = weatherViewModel,
+                    radarPlaybackViewModel = radarViewModel,
+                    radarProvider = provider.value,
+                    onRadarProviderChange = { provider.value = it },
+                    mapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize().testTag("provider_test_map")) }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertEquals(RadarProvider.RAINVIEWER, radarViewModel.state.value.selectedProvider)
+        assertEquals(0, libreWxr.activeCollectors)
+        assertEquals(1, rainViewer.activeCollectors)
+        composeRule.onNodeWithTag("radar_layer_options").performClick()
+        composeRule.onNodeWithTag("radar_layer_provider_librewxr").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(RadarProvider.LIBREWXR, provider.value)
+        assertEquals(RadarProvider.LIBREWXR, radarViewModel.state.value.selectedProvider)
+        assertEquals(1, libreWxr.activeCollectors)
+        assertEquals(0, rainViewer.activeCollectors)
+        composeRule.onNodeWithTag("provider_test_map").assertIsDisplayed()
+    }
+
+    @Test
+    fun destination_and_lifecycle_visibility_cancel_collection_and_ignore_late_display_ack() {
+        val libreWxr = TrackingRadarRepository(RadarMetadataState())
+        val rainViewer = TrackingRadarRepository(RadarMetadataState())
+        radarRepositories += libreWxr
+        radarRepositories += rainViewer
+        val radarViewModel = RadarPlaybackViewModel(
+            mapOf(
+                RadarProvider.LIBREWXR to libreWxr,
+                RadarProvider.RAINVIEWER to rainViewer
+            )
+        )
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        weatherViewModel.onForecastModeSelected(ForecastMode.MAP)
+        val mainMapVisible = mutableStateOf(true)
+        val lifecycleOwner = MutableTestLifecycleOwner(Lifecycle.State.RESUMED)
+
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                HluWeatherTheme(darkTheme = false) {
+                    WeatherScreen(
+                        viewModel = weatherViewModel,
+                        radarPlaybackViewModel = radarViewModel,
+                        mainMapDestinationVisible = mainMapVisible.value,
+                        mapContent = { _, _, _, _, _ -> Box(Modifier.fillMaxSize().testTag("lifecycle_test_map")) }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        assertTrue(radarViewModel.state.value.isVisible)
+        assertEquals(1, libreWxr.activeCollectors)
+
+        val oldFrame = testRadarFrame(RadarProvider.LIBREWXR, 1_793_477_400L)
+        val requestedFrame = testRadarFrame(RadarProvider.LIBREWXR, 1_793_478_000L)
+        val metadata = RadarMetadata.normalized(
+            RadarProvider.LIBREWXR,
+            "https://tiles.librewxr.example.test",
+            listOf(oldFrame, requestedFrame)
+        )
+        libreWxr.publish(metadata)
+        composeRule.waitForIdle()
+        val requestedIdentity = requireNotNull(radarViewModel.state.value.requestedFrameIdentity)
+        val oldIdentity = oldFrame.identity(metadata.host)
+
+        mainMapVisible.value = false
+        composeRule.waitForIdle()
+        assertFalse(radarViewModel.state.value.isVisible)
+        assertEquals(0, libreWxr.activeCollectors)
+        radarViewModel.onDisplayChanged(RadarDisplayState(requestedIdentity, requestedIdentity, pending = false))
+        assertNull(radarViewModel.state.value.displayedFrameIdentity)
+
+        mainMapVisible.value = true
+        composeRule.waitForIdle()
+        assertTrue(radarViewModel.state.value.isVisible)
+        radarViewModel.onDisplayChanged(RadarDisplayState(requestedIdentity, oldIdentity, pending = true))
+        assertEquals(oldIdentity, radarViewModel.state.value.displayedFrameIdentity)
+
+        composeRule.runOnIdle { lifecycleOwner.lifecycle.currentState = Lifecycle.State.CREATED }
+        composeRule.waitForIdle()
+        assertFalse(radarViewModel.state.value.isVisible)
+        assertEquals(0, libreWxr.activeCollectors)
+        radarViewModel.onDisplayChanged(RadarDisplayState(requestedIdentity, requestedIdentity, pending = false))
+        assertNull(radarViewModel.state.value.displayedFrameIdentity)
+        composeRule.onNodeWithTag("lifecycle_test_map").assertIsDisplayed()
     }
 
     @Test
@@ -1106,8 +1226,23 @@ class WeatherScreenTest {
                 initial
             )
 
+        fun publish(metadata: RadarMetadata) {
+            updates.value = RadarMetadataState(metadata = metadata, isLoading = false)
+        }
+
         fun close() = scope.cancel()
     }
+
+    private class MutableTestLifecycleOwner(initialState: Lifecycle.State) : LifecycleOwner {
+        override val lifecycle = LifecycleRegistry(this).apply { currentState = initialState }
+    }
+
+    private fun testRadarFrame(provider: RadarProvider, timestamp: Long) = RadarFrame(
+        timestampSeconds = timestamp,
+        path = "/v2/radar/$timestamp",
+        type = RadarFrameType.OBSERVED,
+        provider = provider
+    )
 
     private fun ImageBitmap.hasLightForeground(): Boolean {
         val pixels = IntArray(width * height)

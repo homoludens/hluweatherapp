@@ -124,7 +124,8 @@ fun HluNavHost(
                             radarEnabled = settingsState.radarEnabled,
                             onRadarEnabledChange = settingsViewModel::setRadarEnabled,
                             radarProvider = settingsState.radarProvider,
-                            onRadarProviderChange = settingsViewModel::setRadarProvider
+                            onRadarProviderChange = settingsViewModel::setRadarProvider,
+                            mainMapDestinationVisible = mainDestination == MainDestination.MAP
                         )
                     } else {
                         WeatherScreen(
@@ -143,6 +144,7 @@ fun HluNavHost(
                             onRadarEnabledChange = settingsViewModel::setRadarEnabled,
                             radarProvider = settingsState.radarProvider,
                             onRadarProviderChange = settingsViewModel::setRadarProvider,
+                            mainMapDestinationVisible = mainDestination == MainDestination.MAP,
                             mapContent = weatherMapContent
                         )
                     }

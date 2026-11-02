@@ -30,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
+import java.io.IOException
 import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,7 @@ import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.LibreWxrRadarFrame
 import net.droopia.hluweather.data.network.LibreWxrRadarFrameType
 import net.droopia.hluweather.data.network.LibreWxrRadarMetadata
+import net.droopia.hluweather.data.network.RadarApiException
 import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.MockWeatherRepository
 import net.droopia.hluweather.data.repository.RadarMetadataState
@@ -171,7 +173,7 @@ class RadarMapOverlayTest {
         setOverlayContent(playback, enabled, opacity, darkTheme = false)
 
         composeRule.onNodeWithText("Observed").assertIsDisplayed()
-        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
+        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_latest_observed_marker").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_timeline_slider")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
@@ -179,7 +181,7 @@ class RadarMapOverlayTest {
             }
 
         composeRule.onNodeWithText("Forecast +10 min").assertIsDisplayed()
-        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
+        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_timeline_slider").run {
             val range = fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo]
             assertEquals(0f..2f, range.range)
@@ -191,6 +193,56 @@ class RadarMapOverlayTest {
         composeRule.onNodeWithContentDescription("Pause radar playback").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Pause radar playback").performClick()
         assertFalse(playback.state.value.isPlaying)
+    }
+
+    @Test
+    fun requested_and_displayed_times_and_rate_limit_error_stay_distinct_and_play_retries() {
+        val playback = playbackViewModel()
+        playback.setVisible(true)
+        val state = playback.state.value
+        val requested = requireNotNull(state.requestedFrameIdentity)
+        val shown = requireNotNull(state.metadata).frames.first().identity(state.metadata.host)
+        playback.onDisplayChanged(RadarDisplayState(requested, shown, pending = true))
+        val enabled = mutableStateOf(true)
+        val opacity = mutableFloatStateOf(0.75f)
+        setOverlayContent(playback, enabled, opacity, darkTheme = false)
+
+        composeRule.onNodeWithText("Loading radar frame…").assertIsDisplayed()
+        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
+        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_requested_time").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_displayed_time").assertIsDisplayed()
+
+        playback.selectFrame(playback.state.value.frames.last().timestampSeconds)
+        val forecastIdentity = requireNotNull(playback.state.value.requestedFrameIdentity)
+        playback.onDisplayChanged(
+            RadarDisplayState(
+                requested = forecastIdentity,
+                displayed = shown,
+                pending = false,
+                error = "HTTP 429: rate limit reached"
+            )
+        )
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Radar rate limit reached").assertIsDisplayed()
+        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
+        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        playback.onDisplayChanged(
+            RadarDisplayState(
+                requested = forecastIdentity,
+                displayed = shown,
+                pending = false,
+                error = "Connection reset"
+            )
+        )
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Radar network unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        val retryToken = playback.state.value.displayRetryToken
+        composeRule.onNodeWithContentDescription("Play radar playback").performClick()
+        assertTrue(playback.state.value.displayRetryToken > retryToken)
+        assertTrue(playback.state.value.isPending)
     }
 
     @Test
@@ -250,6 +302,16 @@ class RadarMapOverlayTest {
         composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
         composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
             .assertIsDisplayed()
+
+        emptyRepository.updates.value = RadarMetadataState(error = IOException("offline"))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Radar network unavailable").assertIsDisplayed()
+
+        emptyRepository.updates.value = RadarMetadataState(
+            error = RadarApiException("Too many requests", statusCode = 429)
+        )
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Radar rate limit reached").assertIsDisplayed()
     }
 
     @Test

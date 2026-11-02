@@ -50,8 +50,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.IOException
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.network.RadarApiException
 import net.droopia.hluweather.data.repository.RadarMetadataState
 
 private val RadarObservedColor = Color(0xFF27835A)
@@ -290,10 +292,14 @@ private fun RadarTimeline(
         RadarFrameType.FORECAST -> MaterialTheme.colorScheme.onPrimaryContainer
         null -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val displayFailure = playbackState.displayError?.let(::radarDisplayErrorLabel)
+    val metadataFailure = metadataState.error?.let(::radarMetadataErrorLabel)
     val status = when {
-        metadataState.error != null -> if (frames.isEmpty()) "Radar unavailable" else "Radar updating"
+        displayFailure != null -> displayFailure
+        metadataFailure != null -> metadataFailure
         metadataState.isLoading && frames.isEmpty() -> "Loading radar…"
         frames.isEmpty() -> "No radar frames"
+        playbackState.isPending -> "Loading radar frame…"
         metadataState.isLoading -> "Updating radar…"
         else -> null
     }
@@ -313,7 +319,7 @@ private fun RadarTimeline(
                         .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }
                         .testTag("radar_status"),
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (metadataState.error != null) {
+                    color = if (displayFailure != null || metadataFailure != null) {
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -323,6 +329,9 @@ private fun RadarTimeline(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val showRequestedAndDisplayed = playbackState.requestedFrameIdentity != null &&
+                        (playbackState.isPending || playbackState.displayError != null ||
+                            playbackState.requestedFrameIdentity != playbackState.displayedFrameIdentity)
                     if (selectedType != null) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -342,10 +351,23 @@ private fun RadarTimeline(
                         Text("Radar timeline", style = MaterialTheme.typography.labelMedium)
                     }
                     Text(
-                        text = playbackState.selectedFrameTimeLabel ?: "Waiting for radar frames",
+                        text = if (showRequestedAndDisplayed) {
+                            "Requested · ${playbackState.requestedFrameTimeLabel ?: "Waiting"}"
+                        } else {
+                            playbackState.requestedFrameTimeLabel ?: "Waiting for radar frames"
+                        },
+                        modifier = Modifier.testTag("radar_requested_time"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (showRequestedAndDisplayed) {
+                        Text(
+                            text = "Showing · ${playbackState.displayedFrameTimeLabel ?: "no frame yet"}",
+                            modifier = Modifier.testTag("radar_displayed_time"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 IconButton(
@@ -441,4 +463,20 @@ private fun RadarTimeline(
             )
         }
     }
+}
+
+private fun radarMetadataErrorLabel(error: Throwable): String = when {
+    error is RadarApiException && error.statusCode == 429 -> "Radar rate limit reached"
+    error is IOException -> "Radar network unavailable"
+    else -> "Radar unavailable"
+}
+
+private fun radarDisplayErrorLabel(message: String): String = when {
+    message.contains("429") || message.contains("rate limit", ignoreCase = true) ->
+        "Radar rate limit reached"
+    message.contains("timed out", ignoreCase = true) || message.contains("timeout", ignoreCase = true) ->
+        "Radar loading timed out"
+    message.contains("network", ignoreCase = true) || message.contains("connection", ignoreCase = true) ||
+        message.contains("http", ignoreCase = true) -> "Radar network unavailable"
+    else -> "Radar unavailable"
 }

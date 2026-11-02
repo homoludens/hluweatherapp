@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.network.radarMapRuntimeOptions
@@ -245,6 +246,8 @@ fun WeatherMap(
     radar: WeatherMapRadarConfig? = null,
     radarResources: WeatherRadarResources? = null,
     radarProvider: RadarProvider? = radar?.frame?.provider,
+    radarMetadata: RadarMetadata? = null,
+    radarRetryToken: Long = 0L,
     onRadarDisplayChanged: (RadarDisplayState) -> Unit = {},
     recenterTopPadding: Dp = 16.dp,
     onLocationClick: (WeatherLocation) -> Unit = {},
@@ -282,7 +285,15 @@ fun WeatherMap(
     )
     DisposableEffect(radarRuntime) { onDispose { radarRuntime?.close() } }
     if (radarResources != null) {
-        WeatherRadarRenderer(mapState, radarResources, radar, radarProvider, onRadarDisplayChanged)
+        WeatherRadarRenderer(
+            mapState = mapState,
+            resources = radarResources,
+            radar = radar,
+            selectedProvider = radarProvider,
+            metadata = radarMetadata,
+            retryToken = radarRetryToken,
+            onDisplayChanged = onRadarDisplayChanged
+        )
     }
     val scope = rememberCoroutineScope()
     val markers = remember(locations, activeLocationId) {

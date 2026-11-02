@@ -38,6 +38,7 @@ data class RadarPlaybackState(
     val requestedFrameIdentity: RadarFrameIdentity? = null,
     val displayedFrame: RadarFrame? = null,
     val displayedFrameIdentity: RadarFrameIdentity? = null,
+    val displayedFrameTimeLabel: String? = null,
     val latestObservedTimestampSeconds: Long? = null,
     val requestedFrameTimeLabel: String? = null,
     val requestedFrameType: RadarFrameType? = null,
@@ -107,7 +108,9 @@ class RadarPlaybackViewModel(
                     isVisible = false,
                     displayedFrame = null,
                     displayedFrameIdentity = null,
-                    isPending = false
+                    displayedFrameTimeLabel = null,
+                    isPending = false,
+                    displayError = null
                 )
             }
         }
@@ -170,6 +173,9 @@ class RadarPlaybackViewModel(
         _state.value = current.copy(
             displayedFrame = displayedFrame,
             displayedFrameIdentity = displayedIdentity,
+            displayedFrameTimeLabel = displayedFrame?.let {
+                Instant.fromEpochSeconds(it.timestampSeconds).dateTimeText(timeZone())
+            },
             isPending = error == null && display.displayed != requested,
             displayError = error
         )
