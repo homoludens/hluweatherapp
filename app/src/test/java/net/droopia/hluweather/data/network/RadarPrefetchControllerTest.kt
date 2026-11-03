@@ -9,6 +9,8 @@ import net.droopia.hluweather.data.model.RadarFrame
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarProviderDescriptors
+import net.droopia.hluweather.data.model.RadarTileCoverage
 import net.droopia.hluweather.data.model.RadarViewportBounds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,9 +31,9 @@ class RadarPrefetchControllerTest {
         val registry = RadarTileRegistry()
         val plan = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
         assertEquals(1, plan.demand.size)
-        assertEquals(listOf("/radar/1/", "/radar/3/", "/radar/0/", "/radar/4/"),
+        assertEquals(listOf("/radar/1/", "/radar/3/"),
             plan.speculative.map { key -> frames.first { key.url.contains(it.path + "/") }.path + "/" })
-        assertTrue(plan.demand.all { it.coordinate.zoom == 2 })
+        assertTrue(plan.demand.all { it.coordinate.zoom == 0 })
         assertTrue(plan.speculative.none { it in plan.demand })
         assertEquals(plan.speculative.size, plan.speculative.toSet().size)
         assertEquals("Neighbors do not retain native source registrations", 1, registry.registeredCount)
@@ -41,7 +43,7 @@ class RadarPrefetchControllerTest {
 
     @Test
     fun largeViewportIsBoundedAndPrioritizesClosestFrameAndTiles() {
-        val broad = RadarViewportBounds(-90.0, -66.0, 90.0, 66.0, 3.0, 0.0, 0.0)
+        val broad = RadarViewportBounds(-90.0, -66.0, 90.0, 66.0, 10.0, 0.0, 0.0)
         val plan = planRadarTiles(RadarTileRegistry(), metadata, frames[2].identity(host), broad)
         assertTrue(plan.demand.size > 16)
         assertEquals(64, plan.speculative.size)
@@ -91,9 +93,42 @@ class RadarPrefetchControllerTest {
     fun metadataRefreshAndEndpointProduceOnlyCurrentNeighbors() {
         val refreshed = metadata.copy(frames = frames.drop(2))
         val plan = planRadarTiles(RadarTileRegistry(), refreshed, frames[2].identity(host), viewport)
-        assertEquals(2, plan.speculative.size)
+        assertEquals(1, plan.speculative.size)
         assertTrue(plan.speculative[0].url.contains("/radar/3/"))
-        assertTrue(plan.speculative[1].url.contains("/radar/4/"))
+    }
+
+    @Test
+    fun visibleAndSpeculativePlansShareCoarseCoordinatesAndPrefetchWarmsForegroundCache() = runTest {
+        val registry = RadarTileRegistry()
+        val broad = RadarViewportBounds(-90.0, -66.0, 90.0, 66.0, 4.0, 0.0, 0.0)
+        val plan = planRadarTiles(registry, metadata, frames[2].identity(host), broad)
+        val expectedCoordinates = RadarTileCoverage.tiles(
+            broad,
+            RadarProviderDescriptors[metadata.provider]
+        ).toSet()
+        assertTrue(expectedCoordinates.size > 1)
+        assertEquals(expectedCoordinates, plan.demand.map { it.coordinate }.toSet())
+        assertEquals(expectedCoordinates, plan.speculative.map { it.coordinate }.toSet())
+        assertEquals(setOf(3), expectedCoordinates.map { it.zoom }.toSet())
+
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        val attempts = mutableListOf<RadarTileKey>()
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { key, _ ->
+            attempts += key
+            RadarTileHttpResult(200, RadarTilePayload(byteArrayOf(key.coordinate.x.toByte()), 100_000))
+        }, { testScheduler.currentTime })
+        val controller = RadarPrefetchController(backgroundScope, loader)
+        controller.replan(plan)
+        runCurrent()
+        assertEquals(plan.speculative, attempts)
+
+        val previousFrame = plan.speculative.filter { it.url.contains(frames[1].path + "/") }
+        assertEquals(expectedCoordinates, previousFrame.map { it.coordinate }.toSet())
+        previousFrame.forEach { key -> loader.load(key) }
+        assertEquals("Foreground demand must reuse completed coarse prefetch", plan.speculative, attempts)
+
+        controller.stop()
+        registry.unregister(plan.requestedSource)
     }
 
     @Test
@@ -124,7 +159,8 @@ class RadarPrefetchControllerTest {
         runCurrent()
         assertEquals("Equivalent viewport plans must not restart failed or no-store prefetch", initial.speculative.size, attempts.size)
 
-        val changed = planRadarTiles(registry, metadata, frames[3].identity(host), viewport)
+        // Jump to the endpoint so the new one-neighbor plan still shares frame 3 with the old plan.
+        val changed = planRadarTiles(registry, metadata, frames[4].identity(host), viewport)
         controller.replan(changed)
         runCurrent()
         val shared = initial.speculative.intersect(changed.speculative.toSet())

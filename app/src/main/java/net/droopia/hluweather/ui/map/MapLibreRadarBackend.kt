@@ -73,7 +73,6 @@ internal class MapLibreRadarBackend(
 
     override fun create(slot: RadarRenderSlot) {
         val request = slot.request
-        val descriptor = RadarProviderDescriptors[request.config.frame.provider]
         val lease = registry.register(request.config.host, request.config.frame)
         val keys = request.coordinates.map(lease::tile)
         val observation = provider.observeNativeTiles(keys)
@@ -81,16 +80,7 @@ internal class MapLibreRadarBackend(
         val layerId = "hlu-radar-layer-$instance-${slot.id}"
         var handle: MutableSourceHandle? = null
         try {
-            handle = mapState.style.sources.add(RasterTileSource(
-                id = sourceId,
-                tiles = listOf(lease.template),
-                tileSize = descriptor.tileOptions.size,
-                options = TileSetOptions(
-                    minZoom = descriptor.nativeMinZoom,
-                    maxZoom = descriptor.nativeMaxZoom,
-                    tileCoordinateSystem = TileCoordinateSystem.XYZ
-                )
-            ))
+            handle = mapState.style.sources.add(radarRasterTileSource(sourceId, lease))
             handle.isVolatile = true
             check(handle.isVolatile) { "Radar source did not become volatile" }
             slots[slot.id] = NativeSlot(sourceId, layerId, lease, handle, observation)
@@ -294,4 +284,34 @@ internal class MapLibreRadarBackend(
         internal val tileOrder = compareBy<net.droopia.hluweather.data.model.RadarTileCoordinate> { it.zoom }
             .thenBy { it.x }.thenBy { it.y }
     }
+}
+
+/** Match app-side coverage and prefetch; the native source must never refine to detailed tiles. */
+internal data class RadarRasterTileSourceConfig(
+    val template: String,
+    val tileSize: Int,
+    val options: TileSetOptions
+)
+
+internal fun radarRasterTileSourceConfig(lease: RegisteredRadarSource): RadarRasterTileSourceConfig {
+    val descriptor = RadarProviderDescriptors[lease.frame.provider]
+    return RadarRasterTileSourceConfig(
+        template = lease.template,
+        tileSize = RadarTileCoverage.RENDER_TILE_SIZE,
+        options = TileSetOptions(
+            minZoom = descriptor.nativeMinZoom,
+            maxZoom = RadarTileCoverage.renderMaxZoom(descriptor),
+            tileCoordinateSystem = TileCoordinateSystem.XYZ
+        )
+    )
+}
+
+internal fun radarRasterTileSource(id: String, lease: RegisteredRadarSource): RasterTileSource {
+    val config = radarRasterTileSourceConfig(lease)
+    return RasterTileSource(
+        id = id,
+        tiles = listOf(config.template),
+        tileSize = config.tileSize,
+        options = config.options
+    )
 }

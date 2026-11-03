@@ -6,7 +6,7 @@ All five tasks start incomplete: the five partial source edits listed in `design
 
 ## 2. Coarse-Only Raster Loading and Prefetch
 
-- [ ] 2.1 [low] Complete the shared two-level-coarser policy for viewport coverage, native raster source settings, and prefetch; keep provider URLs at supported 256-pixel images, native display tile size at 1024 points, render caps at LibreWXR zoom 10/RainViewer zoom 5, and the existing one-neighbor-per-side timeline policy with no stationary-viewport detail upgrade. Update stale coverage/prefetch tests without removing their safety assertions, add source-configuration/URL tests, and run focused Google debug tests covering zoom rounding/clamping, complete boundary/antimeridian/world-wrap coverage, deduplication, foreground/cache reuse, and identical visible/speculative coarse coordinates.
+- [x] 2.1 [low] Complete the shared two-level-coarser policy for viewport coverage, native raster source settings, and prefetch; keep provider URLs at supported 256-pixel images, native display tile size at 1024 points, render caps at LibreWXR zoom 10/RainViewer zoom 5, and the existing one-neighbor-per-side timeline policy with no stationary-viewport detail upgrade. Update stale coverage/prefetch tests without removing their safety assertions, add source-configuration/URL tests, and run focused Google debug tests covering zoom rounding/clamping, complete boundary/antimeridian/world-wrap coverage, deduplication, foreground/cache reuse, and identical visible/speculative coarse coordinates.
 
 ## 3. Fast Guarded Handoff and Playback
 

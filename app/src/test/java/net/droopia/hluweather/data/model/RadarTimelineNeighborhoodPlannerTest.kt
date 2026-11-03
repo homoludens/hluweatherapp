@@ -36,13 +36,13 @@ class RadarTimelineNeighborhoodPlannerTest {
     fun endpoints_clamp_without_wrapping_and_middle_orders_by_step_distance() {
         val frames = (1L..5L).map { frame(it * 100) }
 
-        assertEquals(listOf(frames[1], frames[2]), plan(frames, frames.first()))
+        assertEquals(listOf(frames[1]), plan(frames, frames.first()))
         assertEquals(
-            listOf(frames[3], frames[2]),
+            listOf(frames[3]),
             plan(frames, frames.last())
         )
         assertEquals(
-            listOf(frames[1], frames[3], frames[0], frames[4]),
+            listOf(frames[1], frames[3]),
             plan(frames, frames[2])
         )
     }
@@ -55,7 +55,7 @@ class RadarTimelineNeighborhoodPlannerTest {
         )
 
         assertEquals(
-            listOf(chronological[1], chronological[3], chronological[0], chronological[4]),
+            listOf(chronological[1], chronological[3]),
             plan(unorderedMetadata, chronological[2])
         )
     }
@@ -90,11 +90,11 @@ class RadarTimelineNeighborhoodPlannerTest {
         )
 
         assertEquals(
-            listOf(frame(200), frame(100)),
+            listOf(frame(200)),
             RadarTimelineNeighborhoodPlanner.plan(initial, requested.identity(host))
         )
         assertEquals(
-            listOf(frame(200), frame(400), frame(100), frame(500)),
+            listOf(frame(200), frame(400)),
             RadarTimelineNeighborhoodPlanner.plan(refreshed, requested.identity(host))
         )
     }

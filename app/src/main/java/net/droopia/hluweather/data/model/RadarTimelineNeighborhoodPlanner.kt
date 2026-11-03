@@ -1,6 +1,6 @@
 package net.droopia.hluweather.data.model
 
-/** Plans up to two adjacent frames on either side of the requested timeline frame. */
+/** Plans the immediately adjacent frame on either side of the requested timeline frame. */
 object RadarTimelineNeighborhoodPlanner {
     fun plan(
         metadata: RadarMetadata,
@@ -23,13 +23,8 @@ object RadarTimelineNeighborhoodPlanner {
         if (requestedIndex < 0) return emptyList()
 
         return buildList {
-            for (distance in 1..2) {
-                val before = requestedIndex - distance
-                if (before >= 0) add(timeline[before])
-
-                val after = requestedIndex + distance
-                if (after < timeline.size) add(timeline[after])
-            }
+            timeline.getOrNull(requestedIndex - 1)?.let(::add)
+            timeline.getOrNull(requestedIndex + 1)?.let(::add)
         }.filterNot { it.identity(metadata.host) == requestedFrame }
     }
 }

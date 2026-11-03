@@ -95,6 +95,22 @@ class RadarModelsTest {
     }
 
     @Test
+    fun provider_tile_urls_keep_supported_256_pixel_images_at_coarse_zoom_levels() {
+        val libre = RadarProviderDescriptors[RadarProvider.LIBREWXR]
+        val rainViewer = RadarProviderDescriptors[RadarProvider.RAINVIEWER]
+        assertEquals(256, libre.tileOptions.size)
+        assertEquals(256, rainViewer.tileOptions.size)
+        assertEquals(
+            "https://tiles.example.test/v2/radar/100/256/10/512/512/2/1_1.png",
+            RadarTileUrlBuilder.build(libre, host, "/v2/radar/100", 10, 512, 512)
+        )
+        assertEquals(
+            "https://tiles.example.test/v2/radar/100/256/5/16/16/2/1_1.png",
+            RadarTileUrlBuilder.build(rainViewer, host, "/v2/radar/100", 5, 16, 16)
+        )
+    }
+
+    @Test
     fun provider_url_builder_requires_https_hosts_and_safe_frame_paths() {
         val descriptor = RadarProviderDescriptors[RadarProvider.LIBREWXR]
         listOf(

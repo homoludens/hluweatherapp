@@ -24,6 +24,14 @@ data class RadarViewportBounds(
 
 /** Conservative Web Mercator coverage, in nearest-to-camera order with world copies deduplicated. */
 object RadarTileCoverage {
+    // Display supported 256-pixel provider images over a 1024-point map tile. Keeping this fixed
+    // prevents native source selection from refining beyond the two-level-coarser coverage zoom.
+    const val RENDER_TILE_SIZE = 1024
+    private const val ZOOM_REDUCTION = 2
+
+    fun renderMaxZoom(descriptor: RadarProviderDescriptor): Int =
+        (descriptor.nativeMaxZoom - ZOOM_REDUCTION).coerceAtLeast(descriptor.nativeMinZoom)
+
     fun tiles(bounds: RadarViewportBounds, descriptor: RadarProviderDescriptor): List<RadarTileCoordinate> {
         require(listOf(
             bounds.west, bounds.south, bounds.east, bounds.north, bounds.zoom,
@@ -32,8 +40,8 @@ object RadarTileCoverage {
         require(bounds.south <= bounds.north) { "South must not exceed north" }
 
         // Native raster sources round the adjusted zoom; camera zoom uses 512-pixel world tiles.
-        val sourceZoom = floor(bounds.zoom + ln(512.0 / descriptor.tileOptions.size) / ln(2.0) + 0.5)
-            .toInt().coerceIn(descriptor.nativeMinZoom, descriptor.nativeMaxZoom)
+        val sourceZoom = floor(bounds.zoom + ln(512.0 / RENDER_TILE_SIZE) / ln(2.0) + 0.5)
+            .toInt().coerceIn(descriptor.nativeMinZoom, renderMaxZoom(descriptor))
         val count = 1 shl sourceZoom
         fun normalize(longitude: Double): Double =
             ((longitude % 360.0 + 540.0) % 360.0) - 180.0
