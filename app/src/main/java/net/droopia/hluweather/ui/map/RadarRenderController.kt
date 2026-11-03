@@ -61,6 +61,12 @@ internal interface RadarRenderBackend {
         guard: RadarMutationGuard
     )
     suspend fun awaitCoverage(slot: RadarRenderSlot)
+    /** Cache-only from creation onward; false or an exception must leave no source or lease. */
+    fun createOptional(slot: RadarRenderSlot): Boolean = false
+    /** Check every required tile in the current cache, including freshness and cache-control. */
+    suspend fun hasCachedCoverage(slot: RadarRenderSlot): Boolean = false
+    /** Transfer this exact optional registration to real demand only inside the supplied guard. */
+    suspend fun adoptOptional(slot: RadarRenderSlot, guard: RadarMutationGuard): Boolean = false
     /** Wait for a render after this call's native barrier, not a previously observed event. */
     suspend fun awaitFullRender(slot: RadarRenderSlot, viewport: RadarRenderRequest, guard: RadarMutationGuard)
     suspend fun remove(slot: RadarRenderSlot)
@@ -75,8 +81,15 @@ internal class RadarRenderController(
     private val scope: CoroutineScope,
     private val backend: RadarRenderBackend,
     private val timeoutMillis: Long = 45_000,
-    private val waitForFullRender: Boolean = false
+    private val waitForFullRender: Boolean = false,
+    timing: RadarHandoffTiming? = null
 ) {
+    // The existing renderer remains on its established path until the later integration enables
+    // timed handoff and implements the optional-source backend contract.
+    private val buffered = timing?.let {
+        require(!waitForFullRender) { "Timed handoff and render-barrier diagnostics are separate modes" }
+        RadarBufferedRenderController(scope, backend, timeoutMillis, it)
+    }
     private val lock = Any()
     private val mutex = Mutex()
     private val serial = AtomicLong()
@@ -98,16 +111,25 @@ internal class RadarRenderController(
     private var frontVisible = false
     private var nextSlot = 0L
     private val mutableState = MutableStateFlow(RadarDisplayState())
-    val state: StateFlow<RadarDisplayState> = mutableState.asStateFlow()
+    val state: StateFlow<RadarDisplayState> = buffered?.state ?: mutableState.asStateFlow()
 
     fun update(request: RadarRenderRequest?, provider: RadarProvider?) {
+        if (buffered != null) return buffered.update(request, provider)
         update(request, provider, force = false)
     }
 
-    fun retry() = update(input, selectedProvider, force = true)
+    fun retry() {
+        if (buffered != null) buffered.retry() else update(input, selectedProvider, force = true)
+    }
+
+    /** A new opportunity may retry a prior cache miss; repeating the same opportunity cannot. */
+    fun prepare(request: RadarRenderRequest?, revision: Long = 0) {
+        buffered?.prepare(request, revision)
+    }
 
     /** Invalid viewport or metadata invalidates pending work without erasing a same-style front. */
     fun reject(identity: RadarFrameIdentity, provider: RadarProvider?, styleEpoch: Long, message: String) {
+        if (buffered != null) return buffered.reject(identity, provider, styleEpoch, message)
         val token = synchronized(lock) {
             input = null
             selectedProvider = provider
@@ -409,6 +431,7 @@ internal class RadarRenderController(
 
     /** Invalidate queued native commands immediately; cleanup may finish after the map closes. */
     suspend fun close() {
+        if (buffered != null) return buffered.close()
         synchronized(lock) {
             serial.incrementAndGet()
             input = null

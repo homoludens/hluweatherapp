@@ -10,6 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -921,6 +922,711 @@ class RadarRenderControllerTest {
         assertTrue(backend.activeSlots.isEmpty())
     }
 
+    @Test
+    fun timedHandoffStartsAfterBothCoverageAndInstallationAndRetiresWithoutEvents() = runTest {
+        val installGate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(installGate = 2L to installGate, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR)
+        runCurrent(); backend.ready(1); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed) // No initial delay.
+
+        controller.update(request(2), RadarProvider.LIBREWXR)
+        runCurrent(); backend.ready(2); runCurrent()
+        advanceTimeBy(100); runCurrent()
+        assertFalse(backend.operations.contains("promote:2:1"))
+        installGate.complete(Unit); runCurrent()
+        advanceTimeBy(49); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertFalse(controller.state.value.pending)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        assertEquals(0f, backend.opacities[1])
+        advanceTimeBy(49); runCurrent()
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(setOf(2L), backend.activeSlots)
+    }
+
+    @Test
+    fun timedWarmupStartsAtLaterCoverageAndUsesAcceptedInstallTimeNotContinuationTime() = runTest {
+        val afterInstall = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(afterInstallGate = 2L to afterInstall, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent(); backend.ready(1); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(100); runCurrent() // Installation alone is not coverage.
+        backend.ready(2); runCurrent()
+        advanceTimeBy(49); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(1); runCurrent()
+        afterInstall.complete(Unit); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+    }
+
+    @Test
+    fun agedOptionalSlotIsAdoptedAcrossPauseAndManualSelectionWithoutAnotherWarmup() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        val second = request(2)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        val before = controller.state.value
+        controller.prepare(second, revision = 1); runCurrent()
+        assertEquals(before, controller.state.value)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        assertTrue(backend.operations.contains("install:2:0.001"))
+        advanceTimeBy(100); runCurrent()
+
+        // Both calls may arrive in one UI turn when the slider pauses playback.
+        controller.prepare(null)
+        controller.update(second, RadarProvider.LIBREWXR)
+        runCurrent()
+        assertEquals(second.identity, controller.state.value.displayed)
+        assertEquals(setOf(2L), backend.adoptedSlots)
+        assertFalse(backend.operations.contains("create:3"))
+        assertEquals(1, backend.operations.count { it == "install:2:0.001" })
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        advanceTimeBy(50); runCurrent()
+        assertEquals(setOf(2L), backend.activeSlots)
+    }
+
+    @Test
+    fun partialWarmupAndOpacityChangeReuseAgeAndLatestOpacity() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2), revision = 1); runCurrent()
+        advanceTimeBy(20); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(10); runCurrent()
+        controller.update(request(2, opacity = 0.4f), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(19); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(0.4f, backend.opacities[2])
+        assertFalse(backend.operations.contains("create:3"))
+        assertEquals(1, backend.operations.count { it == "install:2:0.001" })
+    }
+
+    @Test
+    fun expiredOptionalCoverageIsDiscardedAndForegroundReloadsNormally() = runTest {
+        var fresh = true
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { fresh }, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2), revision = 1); runCurrent()
+        advanceTimeBy(20); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        fresh = false // Expiry after adoption but before promotion must also be checked.
+        advanceTimeBy(30); runCurrent()
+        assertTrue(backend.operations.contains("remove:2"))
+        assertTrue(backend.operations.contains("install:3:0.001"))
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertFalse(backend.operations.contains("promote:2:1"))
+        assertEquals(setOf(1L, 3L), backend.activeSlots)
+    }
+
+    @Test
+    fun missingOptionalCoverageIsSilentAndRetriesOnlyForNewOpportunity() = runTest {
+        var fresh = false
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { fresh }, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        val state = controller.state.value
+        controller.prepare(request(2), revision = 1); runCurrent()
+        assertEquals(state, controller.state.value)
+        assertEquals(setOf(1L), backend.activeSlots)
+        controller.prepare(request(2), revision = 1); runCurrent()
+        assertFalse(backend.operations.contains("create:3"))
+        fresh = true
+        controller.prepare(request(2), revision = 2); runCurrent()
+        assertTrue(backend.operations.contains("install:3:0.001"))
+        assertEquals(state, controller.state.value)
+    }
+
+    @Test
+    fun demandPreemptsUninterruptibleOptionalCoverageAndFencesItsLateCompletion() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { withContext(NonCancellable) { gate.await() }; true }, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2), revision = 1); runCurrent()
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.operations.contains("remove:2"))
+        assertTrue(backend.operations.contains("install:3:0.001"))
+        assertEquals(setOf(1L, 3L), backend.activeSlots)
+        gate.complete(Unit); runCurrent()
+        assertFalse(backend.operations.contains("install:2:0.001"))
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun pauseDiscardsUnrequestedSlotAndCannotChangeDisplayedState() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        val state = controller.state.value
+        controller.prepare(request(2)); runCurrent()
+        controller.prepare(null); runCurrent()
+        assertEquals(state, controller.state.value)
+        assertEquals(setOf(1L), backend.activeSlots)
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.operations.contains("create:3"))
+        assertTrue(backend.adoptedSlots.isEmpty())
+    }
+
+    @Test
+    fun newDemandPreemptsRetirementAndOldTimerCannotRemoveNewRetiredSlot() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true)
+        val controller = timedController(backend, warmupMillis = 0)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        advanceTimeBy(20); runCurrent()
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.operations.indexOf("remove:1") < backend.operations.indexOf("create:3"))
+        assertEquals(setOf(2L, 3L), backend.activeSlots)
+        advanceTimeBy(30); runCurrent() // The old timer would have fired now.
+        assertEquals(setOf(2L, 3L), backend.activeSlots)
+        advanceTimeBy(20); runCurrent()
+        assertEquals(setOf(3L), backend.activeSlots)
+    }
+
+    @Test
+    fun acceptedPromotionStaysAcknowledgedEvenWhenItsCoroutineIsSuperseded() = runTest {
+        lateinit var controller: RadarRenderController
+        var atSwap: RadarDisplayState? = null
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true, afterPromotion = {
+            if (it.id == 2L) {
+                atSwap = controller.state.value
+                controller.update(request(3), RadarProvider.LIBREWXR)
+            }
+        })
+        controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, atSwap?.displayed)
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(request(3).identity, controller.state.value.requested)
+        assertEquals(setOf(2L, 3L), backend.activeSlots)
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun partialPromotionAndFailedRollbackKeepBothLeasesUntilRetryRestoresFront() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, partialPromotionFailures = setOf(2L),
+            rollbackFailures = 1, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertTrue(requireNotNull(controller.state.value.error).contains("restore failed"))
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        controller.retry(); runCurrent()
+        assertTrue(backend.operations.contains("rollback:2:1:0.75"))
+        assertTrue(backend.operations.indexOf("remove:2") < backend.operations.indexOf("create:3"))
+        assertEquals(0.75f, backend.opacities[1])
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun timedCoverageTimeoutAndRetryKeepTheFront() = runTest {
+        val backend = RecordingBackend(failOnRenderBarrier = true)
+        val controller = timedController(backend, timeoutMillis = 100)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent(); backend.ready(1); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(101); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertNotNull(controller.state.value.error)
+        assertEquals(setOf(1L), backend.activeSlots)
+        controller.retry(); runCurrent(); backend.ready(3); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertNull(controller.state.value.error)
+    }
+
+    @Test
+    fun failedRetirementNeverAllocatesThirdSlotOrClearsTheFront() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true,
+            removeFailures = mutableMapOf(1L to 2))
+        val controller = timedController(backend, warmupMillis = 0)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent() // First removal fails in the retirement job.
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent() // Second removal fails.
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertNotNull(controller.state.value.error)
+        assertFalse(backend.operations.contains("create:3"))
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        controller.retry(); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+        assertTrue(backend.operations.indexOf("remove:1") < backend.operations.indexOf("create:3"))
+    }
+
+    @Test
+    fun timedTransparentAndNoContentCoveragePromotesNormally() = runTest {
+        val transparent = Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII="
+        )
+        val registry = RadarTileRegistry()
+        val source = registry.register("https://tiles.example.test", request(2).config.frame)
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { key, _ ->
+            if (key.coordinate.x == 1) RadarTileHttpResult(200, RadarTilePayload(transparent, 100_000))
+            else RadarTileHttpResult(204, RadarTilePayload(null, 100_000))
+        }, { testScheduler.currentTime })
+        val keys = listOf(source.tile(RadarTileCoordinate(3, 1, 1)), source.tile(RadarTileCoordinate(3, 2, 1)))
+        val backend = RecordingBackend(coverageAction = { loader.awaitCoverage(keys) }, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(0f, backend.opacities[1])
+        advanceTimeBy(50); runCurrent()
+        assertEquals(setOf(2L), backend.activeSlots)
+        registry.unregister(source)
+    }
+
+    @Test
+    fun opacityZeroCancelsPreparationAndRestoreUsesCompatibleFrontWithoutDelay() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        controller.update(request(1, opacity = 0f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(1L), backend.activeSlots)
+        assertEquals(0f, backend.opacities[1])
+        assertFalse(controller.state.value.pending)
+        controller.prepare(request(2), revision = 1); runCurrent()
+        assertFalse(backend.operations.contains("create:3"))
+        controller.update(request(1, opacity = 0.4f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertEquals(0.4f, backend.opacities[1])
+    }
+
+    @Test
+    fun incompatibleViewportStyleProviderHideAndCloseFenceOptionalWork() = runTest {
+        val moved = request(1).copy(coordinates = listOf(RadarTileCoordinate(3, 2, 2)))
+        val targets = listOf(
+            moved to RadarProvider.LIBREWXR,
+            request(3, style = 2) to RadarProvider.LIBREWXR,
+            request(3, provider = RadarProvider.RAINVIEWER) to RadarProvider.RAINVIEWER,
+            null to RadarProvider.LIBREWXR
+        )
+        for ((target, selected) in targets) {
+            val gate = CompletableDeferred<Unit>()
+            val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+                optionalCoverage = { withContext(NonCancellable) { gate.await() }; true }, failOnRenderBarrier = true)
+            val controller = timedController(backend, warmupMillis = 0)
+            controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+            controller.prepare(request(2)); runCurrent()
+            controller.update(target, selected); runCurrent()
+            gate.complete(Unit); runCurrent()
+            assertFalse(backend.operations.contains("install:2:0.001"))
+            assertEquals(target?.identity, controller.state.value.displayed)
+            controller.close()
+            assertTrue(backend.activeSlots.isEmpty())
+            assertNull(controller.state.value.displayed)
+        }
+    }
+
+    @Test
+    fun manualSelectionCanAdoptAcceptedOptionalInstallBeforeItsContinuationResumes() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            afterInstallGate = 2L to gate, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        assertTrue(backend.operations.contains("install:2:0.001"))
+        advanceTimeBy(50); runCurrent()
+        controller.prepare(null)
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(setOf(2L), backend.adoptedSlots)
+        assertFalse(backend.operations.contains("remove:2"))
+        gate.complete(Unit); runCurrent()
+        assertFalse(backend.operations.contains("create:3"))
+    }
+
+    @Test
+    fun alreadyRemovingOptionalSlotCannotBeClaimedByDemand() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            removeGate = 2L to gate, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        controller.prepare(null); runCurrent()
+        assertTrue(backend.removeStarted.isCompleted)
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.adoptedSlots.isEmpty())
+        assertFalse(backend.operations.contains("create:3"))
+        gate.complete(Unit); runCurrent()
+        assertTrue(backend.operations.indexOf("remove:2") < backend.operations.indexOf("create:3"))
+        assertTrue(backend.adoptedSlots.isEmpty())
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun cancelledAcceptedPromotionStillRetiresWithoutAnotherRequest() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, cancelAfterPromotion = setOf(2L),
+            failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertNull(controller.state.value.error)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        advanceTimeBy(50); runCurrent()
+        assertEquals(setOf(2L), backend.activeSlots)
+    }
+
+    @Test
+    fun canonicalTileSetCanAdoptButChangedTileSetCannot() = runTest {
+        val tiles = listOf(RadarTileCoordinate(3, 1, 1), RadarTileCoordinate(3, 2, 1))
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        val first = request(1).copy(coordinates = tiles)
+        val second = request(2).copy(coordinates = tiles.reversed())
+        controller.update(first, RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(second); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        controller.update(second.copy(coordinates = tiles), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(2L), backend.adoptedSlots)
+        assertEquals(second.identity, controller.state.value.displayed)
+        advanceTimeBy(50); runCurrent()
+        controller.prepare(request(3).copy(coordinates = tiles)); runCurrent()
+        controller.update(request(3).copy(coordinates = listOf(tiles.first())), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.operations.contains("remove:3"))
+        assertTrue(backend.operations.contains("create:4"))
+        assertFalse(4L in backend.adoptedSlots)
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun timedCloseAndTimeoutInvalidateQueuedNativePromotion() = runTest {
+        for (close in listOf(false, true)) {
+            val gate = CompletableDeferred<Unit>()
+            val backend = RecordingBackend(immediateCoverage = true, promotionGate = 2L to gate,
+                failOnRenderBarrier = true)
+            val controller = timedController(backend, timeoutMillis = 100)
+            controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+            controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+            advanceTimeBy(50); runCurrent()
+            val guard = requireNotNull(backend.lastPromotionGuard)
+            if (close) controller.close() else { advanceTimeBy(51); runCurrent() }
+            var applied = false
+            assertFalse(guard { applied = true })
+            gate.complete(Unit); runCurrent()
+            assertFalse(applied)
+            assertEquals(if (close) null else request(1).identity, controller.state.value.displayed)
+            assertEquals(if (close) emptySet<Long>() else setOf(1L), backend.activeSlots)
+            if (!close) assertNotNull(controller.state.value.error)
+        }
+    }
+
+    @Test
+    fun demandPreemptsUninterruptibleOptionalInstallAndItsOldGuardIsFenced() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            nonCancellableInstallGate = 2L to gate, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        val oldGuard = requireNotNull(backend.lastInstallGuard)
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(1L, 3L), backend.activeSlots)
+        var applied = false
+        assertFalse(oldGuard { applied = true })
+        gate.complete(Unit); runCurrent()
+        assertFalse(applied)
+        assertFalse(backend.operations.contains("install:2:0.001"))
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun hideAfterPartialPromotionNeverRestoresOldImageryWhenRemovalFails() = runTest {
+        lateinit var controller: RadarRenderController
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true,
+            removeFailures = mutableMapOf(2L to 2), duringPromotion = {
+                if (it.id == 2L) controller.update(null, RadarProvider.LIBREWXR)
+            })
+        controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertNull(controller.state.value.displayed)
+        assertNull(controller.state.value.requested)
+        assertFalse(backend.operations.any { it.startsWith("rollback:") })
+        assertEquals(setOf(2L), backend.activeSlots)
+        assertEquals(0f, backend.opacities[2])
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        assertTrue(backend.operations.indexOf("remove:2") < backend.operations.indexOf("create:3"))
+        assertEquals(request(3).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun failedOptionalRemovalBlocksAnotherAllocationUntilRetry() = runTest {
+        var fresh = true
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { fresh }, removeFailures = mutableMapOf(2L to 2), failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        fresh = false
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertNotNull(controller.state.value.error)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        assertFalse(backend.operations.contains("create:3"))
+        controller.retry(); runCurrent()
+        assertTrue(backend.operations.indexOf("remove:2") < backend.operations.indexOf("create:3"))
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun newerMatchingOpportunityDoesNotDiscardAnAlreadyWarmingSlot() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2), revision = 1); runCurrent()
+        advanceTimeBy(20); runCurrent()
+        controller.prepare(request(2), revision = 2); runCurrent()
+        assertFalse(backend.operations.contains("remove:2"))
+        advanceTimeBy(30); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(setOf(2L), backend.adoptedSlots)
+        assertFalse(backend.operations.contains("create:3"))
+    }
+
+    @Test
+    fun obsoleteOptionalCleanupCannotRemoveTheNextPreparedSlot() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        controller.prepare(null)
+        controller.prepare(request(3), revision = 1)
+        runCurrent()
+        assertEquals(setOf(1L, 3L), backend.activeSlots)
+        assertTrue(backend.operations.contains("install:3:0.001"))
+        advanceTimeBy(50); runCurrent()
+        controller.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+        assertEquals(setOf(3L), backend.adoptedSlots)
+    }
+
+    @Test
+    fun nextPreparationStartsAfterRetirementWithoutChangingSelection() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true, failOnRenderBarrier = true)
+        val controller = timedController(backend, warmupMillis = 0)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(3)); runCurrent()
+        assertFalse(backend.operations.contains("create:3"))
+        advanceTimeBy(50); runCurrent()
+        assertTrue(backend.operations.contains("install:3:0.001"))
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(request(2).identity, controller.state.value.requested)
+        assertEquals(setOf(2L, 3L), backend.activeSlots)
+    }
+
+    @Test
+    fun optionalRevalidationOrAdoptionErrorsFallBackToForegroundWithoutAVisibleError() = runTest {
+        for (failAdoption in listOf(false, true)) {
+            var checks = 0
+            val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+                optionalCoverage = {
+                    checks++
+                    if (!failAdoption && checks > 1) error("cache unavailable")
+                    true
+                }, adoptionFailure = failAdoption, failOnRenderBarrier = true)
+            val controller = timedController(backend)
+            controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+            controller.prepare(request(2)); runCurrent()
+            advanceTimeBy(50); runCurrent()
+            controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+            assertTrue(backend.operations.contains("remove:2"))
+            assertTrue(backend.operations.contains("create:3"))
+            assertNull(controller.state.value.error)
+            assertEquals(request(1).identity, controller.state.value.displayed)
+            advanceTimeBy(50); runCurrent()
+            assertEquals(request(2).identity, controller.state.value.displayed)
+            assertNull(controller.state.value.error)
+        }
+    }
+
+    @Test
+    fun unsupportedOptionalBackendFailsClosedAndDemandStillWorks() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        assertEquals(setOf(1L), backend.activeSlots)
+        assertFalse(backend.operations.contains("create:2"))
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun retirementDeadlineIsMeasuredFromGuardAcceptanceNotDelayedJobStart() = runTest {
+        var clock = 0L
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true,
+            afterPromotion = { if (it.id == 2L) clock = 100L })
+        val controller = RadarRenderController(backgroundScope, backend,
+            timing = RadarHandoffTiming(warmupMillis = 0, nowMillis = { clock }))
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+        assertEquals(setOf(2L), backend.activeSlots)
+    }
+
+    @Test
+    fun zeroOpacityAlsoHidesStagingWhenItsRemovalFails() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            removeFailures = mutableMapOf(2L to 2), failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        controller.update(request(1, opacity = 0f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        assertEquals(0f, backend.opacities[1])
+        assertEquals(0f, backend.opacities[2])
+        assertFalse(controller.state.value.pending)
+        controller.update(request(1, opacity = 0.4f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(setOf(1L), backend.activeSlots)
+        assertEquals(0.4f, backend.opacities[1])
+    }
+
+    @Test
+    fun reentrantNewSelectionRepairsPartiallyAppliedSwapBeforeAllocating() = runTest {
+        lateinit var controller: RadarRenderController
+        val backend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true,
+            duringPromotion = { if (it.id == 2L) controller.update(request(3), RadarProvider.LIBREWXR) })
+        controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertEquals(request(3).identity, controller.state.value.requested)
+        assertTrue(backend.operations.contains("rollback:2:1:0.75"))
+        assertTrue(backend.operations.indexOf("remove:2") < backend.operations.indexOf("create:3"))
+        advanceTimeBy(50); runCurrent()
+        assertEquals(request(3).identity, controller.state.value.displayed)
+        assertFalse(controller.state.value.pending)
+    }
+
+    @Test
+    fun timedInvalidViewportRejectFencesQueuedSwapAndRetainsCompatibleFront() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, promotionGate = 2L to gate,
+            failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        val oldGuard = requireNotNull(backend.lastPromotionGuard)
+        controller.reject(request(3).identity, RadarProvider.LIBREWXR, 1, "invalid viewport"); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        assertEquals("invalid viewport", controller.state.value.error)
+        assertEquals(setOf(1L), backend.activeSlots)
+        var applied = false
+        assertFalse(oldGuard { applied = true })
+        gate.complete(Unit); runCurrent()
+        assertFalse(applied)
+        assertEquals(request(1).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun zeroOpacityHidesBothLayersEvenIfPartialSwapRollbackStillFails() = runTest {
+        val backend = RecordingBackend(immediateCoverage = true, partialPromotionFailures = setOf(2L),
+            rollbackFailures = 3, failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.update(request(2), RadarProvider.LIBREWXR); runCurrent()
+        advanceTimeBy(50); runCurrent()
+        assertEquals(0.75f, backend.opacities[2])
+        controller.update(request(2, opacity = 0f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(0f, backend.opacities[1])
+        assertEquals(0f, backend.opacities[2])
+        assertNotNull(controller.state.value.error)
+        controller.update(request(2, opacity = 0.4f), RadarProvider.LIBREWXR); runCurrent()
+        assertEquals(0.4f, backend.opacities[1])
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(49); runCurrent()
+        assertEquals(request(1).identity, controller.state.value.displayed)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(request(2).identity, controller.state.value.displayed)
+    }
+
+    @Test
+    fun replacedSurfaceCannotBeChangedByOldSurfacePreparation() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val oldBackend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { withContext(NonCancellable) { gate.await() }; true }, failOnRenderBarrier = true)
+        val old = timedController(oldBackend)
+        old.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        old.prepare(request(2)); runCurrent()
+        old.close()
+
+        val newBackend = RecordingBackend(immediateCoverage = true, failOnRenderBarrier = true)
+        val replacement = timedController(newBackend)
+        replacement.update(request(3), RadarProvider.LIBREWXR); runCurrent()
+        gate.complete(Unit); runCurrent()
+        assertTrue(oldBackend.activeSlots.isEmpty())
+        assertFalse(oldBackend.operations.contains("install:2:0.001"))
+        assertEquals(request(3).identity, replacement.state.value.displayed)
+        assertEquals(setOf(1L), newBackend.activeSlots)
+    }
+
+    @Test
+    fun failedOptionalCleanupCannotInstallAfterItsLeaseWasMarkedUnusable() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val backend = RecordingBackend(immediateCoverage = true, optionalSupport = true,
+            optionalCoverage = { withContext(NonCancellable) { gate.await() }; true },
+            paintFailures = setOf(1L to 0.4f), removeFailures = mutableMapOf(2L to 1), failOnRenderBarrier = true)
+        val controller = timedController(backend)
+        controller.update(request(1), RadarProvider.LIBREWXR); runCurrent()
+        controller.prepare(request(2)); runCurrent()
+        controller.update(request(1, opacity = 0.4f), RadarProvider.LIBREWXR); runCurrent()
+        assertNotNull(controller.state.value.error)
+        assertEquals(setOf(1L, 2L), backend.activeSlots)
+        gate.complete(Unit); runCurrent()
+        assertFalse(backend.operations.contains("install:2:0.001"))
+        assertEquals(setOf(1L), backend.activeSlots)
+        assertEquals(request(1).identity, controller.state.value.displayed)
+    }
+
+    private fun TestScope.timedController(
+        backend: RecordingBackend,
+        timeoutMillis: Long = 45_000,
+        warmupMillis: Long = 50
+    ) = RadarRenderController(backgroundScope, backend, timeoutMillis = timeoutMillis,
+        timing = RadarHandoffTiming(warmupMillis = warmupMillis, nowMillis = { testScheduler.currentTime }))
+
     private fun request(
         time: Long,
         opacity: Float = 0.75f,
@@ -944,25 +1650,57 @@ class RadarRenderControllerTest {
         private val afterPromotionGate: Pair<Long, CompletableDeferred<Unit>>? = null,
         private val duringPromotion: ((RadarRenderSlot) -> Unit)? = null,
         private val afterPromotion: ((RadarRenderSlot) -> Unit)? = null,
-        private val failOnRenderBarrier: Boolean = false
+        private val failOnRenderBarrier: Boolean = false,
+        private val optionalSupport: Boolean = false,
+        private val optionalCoverage: (suspend (RadarRenderSlot) -> Boolean)? = null,
+        private val adoptionFailure: Boolean = false,
+        private val afterInstallGate: Pair<Long, CompletableDeferred<Unit>>? = null,
+        private val nonCancellableInstallGate: Pair<Long, CompletableDeferred<Unit>>? = null,
+        private val removeGate: Pair<Long, CompletableDeferred<Unit>>? = null,
+        private val paintFailures: Set<Pair<Long, Float>> = emptySet(),
+        val removeFailures: MutableMap<Long, Int> = mutableMapOf()
     ) : RadarRenderBackend {
         val operations = mutableListOf<String>()
         val opacities = mutableMapOf<Long, Float>()
         val activeSlots = mutableSetOf<Long>()
+        val optionalSlots = mutableSetOf<Long>()
+        val adoptedSlots = mutableSetOf<Long>()
+        val cacheChecks = mutableListOf<Long>()
         val rollbackStarted = CompletableDeferred<Unit>()
+        val removeStarted = CompletableDeferred<Unit>()
         var lastInstallGuard: RadarMutationGuard? = null
         var lastPromotionGuard: RadarMutationGuard? = null
         private val coverage = mutableMapOf<Long, CompletableDeferred<Unit>>()
         private val renders = mutableMapOf<Long, Channel<Result<Unit>>>()
         override fun create(slot: RadarRenderSlot) {
+            check(activeSlots.size < 2) { "Allocated a third radar slot" }
             operations += "create:${slot.id}"
             activeSlots += slot.id
             coverage[slot.id] = CompletableDeferred<Unit>().also { if (immediateCoverage) it.complete(Unit) }
             renders[slot.id] = Channel(Channel.RENDEZVOUS)
         }
+        override fun createOptional(slot: RadarRenderSlot): Boolean {
+            if (!optionalSupport) return false
+            create(slot)
+            optionalSlots += slot.id
+            return true
+        }
+        override suspend fun hasCachedCoverage(slot: RadarRenderSlot): Boolean {
+            cacheChecks += slot.id
+            return optionalCoverage?.invoke(slot) ?: true
+        }
+        override suspend fun adoptOptional(slot: RadarRenderSlot, guard: RadarMutationGuard): Boolean = guard {
+            check(!adoptionFailure) { "optional adoption failed" }
+            check(slot.id in optionalSlots)
+            operations += "adopt:${slot.id}"
+            adoptedSlots += slot.id
+        }
         override suspend fun install(slot: RadarRenderSlot, opacity: Float, guard: RadarMutationGuard) {
             lastInstallGuard = guard
             installGate?.takeIf { it.first == slot.id }?.second?.await()
+            nonCancellableInstallGate?.takeIf { it.first == slot.id }?.second?.let {
+                withContext(NonCancellable) { it.await() }
+            }
             if (!guard {
                     check(slot.id !in installFailures) { "installation failed" }
                     operations += "install:${slot.id}:$opacity"
@@ -970,9 +1708,13 @@ class RadarRenderControllerTest {
                 }) {
                 throw CancellationException("Obsolete radar installation")
             }
+            afterInstallGate?.takeIf { it.first == slot.id }?.second?.await()
         }
         override suspend fun paint(slot: RadarRenderSlot, opacity: Float, guard: RadarMutationGuard) {
-            guard { operations += "paint:${slot.id}:$opacity"; opacities[slot.id] = opacity }
+            guard {
+                check(slot.id to opacity !in paintFailures) { "paint failed" }
+                operations += "paint:${slot.id}:$opacity"; opacities[slot.id] = opacity
+            }
         }
         override suspend fun promote(next: RadarRenderSlot, previous: RadarRenderSlot?, opacity: Float, guard: RadarMutationGuard) {
             lastPromotionGuard = guard
@@ -1017,9 +1759,19 @@ class RadarRenderControllerTest {
             guard { operations += "full:${slot.id}" }
         }
         override suspend fun remove(slot: RadarRenderSlot) {
+            removeGate?.takeIf { it.first == slot.id }?.second?.let {
+                removeStarted.complete(Unit)
+                withContext(NonCancellable) { it.await() }
+            }
+            val remaining = removeFailures[slot.id] ?: 0
+            if (remaining > 0) {
+                removeFailures[slot.id] = remaining - 1
+                throw IllegalStateException("removal failed")
+            }
             operations += "remove:${slot.id}"
             opacities.remove(slot.id)
             activeSlots.remove(slot.id)
+            optionalSlots.remove(slot.id)
         }
         fun ready(id: Long) { coverage.getValue(id).complete(Unit) }
         fun fail(id: Long) { coverage.getValue(id).completeExceptionally(IllegalStateException("tile failed")) }
