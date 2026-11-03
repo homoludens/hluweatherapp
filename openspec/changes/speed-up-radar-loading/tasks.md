@@ -14,7 +14,7 @@ All five tasks start incomplete: the five partial source edits listed in `design
 
 ## 4. Provider Guide and Verification Procedure
 
-- [ ] 4.1 [low] Update `docs/radar/radar-providers.md` for coarse-only zooms, eight/four tile-request concurrency, one neighbor on each side, guarded acceptance instead of draw proof, and the accepted gap/blinking trade-off, while preserving cache/privacy/rate-limit and unresolved distribution warnings. Create this change's `verification.md` with reproducible baseline-versus-experiment cold/warm and adjacent-frame procedures that distinguish command acknowledgment, first visible pixels, complete coarse coverage, request count/bytes, and visual quality; verify the guide and procedure match the delta spec and clearly label any unrun checks without inventing latency results.
+- [x] 4.1 [low] Update `docs/radar/radar-providers.md` for coarse-only zooms, eight/four tile-request concurrency, one neighbor on each side, guarded acceptance instead of draw proof, and the accepted gap/blinking trade-off, while preserving cache/privacy/rate-limit and unresolved distribution warnings. Create this change's `verification.md` with reproducible baseline-versus-experiment cold/warm and adjacent-frame procedures that distinguish command acknowledgment, first visible pixels, complete coarse coverage, request count/bytes, and visual quality; verify the guide and procedure match the delta spec and clearly label any unrun checks without inventing latency results.
 
 ## 5. Integrated Google Debug Verification
 
