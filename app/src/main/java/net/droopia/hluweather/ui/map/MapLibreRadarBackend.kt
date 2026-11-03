@@ -55,7 +55,7 @@ internal class MapLibreRadarBackend(
     private data class NativeSlot(
         val sourceId: String,
         val layerId: String,
-        val lease: RegisteredRadarSource,
+        var lease: RegisteredRadarSource,
         val handle: MutableSourceHandle,
         val observations: RadarNativeTileObservation
     )
@@ -72,12 +72,18 @@ internal class MapLibreRadarBackend(
         }
     }
 
-    override fun create(slot: RadarRenderSlot) {
+    override fun create(slot: RadarRenderSlot) = createSlot(slot, optional = false)
+
+    private fun createSlot(slot: RadarRenderSlot, optional: Boolean) {
         failedCreates.retry()
         check(slot.id !in slots && !failedCreates.contains(slot.id)) { "Radar slot is already registered" }
         check(slots.size + failedCreates.size < 2) { "No free radar source slot" }
         val request = slot.request
-        val lease = registry.register(request.config.host, request.config.frame)
+        val lease = if (optional) {
+            registry.registerOptional(request.config.host, request.config.frame, request.coordinates)
+        } else {
+            registry.register(request.config.host, request.config.frame)
+        }
         val sourceId = "hlu-radar-source-$instance-${slot.id}"
         val layerId = "hlu-radar-layer-$instance-${slot.id}"
         var observation: RadarNativeTileObservation? = null
@@ -94,13 +100,16 @@ internal class MapLibreRadarBackend(
             slots[slot.id] = NativeSlot(sourceId, layerId, lease, handle, observation)
         } catch (error: Exception) {
             val release = { observation?.close(); registry.unregister(lease) }
-            if (!addAttempted || (handle != null && runCatching { handle.remove() }.getOrDefault(false))) {
+            val remove = {
+                if (optional) registry.cancelOptional(lease)
+                handle?.remove() == true
+            }
+            if (!addAttempted || (handle != null && runCatching(remove).getOrDefault(false))) {
                 release()
             } else {
                 // A failed add may have partially installed a source even without returning a
                 // handle. Never release its lease or allocate a third source on that assumption.
-                val sourceHandle = handle
-                failedCreates.retain(slot.id, remove = { sourceHandle?.remove() == true }, release = release)
+                failedCreates.retain(slot.id, remove = remove, release = release)
             }
             throw error
         }
@@ -209,9 +218,16 @@ internal class MapLibreRadarBackend(
     }
 
     override fun createOptional(slot: RadarRenderSlot): Boolean {
-        // Optional native source creation remains disabled until the backend consumes the
-        // registration-scoped cache-only and ownership-transfer contract.
-        return false
+        return try {
+            createSlot(slot, optional = true)
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Speculative setup is best-effort; partial native adds retain their lease/capacity
+            // through failedCreates until removal is confirmed or the map is destroyed.
+            false
+        }
     }
 
     override suspend fun hasCachedCoverage(slot: RadarRenderSlot): Boolean {
@@ -223,8 +239,13 @@ internal class MapLibreRadarBackend(
     }
 
     override suspend fun adoptOptional(slot: RadarRenderSlot, guard: RadarMutationGuard): Boolean {
-        // Keep adoption disabled until the backend transfers the exact registration under guard.
-        return false
+        val native = slots[slot.id] ?: return false
+        return registry.adoptOptional(native.lease, guard) { adopted ->
+            check(slots[slot.id] === native) { "Radar slot changed during optional adoption" }
+            // Publish the new owner handle while the controller's selection guard is still held.
+            // The alias, observation, source and layer stay attached to this exact native slot.
+            native.lease = adopted
+        }
     }
 
     override suspend fun awaitFullRender(slot: RadarRenderSlot, viewport: RadarRenderRequest, guard: RadarMutationGuard) {
@@ -257,6 +278,9 @@ internal class MapLibreRadarBackend(
 
     override suspend fun remove(slot: RadarRenderSlot) {
         val native = slots[slot.id] ?: return
+        // Cancel cache-only callbacks before touching native resources. Demand leases are left
+        // alone; adopted optional slots now carry their demand owner handle in NativeSlot.
+        registry.cancelOptional(native.lease)
         if (!mapState.isClosed) {
             mapState.withPlatformMap {
                 if (this.map.styleLayerExists(native.layerId) && this.map.layerSourceId(native.layerId) == native.sourceId) {
