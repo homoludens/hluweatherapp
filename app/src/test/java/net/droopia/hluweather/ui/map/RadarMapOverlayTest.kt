@@ -3,7 +3,6 @@
 package net.droopia.hluweather.ui.map
 
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -13,9 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertContentDescriptionEquals
@@ -32,8 +29,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.unit.dp
 import java.io.IOException
 import java.util.TimeZone
@@ -53,8 +48,6 @@ import kotlinx.coroutines.test.setMain
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.ForecastMode
-import net.droopia.hluweather.data.model.RadarFrame
-import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.LibreWxrRadarFrame
@@ -274,7 +267,7 @@ class RadarMapOverlayTest {
     }
 
     @Test
-    fun status_and_provider_link_are_nonblocking_without_expanded_credits() {
+    fun radar_status_does_not_duplicate_attribution_outside_the_map_info_control() {
         val emptyRepository = TestRadarRepository(
             RadarMetadataState(isLoading = true)
         )
@@ -285,9 +278,8 @@ class RadarMapOverlayTest {
         setOverlayContent(playback, enabled, opacity, darkTheme = false)
 
         composeRule.onNodeWithText("Loading radar…").assertIsDisplayed()
-        composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
-        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
-        assertTagAbsent("radar_attribution_credits")
+        assertTagAbsent("radar_attribution")
+        composeRule.onNodeWithText("LibreWXR").assertDoesNotExist()
         assertTagAbsent("radar_timeline_slider")
 
         emptyRepository.updates.value = RadarMetadataState(isLoading = false)
@@ -297,8 +289,7 @@ class RadarMapOverlayTest {
         emptyRepository.updates.value = RadarMetadataState(error = IllegalStateException("offline"))
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar unavailable").assertIsDisplayed()
-        composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
-        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
+        assertTagAbsent("radar_attribution")
 
         emptyRepository.updates.value = RadarMetadataState(error = IOException("offline"))
         composeRule.waitForIdle()
@@ -309,99 +300,6 @@ class RadarMapOverlayTest {
         )
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar rate limit reached").assertIsDisplayed()
-    }
-
-    @Test
-    fun provider_source_links_are_accessible_and_open_their_descriptor_urls() {
-        val playback = playbackViewModel()
-        val enabled = mutableStateOf(true)
-        val opacity = mutableFloatStateOf(0.75f)
-        val selectedProvider = mutableStateOf(RadarProvider.LIBREWXR)
-        val uriHandler = RecordingUriHandler()
-        setOverlayContent(
-            playback,
-            enabled,
-            opacity,
-            darkTheme = false,
-            selectedProvider = selectedProvider,
-            uriHandler = uriHandler
-        )
-
-        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
-        assertTagAbsent("radar_attribution_credits")
-        assertSourceLink(
-            label = "LibreWXR",
-            url = "https://librewxr.net/",
-            uriHandler = uriHandler
-        )
-
-        selectedProvider.value = RadarProvider.RAINVIEWER
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
-        composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertDoesNotExist()
-        assertSourceLink(
-            label = "RainViewer",
-            url = "https://www.rainviewer.com/",
-            uriHandler = uriHandler
-        )
-    }
-
-    @Test
-    fun attribution_tracks_retained_displayed_provider_then_falls_back_when_no_frame_is_shown() {
-        val playback = playbackViewModel()
-        val enabled = mutableStateOf(true)
-        val opacity = mutableFloatStateOf(0.75f)
-        val selectedProvider = mutableStateOf(RadarProvider.RAINVIEWER)
-        val attributionState = mutableStateOf(
-            attributionPlaybackState(
-                selectedProvider = RadarProvider.RAINVIEWER,
-                displayedProvider = RadarProvider.LIBREWXR,
-                pending = true
-            )
-        )
-        val uriHandler = RecordingUriHandler()
-        setOverlayContent(
-            playback,
-            enabled,
-            opacity,
-            darkTheme = false,
-            selectedProvider = selectedProvider,
-            uriHandler = uriHandler,
-            playbackStateOverride = attributionState
-        )
-
-        composeRule.onNodeWithText("Loading radar frame…").assertDoesNotExist()
-        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
-        composeRule.onNodeWithText("RainViewer").assertDoesNotExist()
-        assertTagAbsent("radar_attribution_credits")
-
-        attributionState.value = attributionPlaybackState(
-            selectedProvider = RadarProvider.RAINVIEWER,
-            displayedProvider = RadarProvider.RAINVIEWER,
-            pending = true
-        )
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
-        composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertDoesNotExist()
-
-        attributionState.value = attributionPlaybackState(
-            selectedProvider = RadarProvider.RAINVIEWER,
-            displayedProvider = RadarProvider.RAINVIEWER,
-            pending = false,
-            displayError = "HTTP 500"
-        )
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("Radar network unavailable").assertIsDisplayed()
-        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
-
-        attributionState.value = attributionPlaybackState(
-            selectedProvider = RadarProvider.RAINVIEWER,
-            displayedProvider = null,
-            pending = true
-        )
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
-        composeRule.onNodeWithText("LibreWXR").assertDoesNotExist()
     }
 
     @Test
@@ -439,24 +337,15 @@ class RadarMapOverlayTest {
             composeRule.onNodeWithContentDescription("Radar layer options").assertIsDisplayed()
             composeRule.onNodeWithText("Observed").assertIsDisplayed()
             composeRule.onNodeWithTag("radar_timeline").assertIsDisplayed()
-            composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
 
             val containerBounds = composeRule.onNodeWithTag("radar_overlay_position_container")
                 .fetchSemanticsNode().boundsInRoot
             val timeline = composeRule.onNodeWithTag("radar_timeline")
                 .fetchSemanticsNode().boundsInRoot
-            val attribution = composeRule.onNodeWithTag("radar_attribution")
-                .fetchSemanticsNode().boundsInRoot
             assertEquals(
                 with(composeRule.density) { 8.dp.toPx() },
                 containerBounds.bottom - timeline.bottom,
                 1f
-            )
-            assertTrue(
-                "Radar attribution should sit 8 dp above the timeline",
-                kotlin.math.abs(
-                    timeline.top - attribution.bottom - with(composeRule.density) { 8.dp.toPx() }
-                ) <= 1f
             )
             assertTrue(
                 "Radar timeline should stay compact",
@@ -544,100 +433,32 @@ class RadarMapOverlayTest {
         opacity: androidx.compose.runtime.MutableFloatState,
         darkTheme: Boolean,
         selectedProvider: MutableState<RadarProvider> = mutableStateOf(RadarProvider.LIBREWXR),
-        onProviderChange: (RadarProvider) -> Unit = {},
-        uriHandler: UriHandler = NoopUriHandler,
-        playbackStateOverride: MutableState<RadarPlaybackState>? = null
+        onProviderChange: (RadarProvider) -> Unit = {}
     ) {
         composeRule.setContent {
             val collectedPlaybackState by playback.state.collectAsState()
-            val playbackState = playbackStateOverride?.value ?: collectedPlaybackState
-            CompositionLocalProvider(LocalUriHandler provides uriHandler) {
-                HluWeatherTheme(darkTheme = darkTheme) {
-                    Box(Modifier.size(360.dp, 620.dp)) {
-                        RadarMapOverlay(
-                            enabled = enabled.value,
-                            onEnabledChange = { enabled.value = it },
-                            selectedProvider = selectedProvider.value,
-                            onProviderChange = { provider ->
-                                selectedProvider.value = provider
-                                onProviderChange(provider)
-                            },
-                            playbackState = playbackState,
-                            metadataState = playbackState.metadataState,
-                            opacity = opacity.floatValue,
-                            onOpacityChange = { opacity.floatValue = it },
-                            onFrameSelected = playback::selectFrame,
-                            onPlayPause = {
-                                if (playback.state.value.isPlaying) playback.pause() else playback.play()
-                            }
-                        )
-                    }
+            HluWeatherTheme(darkTheme = darkTheme) {
+                Box(Modifier.size(360.dp, 620.dp)) {
+                    RadarMapOverlay(
+                        enabled = enabled.value,
+                        onEnabledChange = { enabled.value = it },
+                        selectedProvider = selectedProvider.value,
+                        onProviderChange = { provider ->
+                            selectedProvider.value = provider
+                            onProviderChange(provider)
+                        },
+                        playbackState = collectedPlaybackState,
+                        metadataState = collectedPlaybackState.metadataState,
+                        opacity = opacity.floatValue,
+                        onOpacityChange = { opacity.floatValue = it },
+                        onFrameSelected = playback::selectFrame,
+                        onPlayPause = {
+                            if (playback.state.value.isPlaying) playback.pause() else playback.play()
+                        }
+                    )
                 }
             }
         }
-    }
-
-    private fun attributionPlaybackState(
-        selectedProvider: RadarProvider,
-        displayedProvider: RadarProvider?,
-        pending: Boolean,
-        displayError: String? = null
-    ): RadarPlaybackState {
-        val requested = RadarFrame(
-            timestampSeconds = 1_793_563_200L,
-            path = "/requested",
-            type = RadarFrameType.OBSERVED,
-            provider = selectedProvider
-        )
-        val displayed = displayedProvider?.let { provider ->
-            RadarFrame(
-                timestampSeconds = 1_793_562_600L,
-                path = "/displayed",
-                type = RadarFrameType.OBSERVED,
-                provider = provider
-            )
-        }
-        val host = providerHost(selectedProvider)
-        return RadarPlaybackState(
-            selectedProvider = selectedProvider,
-            frames = listOf(requested),
-            requestedFrame = requested,
-            requestedFrameIdentity = requested.identity(host),
-            displayedFrame = displayed,
-            displayedFrameIdentity = displayed?.identity(providerHost(displayedProvider!!)),
-            requestedFrameTimeLabel = "Requested frame",
-            requestedFrameType = RadarFrameType.OBSERVED,
-            requestedFrameTypeLabel = "Observed",
-            displayedFrameTimeLabel = displayed?.let { "Displayed frame" },
-            isPending = pending,
-            displayError = displayError
-        )
-    }
-
-    private fun providerHost(provider: RadarProvider): String = when (provider) {
-        RadarProvider.LIBREWXR -> "https://api.librewxr.net"
-        RadarProvider.RAINVIEWER -> "https://tilecache.rainviewer.com"
-    }
-
-    private fun assertSourceLink(label: String, url: String, uriHandler: RecordingUriHandler) {
-        val node = composeRule.onNodeWithTag("radar_attribution_source")
-            .assertIsDisplayed()
-        val semantics = node.fetchSemanticsNode().config
-        val annotatedText = semantics[SemanticsProperties.Text].single()
-        val linkRange = annotatedText.getLinkAnnotations(0, annotatedText.length).single()
-        assertEquals(0, linkRange.start)
-        assertEquals(annotatedText.length, linkRange.end)
-        val link = linkRange.item
-        assertTrue("Source text should carry a URL link annotation", link is LinkAnnotation.Url)
-        assertEquals(url, (link as LinkAnnotation.Url).url)
-        node.assertContentDescriptionEquals("Open $label source link")
-        composeRule.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LinkTestMarker, Unit),
-            useUnmergedTree = true
-        ).assertIsDisplayed()
-            .assertHasClickAction()
-            .performClick()
-        assertEquals(url, uriHandler.openedUris.last())
     }
 
     private fun assertTagAbsent(tag: String) {
@@ -673,18 +494,6 @@ class RadarMapOverlayTest {
 
     private fun own(viewModel: RadarPlaybackViewModel): RadarPlaybackViewModel =
         viewModel.also(radarViewModels::add)
-
-    private class RecordingUriHandler : UriHandler {
-        val openedUris = mutableListOf<String>()
-
-        override fun openUri(uri: String) {
-            openedUris += uri
-        }
-    }
-
-    private object NoopUriHandler : UriHandler {
-        override fun openUri(uri: String) = Unit
-    }
 
     private fun metadata(): LibreWxrRadarMetadata = LibreWxrRadarMetadata(
         host = "https://api.librewxr.net",

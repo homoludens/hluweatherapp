@@ -338,6 +338,11 @@ fun WeatherScreen(
                                             radar = selectedRadar,
                                             radarResources = radarResources,
                                             radarProvider = radarProvider,
+                                            radarAttributionProvider = if (radarEnabled) {
+                                                radarStateForProvider.displayedFrame?.provider ?: radarProvider
+                                            } else {
+                                                null
+                                            },
                                             radarMetadata = radarStateForProvider.metadata,
                                             radarPlaybackPreparationEnabled = true,
                                             radarPlaybackIsPlaying = radarStateForProvider.isPlaying,
@@ -352,7 +357,7 @@ fun WeatherScreen(
                                                 }
                                             },
                                             collapsedAttributionInitially = true,
-                                            recenterTopPadding = 72.dp,
+                                            recenterTopPadding = 112.dp,
                                             onLocationClick = viewModel::selectLocation,
                                             onRecenterClick = onRecenterClick
                                         )

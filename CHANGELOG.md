@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.7.5
+
+- Aligned map layer, compass, location, and attribution controls in a vertical stack on the right.
+- Consolidated basemap and radar provider attribution in the map info control.
+
 ## 3.7.3
 
 - Added an About screen with the installed app version and build number.

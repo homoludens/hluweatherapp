@@ -42,21 +42,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.LinkInteractionListener
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.io.IOException
-import java.net.URI
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.RadarProviderDescriptors
@@ -93,27 +86,18 @@ internal fun RadarMapOverlay(
         )
 
         if (enabled) {
-            Column(
+            RadarTimeline(
+                playbackState = playbackState,
+                selectedProvider = selectedProvider,
+                metadataState = metadataState,
+                onFrameSelected = onFrameSelected,
+                onPlayPause = onPlayPause,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
-                    .padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                RadarAttribution(
-                    provider = playbackState.displayedFrame?.provider ?: selectedProvider
-                )
-                RadarTimeline(
-                    playbackState = playbackState,
-                    selectedProvider = selectedProvider,
-                    metadataState = metadataState,
-                    onFrameSelected = onFrameSelected,
-                    onPlayPause = onPlayPause,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+                    .padding(bottom = 8.dp)
+            )
         }
     }
 }
@@ -453,55 +437,6 @@ private fun RadarTimeline(
             }
         }
     }
-}
-
-@Composable
-private fun RadarAttribution(provider: RadarProvider, modifier: Modifier = Modifier) {
-    val descriptor = RadarProviderDescriptors[provider]
-    val sourceLink = descriptor.sourceLink
-    val uriHandler = LocalUriHandler.current
-    val safeSourceUrl = safeRadarSourceUrl(sourceLink.url)
-    val sourceLabel = buildAnnotatedString {
-        if (safeSourceUrl != null) {
-            pushLink(
-                LinkAnnotation.Url(
-                    url = safeSourceUrl,
-                    linkInteractionListener = LinkInteractionListener {
-                        runCatching { uriHandler.openUri(safeSourceUrl) }
-                    }
-                )
-            )
-        }
-        append(descriptor.displayName)
-        if (safeSourceUrl != null) pop()
-    }
-
-    Surface(
-        modifier = modifier.testTag("radar_attribution"),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        tonalElevation = 2.dp
-    ) {
-        Text(
-            text = sourceLabel,
-            modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .semantics { contentDescription = "Open ${descriptor.displayName} source link" }
-                .testTag("radar_attribution_source"),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 10.sp,
-                textDecoration = TextDecoration.Underline
-            ),
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-private fun safeRadarSourceUrl(url: String): String? {
-    val uri = runCatching { URI(url) }.getOrNull() ?: return null
-    return url.takeIf {
-        uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() && uri.userInfo == null
-    }?.let { uri.toASCIIString() }
 }
 
 private fun radarMetadataErrorLabel(error: Throwable): String = when {

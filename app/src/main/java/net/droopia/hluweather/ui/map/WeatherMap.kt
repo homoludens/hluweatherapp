@@ -58,6 +58,7 @@ import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RadarFrame
 import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarProviderDescriptors
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.network.radarMapRuntimeOptions
 import org.maplibre.compose.camera.CameraMoveReason
@@ -116,6 +117,19 @@ private data class WeatherMapLongitudeBounds(
 
 fun mapStyleUrl(darkTheme: Boolean): String =
     if (darkTheme) OPEN_FREE_MAP_DARK_STYLE else OPEN_FREE_MAP_LIBERTY_STYLE
+
+/** RasterTileSource has no attribution parameter, so include its provider notice in this control. */
+internal fun weatherMapAttributions(
+    styleAttributions: List<String>,
+    radarProvider: RadarProvider?
+): List<String> {
+    val radarAttributions = radarProvider?.let { provider ->
+        val descriptor = RadarProviderDescriptors[provider]
+        listOf("<a href=\"${descriptor.sourceLink.url}\">${descriptor.displayName}</a>") +
+            descriptor.credits
+    }.orEmpty()
+    return (styleAttributions + radarAttributions).distinct()
+}
 
 fun weatherMapMarkers(
     locations: List<WeatherLocation>,
@@ -247,6 +261,7 @@ fun WeatherMap(
     radar: WeatherMapRadarConfig? = null,
     radarResources: WeatherRadarResources? = null,
     radarProvider: RadarProvider? = radar?.frame?.provider,
+    radarAttributionProvider: RadarProvider? = null,
     radarMetadata: RadarMetadata? = null,
     radarPlaybackPreparationEnabled: Boolean = false,
     radarPlaybackIsPlaying: Boolean = false,
@@ -375,12 +390,17 @@ fun WeatherMap(
                     zoom = mapState.cameraPosition.zoom,
                     modifier = Modifier.align(Alignment.TopStart)
                 )
-                DisappearingCompassButton(modifier = Modifier.align(Alignment.TopEnd))
+                DisappearingCompassButton(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 56.dp)
+                )
                 MaplibreLogo(Modifier.align(Alignment.BottomStart))
                 CollapsedFirstAttributionButton(
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 64.dp)
+                    radarProvider = radarAttributionProvider,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 168.dp)
                 )
             } else {
                 include(MapOverlay.Default)
@@ -425,7 +445,7 @@ fun WeatherMap(
                 },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = recenterTopPadding, end = 16.dp)
+                    .padding(top = recenterTopPadding)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
             )
         }
@@ -446,13 +466,16 @@ fun WeatherMap(
 }
 
 @Composable
-private fun MapOverlayScope.CollapsedFirstAttributionButton(modifier: Modifier = Modifier) {
+private fun MapOverlayScope.CollapsedFirstAttributionButton(
+    radarProvider: RadarProvider?,
+    modifier: Modifier = Modifier
+) {
     val mapStyle = style
     val attributions by remember(mapStyle) { derivedStateOf { mapStyle.attributions() } }
     val isGestureMoving =
         mapState.isCameraMoving && mapState.cameraMoveReason == CameraMoveReason.GESTURE
     WeatherMapAttributionControl(
-        attributions = attributions,
+        attributions = weatherMapAttributions(attributions, radarProvider),
         isGestureMoving = isGestureMoving,
         modifier = modifier
     )
@@ -511,9 +534,9 @@ internal fun WeatherMapAttributionControl(
                         )
                         .semantics {
                             contentDescription = if (expanded) {
-                                "Hide basemap information"
+                                "Hide map attribution"
                             } else {
-                                "Show basemap information"
+                                "Show map attribution"
                             }
                         }
                         .testTag("weather_map_attribution_toggle"),
@@ -541,7 +564,8 @@ internal fun WeatherMapAttributionControl(
                         CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
                             AttributionLinks(
                                 attributions = attributions,
-                                textStyle = attributionStyle.textStyle.copy(color = contentColor)
+                                textStyle = attributionStyle.textStyle.copy(color = contentColor),
+                                breakWithinAttribution = true
                             )
                         }
                     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.LinkAnnotation
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
 import org.maplibre.compose.camera.CameraMoveReason
 import kotlin.time.Instant
@@ -199,19 +200,25 @@ class WeatherMapTest {
     }
 
     @Test
-    fun map_attribution_starts_collapsed_opens_style_links_and_can_be_closed() {
+    fun map_attribution_starts_collapsed_and_discloses_basemap_and_radar_provider_links() {
         composeRule.setContent {
             WeatherMapAttributionControl(
-                attributions = listOf(
-                    "<a href=\"https://tiles.example.test/credits\">Example map credit</a>"
+                attributions = weatherMapAttributions(
+                    styleAttributions = listOf(
+                        "<a href=\"https://tiles.example.test/credits\">Example map credit</a>"
+                    ),
+                    radarProvider = RadarProvider.LIBREWXR
                 )
             )
         }
 
         composeRule.onNodeWithTag("weather_map_attribution_toggle")
             .assertHasClickAction()
-            .assertContentDescriptionEquals("Show basemap information")
+            .assertContentDescriptionEquals("Show map attribution")
         composeRule.onNodeWithText("Example map credit").assertDoesNotExist()
+        composeRule.onNodeWithText("LibreWXR").assertDoesNotExist()
+        composeRule.onNodeWithText("EUMETNET OPERA").assertDoesNotExist()
+        composeRule.onNodeWithText("Radar-DPC", substring = true).assertDoesNotExist()
 
         composeRule.onNodeWithTag("weather_map_attribution_toggle").performClick()
 
@@ -223,32 +230,84 @@ class WeatherMapTest {
         val creditLink = creditText.getLinkAnnotations(0, creditText.length).single().item
         assertTrue(creditLink is LinkAnnotation.Url)
         assertEquals("https://tiles.example.test/credits", (creditLink as LinkAnnotation.Url).url)
+        val radarCreditText = composeRule.onNodeWithText("LibreWXR", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .single()
+        val radarCreditLink = radarCreditText
+            .getLinkAnnotations(0, radarCreditText.length)
+            .single()
+            .item
+        assertTrue(radarCreditLink is LinkAnnotation.Url)
+        assertEquals("https://librewxr.net/", (radarCreditLink as LinkAnnotation.Url).url)
+        composeRule.onNodeWithText("EUMETNET OPERA").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Precipitation data from NOAA Enterprise Rain Rate (RRQPE)"
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included).")
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("weather_map_attribution_toggle")
-            .assertContentDescriptionEquals("Hide basemap information")
+            .assertContentDescriptionEquals("Hide map attribution")
 
         composeRule.onNodeWithTag("weather_map_attribution_toggle").performClick()
 
         composeRule.onNodeWithText("Example map credit").assertDoesNotExist()
+        composeRule.onNodeWithText("LibreWXR").assertDoesNotExist()
+        composeRule.onNodeWithText("EUMETNET OPERA").assertDoesNotExist()
         composeRule.onNodeWithTag("weather_map_attribution_toggle")
-            .assertContentDescriptionEquals("Show basemap information")
+            .assertContentDescriptionEquals("Show map attribution")
     }
 
     @Test
-    fun only_the_main_map_opts_into_collapsed_first_attribution() {
+    fun radar_provider_attribution_is_selected_from_the_active_provider() {
+        assertEquals(
+            listOf(
+                "base",
+                "<a href=\"https://librewxr.net/\">LibreWXR</a>",
+                "EUMETNET OPERA",
+                "Precipitation data from NOAA Enterprise Rain Rate (RRQPE)",
+                "Radar-DPC (Italy; CC BY-SA 4.0 where included)."
+            ),
+            weatherMapAttributions(listOf("base"), RadarProvider.LIBREWXR)
+        )
+        assertEquals(
+            listOf("base", "<a href=\"https://www.rainviewer.com/\">RainViewer</a>"),
+            weatherMapAttributions(listOf("base"), RadarProvider.RAINVIEWER)
+        )
+        assertEquals(listOf("base"), weatherMapAttributions(listOf("base"), null))
+    }
+
+    @Test
+    fun main_map_controls_share_a_right_aligned_vertical_stack() {
         val mapSource = mainSource("ui/map/WeatherMap.kt")
 
         assertTrue(mapSource.contains("collapsedAttributionInitially: Boolean = false"))
         assertTrue(mapSource.contains("if (collapsedAttributionInitially)"))
         assertTrue(mapSource.contains("include(MapOverlay.Default)"))
         assertTrue(mapSource.contains("DisappearingScaleBar("))
-        assertTrue(mapSource.contains("DisappearingCompassButton("))
         assertTrue(mapSource.contains("MaplibreLogo("))
+        val compassButtonCall = mapSource
+            .substringAfter("DisappearingCompassButton(")
+            .substringBefore("MaplibreLogo(")
+        assertTrue(compassButtonCall.contains("Alignment.TopEnd"))
+        assertTrue(compassButtonCall.contains("padding(top = 56.dp)"))
+        val recenterButtonCall = mapSource
+            .substringAfter("WeatherMapRecenterButton(")
+            .substringBefore("})")
+        assertTrue(recenterButtonCall.contains("Alignment.TopEnd"))
+        assertTrue(recenterButtonCall.contains("padding(top = recenterTopPadding)"))
         val attributionButtonCall = mapSource
             .substringAfter("CollapsedFirstAttributionButton(")
-            .substringBefore(")")
-        assertTrue(attributionButtonCall.contains("Alignment.TopStart"))
+            .substringBefore("} else {")
+        assertTrue(attributionButtonCall.contains("Alignment.TopEnd"))
+        assertTrue(attributionButtonCall.contains("padding(top = 168.dp)"))
+        val radarOverlaySource = mainSource("ui/map/RadarMapOverlay.kt")
+        assertTrue(radarOverlaySource.contains(".align(Alignment.TopEnd)\n                .padding(8.dp)"))
         assertTrue(mapSource.contains("mapStyle.attributions()"))
-        assertTrue(mainSource("ui/weather/WeatherScreen.kt").contains("collapsedAttributionInitially = true"))
+        val weatherScreenSource = mainSource("ui/weather/WeatherScreen.kt")
+        assertTrue(weatherScreenSource.contains("collapsedAttributionInitially = true"))
+        assertTrue(weatherScreenSource.contains("recenterTopPadding = 112.dp"))
         assertFalse(mainSource("ui/locationpicker/LocationPickerScreen.kt").contains("collapsedAttributionInitially = true"))
         assertFalse(mainSource("ui/weatherroute/RouteEndpointPicker.kt").contains("collapsedAttributionInitially = true"))
     }
