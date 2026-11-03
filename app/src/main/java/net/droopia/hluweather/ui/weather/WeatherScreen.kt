@@ -63,6 +63,7 @@ import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarTimelineNeighborhoodPlanner
 import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -197,6 +198,15 @@ fun WeatherScreen(
     } else {
         null
     }
+    val radarNextPlaybackFrame = if (radarStateForProvider.isPlaying && selectedRadar != null) {
+        radarStateForProvider.metadata?.let { metadata ->
+            radarStateForProvider.requestedFrameIdentity?.let { requested ->
+                RadarTimelineNeighborhoodPlanner.nextFrame(metadata, requested)
+            }
+        }
+    } else {
+        null
+    }
 
     LaunchedEffect(state.trackMeStatus, trackMeSelected) {
         if (trackMeSelected && state.trackMeStatus == TrackMeStatus.PermissionRequired) {
@@ -327,6 +337,9 @@ fun WeatherScreen(
                                             radarResources = radarResources,
                                             radarProvider = radarProvider,
                                             radarMetadata = radarStateForProvider.metadata,
+                                            radarPlaybackPreparationEnabled = true,
+                                            radarPlaybackIsPlaying = radarStateForProvider.isPlaying,
+                                            radarNextPlaybackFrame = radarNextPlaybackFrame,
                                             radarRetryToken = radarStateForProvider.displayRetryToken,
                                             onRadarDisplayChanged = { display ->
                                                 if (radarShouldBeVisible && radarStateForProvider.isVisible &&

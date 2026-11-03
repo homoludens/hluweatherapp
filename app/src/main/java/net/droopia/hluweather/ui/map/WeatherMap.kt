@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.GeoPoint
+import net.droopia.hluweather.data.model.RadarFrame
 import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -247,6 +248,9 @@ fun WeatherMap(
     radarResources: WeatherRadarResources? = null,
     radarProvider: RadarProvider? = radar?.frame?.provider,
     radarMetadata: RadarMetadata? = null,
+    radarPlaybackPreparationEnabled: Boolean = false,
+    radarPlaybackIsPlaying: Boolean = false,
+    radarNextPlaybackFrame: RadarFrame? = null,
     radarRetryToken: Long = 0L,
     onRadarDisplayChanged: (RadarDisplayState) -> Unit = {},
     recenterTopPadding: Dp = 16.dp,
@@ -291,6 +295,9 @@ fun WeatherMap(
             radar = radar,
             selectedProvider = radarProvider,
             metadata = radarMetadata,
+            playbackPreparationEnabled = radarPlaybackPreparationEnabled,
+            playbackIsPlaying = radarPlaybackIsPlaying,
+            nextPlaybackFrame = radarNextPlaybackFrame,
             retryToken = radarRetryToken,
             onDisplayChanged = onRadarDisplayChanged
         )

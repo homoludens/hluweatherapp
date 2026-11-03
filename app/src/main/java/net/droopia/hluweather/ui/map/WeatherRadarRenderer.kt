@@ -17,13 +17,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import net.droopia.hluweather.data.model.RadarFrame
+import net.droopia.hluweather.data.model.RadarFrameIdentity
+import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
 import net.droopia.hluweather.data.model.RadarProviderDescriptors
+import net.droopia.hluweather.data.model.RadarTimelineNeighborhoodPlanner
 import net.droopia.hluweather.data.model.RadarTileCoverage
-import net.droopia.hluweather.data.model.RadarMetadata
-import net.droopia.hluweather.data.model.RadarFrameIdentity
+import net.droopia.hluweather.data.model.RadarViewportBounds
 import net.droopia.hluweather.data.network.RadarMapResourceProvider
+import net.droopia.hluweather.data.network.RadarNextFrameCoverageOpportunity
 import net.droopia.hluweather.data.network.RadarPrefetchController
 import net.droopia.hluweather.data.network.RadarTileLoader
 import net.droopia.hluweather.data.network.RadarTileRegistry
@@ -47,6 +52,9 @@ internal fun WeatherRadarRenderer(
     radar: WeatherMapRadarConfig?,
     selectedProvider: RadarProvider?,
     metadata: RadarMetadata?,
+    playbackPreparationEnabled: Boolean = false,
+    playbackIsPlaying: Boolean = false,
+    nextPlaybackFrame: RadarFrame? = null,
     retryToken: Long,
     onDisplayChanged: (RadarDisplayState) -> Unit
 ) {
@@ -55,10 +63,18 @@ internal fun WeatherRadarRenderer(
     val backend = remember(mapState, resources) {
         MapLibreRadarBackend(mapState, resources.registry, resources.loader, resources.provider, scope)
     }
-    val controller = remember(backend) { RadarRenderController(scope, backend) }
+    val controller = remember(backend, playbackPreparationEnabled) {
+        RadarRenderController(
+            scope,
+            backend,
+            timing = if (playbackPreparationEnabled) RadarHandoffTiming() else null
+        )
+    }
     val currentRadar by rememberUpdatedState(radar)
     val currentProvider by rememberUpdatedState(selectedProvider)
     val currentMetadata by rememberUpdatedState(metadata)
+    val currentPlaybackIsPlaying by rememberUpdatedState(playbackIsPlaying)
+    val currentNextPlaybackFrame by rememberUpdatedState(nextPlaybackFrame)
     val currentCallback by rememberUpdatedState(onDisplayChanged)
     var lastRetryToken by remember(controller) { mutableLongStateOf(retryToken) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -88,7 +104,7 @@ internal fun WeatherRadarRenderer(
         lastRetryToken = retryToken
     }
     LaunchedEffect(controller, mapState) {
-        snapshotFlow {
+        val inputs = snapshotFlow {
             RendererInputs(
                 currentRadar,
                 currentProvider,
@@ -97,13 +113,19 @@ internal fun WeatherRadarRenderer(
                 mapState.style.loadState,
                 lifecycleStarted,
                 mapState.viewport,
-                mapState.cameraPosition
+                mapState.cameraPosition,
+                currentPlaybackIsPlaying,
+                currentNextPlaybackFrame
             )
-        }.collect { input ->
+        }
+        var activePlanGeneration: Long? = null
+        combine(inputs, prefetch.nextFrameCoverageOpportunity) { input, _ -> input }.collect { input ->
             val config = input.radar
             if (!input.started || !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ||
                 config == null || input.provider != config.frame.provider || input.style != StyleLoadState.Ready) {
                 prefetch.stop()
+                activePlanGeneration = null
+                controller.prepare(null)
                 controller.update(null, input.provider)
             } else {
                 val result = runCatching {
@@ -140,19 +162,44 @@ internal fun WeatherRadarRenderer(
                             }.getOrNull()
                             if (plan == null) {
                                 prefetch.stop()
+                                activePlanGeneration = null
                             } else {
                                 try {
-                                    prefetch.replan(plan)
+                                    activePlanGeneration = prefetch.replan(plan)
                                 } finally {
                                     resources.registry.unregister(plan.requestedSource)
                                 }
                             }
                         } else {
                             prefetch.stop()
+                            activePlanGeneration = null
                         }
+                        val bounds = viewport?.let { radarViewportBounds(it, input.camera) }
+                        val opportunity = prefetch.nextFrameCoverageOpportunity.value
+                        val preparation = if (playbackPreparationEnabled) {
+                            nextRadarPreparationRequest(
+                                currentRequest = request,
+                                selectedProvider = input.provider,
+                                metadata = metadata,
+                                lifecycleStarted = input.started,
+                                styleReady = input.style == StyleLoadState.Ready,
+                                playbackIsPlaying = input.playbackIsPlaying,
+                                nextPlaybackFrame = input.nextPlaybackFrame,
+                                viewport = bounds,
+                                opportunity = opportunity,
+                                currentPlanGeneration = activePlanGeneration
+                            )
+                        } else {
+                            null
+                        }
+                        controller.prepare(preparation, revision = opportunity?.generation ?: 0L)
                     },
-                    onFailure = { controller.reject(config.frame.identity(config.host), input.provider, input.styleEpoch,
-                        it.message ?: "Radar viewport unavailable").also { prefetch.stop() } }
+                    onFailure = {
+                        activePlanGeneration = null
+                        controller.prepare(null)
+                        controller.reject(config.frame.identity(config.host), input.provider, input.styleEpoch,
+                            it.message ?: "Radar viewport unavailable").also { prefetch.stop() }
+                    }
                 )
             }
         }
@@ -182,8 +229,41 @@ private data class RendererInputs(
     val style: StyleLoadState,
     val started: Boolean,
     val viewport: org.maplibre.compose.camera.Viewport?,
-    val camera: org.maplibre.compose.camera.CameraPosition
+    val camera: org.maplibre.compose.camera.CameraPosition,
+    val playbackIsPlaying: Boolean,
+    val nextPlaybackFrame: RadarFrame?
 )
+
+/** Translate only the current plan's fully covered, exact non-wrapping next frame to preparation. */
+internal fun nextRadarPreparationRequest(
+    currentRequest: RadarRenderRequest,
+    selectedProvider: RadarProvider?,
+    metadata: RadarMetadata?,
+    lifecycleStarted: Boolean,
+    styleReady: Boolean,
+    playbackIsPlaying: Boolean,
+    nextPlaybackFrame: RadarFrame?,
+    viewport: RadarViewportBounds?,
+    opportunity: RadarNextFrameCoverageOpportunity?,
+    currentPlanGeneration: Long?
+): RadarRenderRequest? {
+    if (!lifecycleStarted || !styleReady || !playbackIsPlaying ||
+        currentRequest.config.opacity <= 0f || selectedProvider != currentRequest.identity.provider
+    ) return null
+    val currentMetadata = metadata ?: return null
+    val bounds = viewport ?: return null
+    if (currentMetadata.provider != selectedProvider || currentMetadata.host != currentRequest.config.host) return null
+    val expectedNext = RadarTimelineNeighborhoodPlanner.nextFrame(currentMetadata, currentRequest.identity)
+        ?: return null
+    if (nextPlaybackFrame != expectedNext) return null
+    val cachedCoverage = opportunity ?: return null
+    if (currentPlanGeneration == null || cachedCoverage.generation != currentPlanGeneration ||
+        cachedCoverage.requestedFrame != currentRequest.identity ||
+        cachedCoverage.nextFrame != expectedNext.identity(currentMetadata.host) ||
+        cachedCoverage.viewport != bounds
+    ) return null
+    return currentRequest.copy(config = currentRequest.config.copy(frame = expectedNext))
+}
 
 internal fun shouldPlanRadarPrefetch(
     radar: WeatherMapRadarConfig?,

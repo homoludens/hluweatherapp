@@ -123,8 +123,11 @@ class RadarPrefetchController(
     val nextFrameCoverageOpportunity: StateFlow<RadarNextFrameCoverageOpportunity?> =
         mutableNextFrameCoverageOpportunity.asStateFlow()
 
-    /** Call after establishing demand consumers, so a promoted prefetch retains its shared fetch. */
-    fun replan(plan: RadarTilePlan) {
+    /**
+     * Call after establishing demand consumers, so a promoted prefetch retains its shared fetch.
+     * Returns the generation that owns this plan, including when its exact key is unchanged.
+     */
+    fun replan(plan: RadarTilePlan): Long {
         val requested = plan.requestedSource.frame.identity(plan.requestedSource.host)
         val nextFrame = plan.nextFrame?.identity(plan.requestedSource.host)
         val planKey = PlanKey(
@@ -141,7 +144,7 @@ class RadarPrefetchController(
         val start = mutableListOf<Job>()
         val planGeneration: Long
         synchronized(lock) {
-            if (currentPlan?.key == planKey) return
+            if (currentPlan?.key == planKey) return requireNotNull(currentPlan).generation
             generation++
             planGeneration = generation
             currentPlan = ActivePlan(planKey, planGeneration, nextFrame, plan.nextFrameCoverage)
@@ -178,6 +181,7 @@ class RadarPrefetchController(
         // Also recognize a complete cache hit, including coverage keys outside the bounded
         // speculative queue. This check is once per changed plan, never a polling loop.
         scope.launch { publishCoverageOpportunity(expectedGeneration = planGeneration) }
+        return planGeneration
     }
 
     fun stop() {
