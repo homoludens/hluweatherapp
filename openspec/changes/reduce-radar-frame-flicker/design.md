@@ -112,9 +112,9 @@ The intended outcome is fewer/shorter **observed** gaps on reproducible nonempty
 ## Migration Plan
 
 1. Implement the timer-driven two-slot controller against a recording backend; no API-feasibility gate is needed. Verify virtual-time cancellation, ownership, and event independence.
-2. Adapt the existing native backend and per-registration cache-only/demand bridge without changing dependencies or remote cache keys.
-3. Wire next-frame planning, scoped prefetch opportunities, renderer adoption, and unchanged acceptance-based playback into the main map only.
-4. Run focused native tests and empirical comparisons, then relevant final regressions and `:app:assembleGoogleDebug`. Record results under the revised scope while retaining historical audits.
-5. No persistent-data migration is required. Rollback affects only ahead-of-time preparation/timers and their wiring; preserve the speedup's coarse tiles, transport capacity, provider budgets, and acceptance-only renderer semantics. Do not discard unrelated work or sync/archive specs without a separate request.
+2. Add cache-only coverage/freshness checks for registered planned tiles, with optional source creation/adoption still failing closed.
+3. Implement per-registration cache-only/demand ownership and alias safety before enabling optional native source creation; preserve remote cache-key deduplication and existing budgets.
+4. Complete the MapLibre backend's optional create/adopt path on that exact role/lease contract, then wire next-frame planning and scoped prefetch into the main map while keeping acceptance-based playback.
+5. Run focused native tests and empirical comparisons, then relevant final regressions and `:app:assembleGoogleDebug`. Record results under the revised scope while retaining historical audits. No persistent-data migration is required; rollback must preserve the speedup's coarse tiles, transport capacity, provider budgets, and acceptance semantics. Do not discard unrelated work or sync/archive specs without a separate request.
 
 The 50 ms defaults are proposed initial trial values, not measured results. Adjusting those internal constants after empirical comparison stays within this design; introducing deliberate visible overlap, a new rendering API, or a different architecture requires approval.
