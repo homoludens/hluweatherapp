@@ -194,7 +194,27 @@ internal class MapLibreRadarBackend(
         loader.awaitCoverage(slot.request.coordinates.map(native.lease::tile))
     }
 
+    override fun createOptional(slot: RadarRenderSlot): Boolean {
+        // Current aliases identify a frame, not a native registration. Until cache-only ownership
+        // is attached to an exact registration, creating this source could grant it demand HTTP.
+        // Fail closed without allocating a source or lease.
+        return false
+    }
+
+    override suspend fun hasCachedCoverage(slot: RadarRenderSlot): Boolean {
+        val native = slots[slot.id] ?: return false
+        if (slot.request.coordinates.isEmpty()) return false
+        return loader.hasFreshCachedCoverage(slot.request.coordinates.map(native.lease::tile))
+    }
+
+    override suspend fun adoptOptional(slot: RadarRenderSlot, guard: RadarMutationGuard): Boolean {
+        // Adoption must change the role of the exact registration. Frame-wide aliases cannot do
+        // that safely; task 2.2 supplies the per-registration lease/role binding.
+        return false
+    }
+
     override suspend fun awaitFullRender(slot: RadarRenderSlot, viewport: RadarRenderRequest, guard: RadarMutationGuard) {
+        // Legacy opt-in diagnostics only. Normal handoff and cleanup use coverage/accepted commands.
         val native = slots.getValue(slot.id)
         // WARNING: Full events are not tagged with a style revision. The renderer can replay an
         // old update after these owner-thread repaint requests, so these barriers alone do not

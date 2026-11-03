@@ -155,6 +155,20 @@ class RadarTileLoader(
         keys.distinct().map { key -> async { load(key) } }.awaitAll()
     }
 
+    /** True only when every requested tile is already fresh in the app cache; never starts I/O. */
+    suspend fun hasFreshCachedCoverage(keys: List<RadarTileKey>): Boolean {
+        val distinctKeys = keys.distinct()
+        if (distinctKeys.isEmpty()) return false
+        for (key in distinctKeys) {
+            try {
+                load(key, cacheOnly = true)
+            } catch (_: RadarTileNotCachedException) {
+                return false
+            }
+        }
+        return true
+    }
+
     private suspend fun fetchWithRetry(
         key: RadarTileKey,
         priority: RadarRequestPriority,

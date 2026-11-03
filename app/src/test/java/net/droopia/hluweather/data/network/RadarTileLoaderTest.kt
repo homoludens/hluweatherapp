@@ -316,6 +316,49 @@ class RadarTileLoaderTest {
     }
 
     @Test
+    fun cacheOnlyCoverageRequiresEveryFreshTileAndNeverStartsNetwork() = runTest {
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        var attempts = 0
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { _, _ ->
+            attempts++
+            RadarTileHttpResult(200, RadarTilePayload(byteArrayOf(1), 5))
+        }, { testScheduler.currentTime })
+        val cached = key(1)
+        val missing = key(2)
+
+        assertFalse(loader.hasFreshCachedCoverage(emptyList()))
+        loader.load(cached)
+        assertFalse(loader.hasFreshCachedCoverage(listOf(cached, missing)))
+        assertEquals("A cache miss must not trigger a fetch", 1, attempts)
+
+        loader.load(missing)
+        assertTrue(loader.hasFreshCachedCoverage(listOf(cached, missing)))
+        assertEquals(2, attempts)
+
+        advanceTimeBy(5)
+        runCurrent()
+        assertFalse("Expired bytes are not reusable preparation coverage",
+            loader.hasFreshCachedCoverage(listOf(cached, missing)))
+        assertEquals("An expired cache-only check must not revalidate over the network", 2, attempts)
+    }
+
+    @Test
+    fun cachedNoContentIsValidOptionalCoverage() = runTest {
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        var attempts = 0
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { _, _ ->
+            attempts++
+            RadarTileHttpResult(204, RadarTilePayload(null, 5))
+        }, { testScheduler.currentTime })
+        val emptyTile = key(1)
+
+        loader.load(emptyTile)
+
+        assertTrue(loader.hasFreshCachedCoverage(listOf(emptyTile)))
+        assertEquals("A valid 204 is covered without another request", 1, attempts)
+    }
+
+    @Test
     fun revalidationDoesNotMakeAnEarlierNoCacheResponseFresh() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         var attempts = 0
