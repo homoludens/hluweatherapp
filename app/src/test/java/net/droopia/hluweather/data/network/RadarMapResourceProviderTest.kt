@@ -106,8 +106,8 @@ class RadarMapResourceProviderTest {
             else RadarTileHttpResult(204, RadarTilePayload(null, 100_000))
         }, { testScheduler.currentTime })
         val provider = RadarMapResourceProvider(registry, loader, scheduler)
-        val observation = provider.observeNativeTiles(listOf(key))
-        val unrelated = provider.observeNativeTiles(listOf(source.tile(RadarTileCoordinate(2, 2, 1))))
+        val observation = provider.observeNativeTiles(source, listOf(key))
+        val unrelated = provider.observeNativeTiles(source, listOf(source.tile(RadarTileCoordinate(2, 2, 1))))
         assertTrue(provider.load(MapResourceLoadRequest(url, MapResourceKind.Tile,
             loadingMethod = MapResourceLoadRequest.LoadingMethod.CacheOnly,
             storagePolicy = MapResourceLoadRequest.StoragePolicy.Volatile)) is MapResourceLoad.Failed)
@@ -162,26 +162,31 @@ class RadarMapResourceProviderTest {
         registry.unregister(old)
         assertEquals(null, registry.resolve(url))
         val replacement = registry.register("https://tiles.example.test", frame())
+        val replacementUrl = replacement.template.replace("{z}", "2").replace("{x}", "1").replace("{y}", "1")
         registry.unregister(old)
-        assertTrue(registry.resolve(url) != null)
-        registry.unregister(replacement)
         assertEquals(null, registry.resolve(url))
+        assertTrue(registry.resolve(replacementUrl) != null)
+        registry.unregister(replacement)
+        assertEquals(null, registry.resolve(replacementUrl))
     }
 
     @Test
-    fun overlappingPlanAndNativeSlotLeasesKeepTheAliasValidUntilBothRelease() {
+    fun overlappingPlanAndNativeSlotHaveIndependentAliasesAndRemoteKeys() {
         val registry = RadarTileRegistry()
         val plan = registry.register("https://tiles.example.test", frame())
         val slot = registry.register("https://tiles.example.test", frame())
         val url = plan.template.replace("{z}", "2").replace("{x}", "1").replace("{y}", "1")
-        assertEquals(plan.template, slot.template)
-        assertEquals(1, registry.registeredCount)
+        val slotUrl = slot.template.replace("{z}", "2").replace("{x}", "1").replace("{y}", "1")
+        assertFalse(plan.template == slot.template)
+        assertEquals(registry.resolve(url), registry.resolve(slotUrl))
+        assertEquals(2, registry.registeredCount)
         registry.unregister(plan)
         registry.unregister(plan) // a delayed duplicate release cannot consume the slot lease
-        assertTrue(registry.resolve(url) != null)
+        assertEquals(null, registry.resolve(url))
+        assertTrue(registry.resolve(slotUrl) != null)
         assertEquals(1, registry.registeredCount)
         registry.unregister(slot)
-        assertEquals(null, registry.resolve(url))
+        assertEquals(null, registry.resolve(slotUrl))
         assertEquals(0, registry.registeredCount)
     }
 

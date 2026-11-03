@@ -62,6 +62,7 @@ internal class MapLibreRadarBackend(
 
     private val instance = instances.incrementAndGet()
     private val slots = mutableMapOf<Long, NativeSlot>()
+    private val failedCreates = RadarFailedSourceCleanup()
     private val fullRenders = RadarFullRenderEvents()
     // Unconfined delivery records the event on the emitter's thread; it never invokes map commands.
     // This avoids mistaking an event waiting on the UI dispatcher for a new native render.
@@ -72,22 +73,35 @@ internal class MapLibreRadarBackend(
     }
 
     override fun create(slot: RadarRenderSlot) {
+        failedCreates.retry()
+        check(slot.id !in slots && !failedCreates.contains(slot.id)) { "Radar slot is already registered" }
+        check(slots.size + failedCreates.size < 2) { "No free radar source slot" }
         val request = slot.request
         val lease = registry.register(request.config.host, request.config.frame)
-        val keys = request.coordinates.map(lease::tile)
-        val observation = provider.observeNativeTiles(keys)
         val sourceId = "hlu-radar-source-$instance-${slot.id}"
         val layerId = "hlu-radar-layer-$instance-${slot.id}"
+        var observation: RadarNativeTileObservation? = null
         var handle: MutableSourceHandle? = null
+        var addAttempted = false
         try {
-            handle = mapState.style.sources.add(radarRasterTileSource(sourceId, lease))
+            val keys = request.coordinates.map(lease::tile)
+            observation = provider.observeNativeTiles(lease, keys)
+            val source = radarRasterTileSource(sourceId, lease)
+            addAttempted = true
+            handle = mapState.style.sources.add(source)
             handle.isVolatile = true
             check(handle.isVolatile) { "Radar source did not become volatile" }
             slots[slot.id] = NativeSlot(sourceId, layerId, lease, handle, observation)
         } catch (error: Exception) {
-            runCatching { handle?.remove() }
-            observation.close()
-            registry.unregister(lease)
+            val release = { observation?.close(); registry.unregister(lease) }
+            if (!addAttempted || (handle != null && runCatching { handle.remove() }.getOrDefault(false))) {
+                release()
+            } else {
+                // A failed add may have partially installed a source even without returning a
+                // handle. Never release its lease or allocate a third source on that assumption.
+                val sourceHandle = handle
+                failedCreates.retain(slot.id, remove = { sourceHandle?.remove() == true }, release = release)
+            }
             throw error
         }
     }
@@ -195,21 +209,21 @@ internal class MapLibreRadarBackend(
     }
 
     override fun createOptional(slot: RadarRenderSlot): Boolean {
-        // Current aliases identify a frame, not a native registration. Until cache-only ownership
-        // is attached to an exact registration, creating this source could grant it demand HTTP.
-        // Fail closed without allocating a source or lease.
+        // Optional native source creation remains disabled until the backend consumes the
+        // registration-scoped cache-only and ownership-transfer contract.
         return false
     }
 
     override suspend fun hasCachedCoverage(slot: RadarRenderSlot): Boolean {
         val native = slots[slot.id] ?: return false
         if (slot.request.coordinates.isEmpty()) return false
-        return loader.hasFreshCachedCoverage(slot.request.coordinates.map(native.lease::tile))
+        if (!registry.allowsCachedReuse(native.lease, slot.request.coordinates)) return false
+        if (!loader.hasFreshCachedCoverage(slot.request.coordinates.map(native.lease::tile))) return false
+        return registry.allowsCachedReuse(native.lease, slot.request.coordinates)
     }
 
     override suspend fun adoptOptional(slot: RadarRenderSlot, guard: RadarMutationGuard): Boolean {
-        // Adoption must change the role of the exact registration. Frame-wide aliases cannot do
-        // that safely; task 2.2 supplies the per-registration lease/role binding.
+        // Keep adoption disabled until the backend transfers the exact registration under guard.
         return false
     }
 
@@ -261,7 +275,8 @@ internal class MapLibreRadarBackend(
         if (mapState.isClosed) mapState.awaitClosed()
         native.observations.close()
         registry.unregister(native.lease)
-        slots.remove(slot.id)
+        // A removal can suspend; never erase a different owner if the slot entry changed.
+        if (slots[slot.id] === native) slots.remove(slot.id)
     }
 
     /** Release only after map destruction if Compose disposes the whole map. */
@@ -270,6 +285,7 @@ internal class MapLibreRadarBackend(
         mapState.awaitClosed()
         slots.values.forEach { it.observations.close(); registry.unregister(it.lease) }
         slots.clear()
+        failedCreates.releaseAfterMap()
     }
 
     private fun org.maplibre.compose.map.PlatformMapScope.checkReady(
@@ -303,6 +319,36 @@ internal class MapLibreRadarBackend(
         private val instances = AtomicLong()
         internal val tileOrder = compareBy<net.droopia.hluweather.data.model.RadarTileCoordinate> { it.zoom }
             .thenBy { it.x }.thenBy { it.y }
+    }
+}
+
+/** Failed native allocations retain their leases and consume capacity until confirmed removed. */
+internal class RadarFailedSourceCleanup {
+    private class Pending(val remove: () -> Boolean, val release: () -> Unit)
+    private val pending = linkedMapOf<Long, Pending>()
+    val size: Int get() = pending.size
+
+    fun contains(slotId: Long): Boolean = slotId in pending
+
+    fun retain(slotId: Long, remove: () -> Boolean, release: () -> Unit) {
+        check(slotId !in pending) { "Radar cleanup is already retained" }
+        pending[slotId] = Pending(remove, release)
+    }
+
+    fun retry() {
+        val iterator = pending.iterator()
+        while (iterator.hasNext()) {
+            val item = iterator.next().value
+            if (runCatching(item.remove).getOrDefault(false)) {
+                item.release()
+                iterator.remove()
+            }
+        }
+    }
+
+    fun releaseAfterMap() {
+        pending.values.forEach { it.release() }
+        pending.clear()
     }
 }
 

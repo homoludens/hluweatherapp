@@ -28,6 +28,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.maplibre.compose.resource.MapResourceKind
+import org.maplibre.compose.resource.MapResourceLoad
+import org.maplibre.compose.resource.MapResourceLoadRequest
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -35,6 +38,46 @@ import kotlin.time.Instant
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class RadarSharedBudgetIntegrationTest {
+    @Test
+    fun optionalNativeFallbacksUseNoHttpOrRainViewerBudgetBeforeNormalDemand() = runTest {
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        val registry = RadarTileRegistry()
+        val frame = RadarFrame(100, "/v2/radar/100", RadarFrameType.OBSERVED, RadarProvider.RAINVIEWER)
+        val required = RadarTileCoordinate(5, 12, 13)
+        val optional = registry.registerOptional("https://tilecache.rainviewer.com", frame, listOf(required))
+        val sameFrameDemand = registry.register("https://tilecache.rainviewer.com", frame)
+        var attempts = 0
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { _, _ ->
+            attempts++
+            RadarTileHttpResult(200, RadarTilePayload(byteArrayOf(1), testScheduler.currentTime + 60_000))
+        }, { testScheduler.currentTime })
+        val bridge = RadarMapResourceProvider(registry, loader, scheduler)
+        fun request(source: RegisteredRadarSource, coordinate: RadarTileCoordinate) = MapResourceLoadRequest(
+            source.template.replace("{z}", coordinate.zoom.toString()).replace("{x}", coordinate.x.toString())
+                .replace("{y}", coordinate.y.toString()),
+            MapResourceKind.Tile, loadingMethod = MapResourceLoadRequest.LoadingMethod.NetworkOnly,
+            storagePolicy = MapResourceLoadRequest.StoragePolicy.Volatile
+        )
+        repeat(16) { x ->
+            assertTrue(bridge.load(request(optional, RadarTileCoordinate(4, x, 0))) is MapResourceLoad.Failed)
+        }
+        assertEquals(0, attempts)
+        assertTrue(registry.allowsCachedReuse(optional, listOf(required)))
+
+        // All 90 foreground attempts are still available in the current shared window.
+        repeat(90) { scheduler.execute(RadarProvider.RAINVIEWER) { } }
+        val foreground = backgroundScope.async { bridge.load(request(sameFrameDemand, required)) }
+        runCurrent()
+        assertFalse(foreground.isCompleted)
+        assertEquals(0, attempts)
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertTrue(foreground.await() is MapResourceLoad.Bytes)
+        assertEquals(1, attempts)
+        registry.unregister(optional)
+        registry.unregister(sameFrameDemand)
+    }
+
     @Test
     fun metadataHttp429DelaysTileAndRepositoryRetryAndEveryAttemptUsesTheSameWindow() = runTest {
         val epoch = 1_700_000_000_000L
