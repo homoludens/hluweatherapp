@@ -8,12 +8,15 @@ import io.ktor.serialization.kotlinx.json.json
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
 
 /** All actual radar HTTP exchanges must be individually admitted by RadarNetworkScheduler. */
 internal fun createRadarHttpClient(): HttpClient = HttpClient(OkHttp) {
     followRedirects = false
     engine {
         config {
+            // Do not let OkHttp's default five-per-host queue undercut the shared scheduler.
+            dispatcher(Dispatcher().apply { maxRequestsPerHost = RadarNetworkScheduler.MAX_CONCURRENT })
             followRedirects(false)
             followSslRedirects(false)
             retryOnConnectionFailure(false)

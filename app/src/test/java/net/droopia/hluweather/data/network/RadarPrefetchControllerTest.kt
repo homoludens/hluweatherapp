@@ -66,7 +66,7 @@ class RadarPrefetchControllerTest {
         val initial = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
         controller.replan(initial)
         runCurrent()
-        assertEquals(initial.speculative.take(2), started)
+        assertEquals(initial.speculative.take(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT), started)
 
         val selected = initial.speculative[1] // frame 3 was already being prefetched
         val display = backgroundScope.async { loader.load(selected) }
@@ -153,7 +153,8 @@ class RadarPrefetchControllerTest {
         val old = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
         controller.replan(old)
         runCurrent()
-        assertEquals(2, started.size)
+        val oldStarted = old.speculative.take(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT)
+        assertEquals(oldStarted.size, started.size)
 
         val newFrames = frames.map { it.copy(provider = RadarProvider.LIBREWXR) }
         val newer = RadarMetadata(host, newFrames, provider = RadarProvider.LIBREWXR)
@@ -161,9 +162,12 @@ class RadarPrefetchControllerTest {
         val next = planRadarTiles(registry, newer, newFrames[2].identity(host), moved)
         controller.replan(next)
         runCurrent()
-        assertEquals(2, started.count { it.provider == RadarProvider.RAINVIEWER })
-        assertEquals(2, started.count { it.provider == RadarProvider.LIBREWXR })
-        assertTrue(started.drop(2).all { it in next.speculative })
+        val nextStarted = next.speculative.take(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT)
+        assertEquals(oldStarted.size,
+            started.count { it.provider == RadarProvider.RAINVIEWER })
+        assertEquals(nextStarted.size,
+            started.count { it.provider == RadarProvider.LIBREWXR })
+        assertTrue(started.drop(oldStarted.size).all { it in next.speculative })
         controller.stop()
         runCurrent()
         val stoppedAt = started.size

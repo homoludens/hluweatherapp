@@ -100,7 +100,7 @@ class RadarSharedBudgetIntegrationTest {
     @Test
     fun lastObserverCancelsQueuedAndInFlightMetadataAndAReobserverCanRestart() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
-        val gates = List(4) { CompletableDeferred<Unit>() }
+        val gates = List(RadarNetworkScheduler.MAX_CONCURRENT) { CompletableDeferred<Unit>() }
         gates.forEach { gate -> backgroundScope.launch { scheduler.execute(RadarProvider.LIBREWXR) { gate.await() } } }
         runCurrent()
         var attempts = 0

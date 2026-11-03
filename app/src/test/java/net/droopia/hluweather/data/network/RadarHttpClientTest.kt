@@ -3,12 +3,19 @@ package net.droopia.hluweather.data.network
 import io.ktor.client.request.get
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -21,6 +28,44 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RadarHttpClientTest {
+    @Test
+    fun eightSameHostRequestsReachServerAndNinthWaitsForCapacity() = runBlocking {
+        HeldResponseLocalHttpServer().use { server ->
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val scheduler = RadarNetworkScheduler(scope)
+            val client = createRadarHttpClient()
+            try {
+                val firstEight = (1..8).map {
+                    async(Dispatchers.IO) {
+                        scheduler.execute(RadarProvider.RAINVIEWER) { client.get(server.url) }
+                    }
+                }
+
+                assertTrue("All eight requests should reach the held-response server",
+                    server.awaitEightRequests(5_000))
+                assertEquals(8, server.requests.get())
+                assertTrue("Responses are held until the concurrency assertion", firstEight.none { it.isCompleted })
+
+                // UNDISPATCHED runs through scheduler admission before suspending on its ninth slot.
+                val ninth = async(start = CoroutineStart.UNDISPATCHED) {
+                    scheduler.execute(RadarProvider.RAINVIEWER) { client.get(server.url) }
+                }
+                assertFalse("The ninth request must wait while all eight are active", ninth.isCompleted)
+                assertEquals(8, server.requests.get())
+
+                server.releaseResponses()
+                val responses = withTimeout(5_000) { (firstEight + ninth).awaitAll() }
+                assertTrue(responses.all { it.status.value == 200 })
+                assertEquals("The waiting request reaches the same host after capacity is released", 9,
+                    server.requests.get())
+            } finally {
+                server.releaseResponses()
+                client.close()
+                scope.cancel()
+            }
+        }
+    }
+
     @Test
     fun okhttpCannotRetryA503OutsideTheSharedBudget() = runBlocking {
         LocalHttpServer { n -> if (n == 1) "503 Service Unavailable\r\nRetry-After: 0" else "200 OK" }.use { server ->
@@ -95,6 +140,63 @@ class RadarHttpClientTest {
         override fun close() {
             server.close()
             worker.join(5_000)
+        }
+    }
+
+    private class HeldResponseLocalHttpServer : AutoCloseable {
+        private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+        private val release = CountDownLatch(1)
+        private val firstEightRequests = CountDownLatch(8)
+        private val sockets = ConcurrentHashMap.newKeySet<Socket>()
+        private val requestWorkers = CopyOnWriteArrayList<Thread>()
+        val url = "http://127.0.0.1:${server.localPort}/radar"
+        val requests = AtomicInteger()
+
+        private val acceptWorker = thread(name = "radar-http-concurrency-test", isDaemon = true) {
+            while (!server.isClosed) {
+                try {
+                    val socket = server.accept()
+                    sockets.add(socket)
+                    requestWorkers += thread(name = "radar-http-concurrency-request", isDaemon = true) {
+                        try {
+                            socket.use {
+                                it.soTimeout = 5_000
+                                val input = it.getInputStream().bufferedReader()
+                                if (input.readLine() == null) return@use
+                                while (!input.readLine().isNullOrEmpty()) Unit
+                                requests.incrementAndGet()
+                                firstEightRequests.countDown()
+                                release.await()
+                                it.getOutputStream().apply {
+                                    write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                                    flush()
+                                }
+                            }
+                        } catch (error: Exception) {
+                            if (!server.isClosed) throw error
+                        } finally {
+                            sockets.remove(socket)
+                        }
+                    }
+                } catch (error: Exception) {
+                    if (!server.isClosed) throw error
+                }
+            }
+        }
+
+        fun awaitEightRequests(timeoutMillis: Long): Boolean =
+            firstEightRequests.await(timeoutMillis, TimeUnit.MILLISECONDS)
+
+        fun releaseResponses() {
+            release.countDown()
+        }
+
+        override fun close() {
+            releaseResponses()
+            server.close()
+            sockets.forEach { runCatching { it.close() } }
+            acceptWorker.join(5_000)
+            requestWorkers.forEach { it.join(5_000) }
         }
     }
 }

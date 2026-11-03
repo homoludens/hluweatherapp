@@ -68,7 +68,7 @@ class RadarTileLoaderTest {
     fun invalidatingOneQueuedSpeculativeOwnerPreservesAnotherOwnerOfTheSameTile() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
-        repeat(2) {
+        repeat(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT) {
             backgroundScope.launch { scheduler.execute(RadarProvider.LIBREWXR, RadarRequestPriority(true)) { gate.await() } }
         }
         runCurrent()
@@ -93,7 +93,7 @@ class RadarTileLoaderTest {
     fun foregroundJoiningAnAlreadyInvalidatedQueuedPrefetchStartsAFreshRequest() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
-        repeat(2) {
+        repeat(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT) {
             backgroundScope.launch { scheduler.execute(RadarProvider.LIBREWXR, RadarRequestPriority(true)) { gate.await() } }
         }
         runCurrent()
@@ -114,7 +114,7 @@ class RadarTileLoaderTest {
     }
 
     @Test
-    fun joiningQueuedPrefetchAsDemandImmediatelyPromotesItAboveSpeculation() = runTest {
+    fun joiningQueuedPrefetchAsDemandImmediatelyPromotesItAboveFourActiveSpeculations() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
         val starts = mutableListOf<RadarTileKey>()
@@ -123,21 +123,21 @@ class RadarTileLoaderTest {
             gate.await()
             ok(1)
         }, { testScheduler.currentTime })
-        val keys = (1..4).map(::key)
+        val keys = (1..6).map(::key)
         keys.forEach { tile -> backgroundScope.launch { loader.load(tile, speculative = true) } }
         runCurrent()
-        assertEquals(keys.take(2), starts)
-        val demand = backgroundScope.async { loader.load(keys[3]) }
+        assertEquals(keys.take(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT), starts)
+        val demand = backgroundScope.async { loader.load(keys[5]) }
         runCurrent()
-        assertEquals(listOf(keys[0], keys[1], keys[3]), starts)
+        assertEquals(keys.take(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT) + keys[5], starts)
         gate.complete(Unit)
         runCurrent()
         assertArrayEquals(byteArrayOf(1), demand.await().bytes)
-        assertEquals(1, starts.count { it == keys[3] })
+        assertEquals(1, starts.count { it == keys[5] })
     }
 
     @Test
-    fun demotingRunningDemandNeverExceedsTwoSpeculativeRequests() = runTest {
+    fun demotingRunningDemandNeverExceedsFourSpeculativeRequests() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
         val starts = mutableListOf<RadarTileKey>()
@@ -152,22 +152,22 @@ class RadarTileLoaderTest {
         runCurrent()
         val demand = backgroundScope.async { loader.load(first) }
         runCurrent()
-        val others = (2..3).map { index -> backgroundScope.async { loader.load(key(index), speculative = true) } }
+        val others = (2..5).map { index -> backgroundScope.async { loader.load(key(index), speculative = true) } }
         runCurrent()
-        assertEquals(listOf(first, key(2), key(3)), starts)
+        assertEquals(listOf(first, key(2), key(3), key(4), key(5)), starts)
         demand.cancel()
         runCurrent()
         assertTrue("Demoted excess speculation must be cancelled", first in cancellations)
         assertTrue(prefetch.isCancelled)
-        val queued = backgroundScope.async { loader.load(key(4), speculative = true) }
+        val queued = backgroundScope.async { loader.load(key(6), speculative = true) }
         runCurrent()
-        assertEquals("Two surviving speculative slots remain busy", 3, starts.size)
+        assertEquals("Four surviving speculative slots remain busy", 5, starts.size)
         assertFalse(queued.isCompleted)
         gate.complete(Unit)
         runCurrent()
         others.forEach { it.await() }
         queued.await()
-        assertEquals(4, starts.size)
+        assertEquals(6, starts.size)
     }
 
     @Test

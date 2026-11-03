@@ -30,7 +30,7 @@ internal class RadarObsoleteSpeculationException : CancellationException("Obsole
 
 /**
  * Schedules individual HTTP attempts, not whole retry loops. Metadata and tiles use the same
- * scheduler, so an in-progress request holds one of the four slots until its response is read.
+ * scheduler, so an in-progress request holds one of the eight slots until its response is read.
  */
 class RadarNetworkScheduler(
     private val scope: CoroutineScope,
@@ -234,8 +234,8 @@ class RadarNetworkScheduler(
     }
 
     companion object {
-        const val MAX_CONCURRENT = 4
-        const val MAX_SPECULATIVE_CONCURRENT = 2
+        const val MAX_CONCURRENT = 8
+        const val MAX_SPECULATIVE_CONCURRENT = 4
         const val MAX_SPECULATIVE_QUEUE = 64
         const val MAX_RAIN_REQUESTS = 90
         const val FOREGROUND_RESERVE = 20

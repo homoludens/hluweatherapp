@@ -15,44 +15,52 @@ import org.junit.Test
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class RadarNetworkSchedulerTest {
     @Test
-    fun foregroundPrecedesQueuedPrefetchAndAllRequestsShareFourSlots() = runTest {
+    fun foregroundUsesRemainingSlotsAndPrecedesQueuedPrefetchWithinEightTotalSlots() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
-        val spec = RadarRequestPriority(true)
-        val demand = RadarRequestPriority(false)
-        val gates = List(5) { CompletableDeferred<Unit>() }
+        val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
         val starts = mutableListOf<String>()
-        fun launchRequest(name: String, priority: RadarRequestPriority, gate: CompletableDeferred<Unit>) =
+        fun launchRequest(name: String, speculative: Boolean) =
             backgroundScope.launch {
-                scheduler.execute(RadarProvider.LIBREWXR, priority) {
+                scheduler.execute(RadarProvider.LIBREWXR, RadarRequestPriority(speculative)) {
                     starts += name
-                    gate.await()
+                    gates.getValue(name).await()
                 }
             }
-        launchRequest("spec1", spec, gates[0])
-        launchRequest("spec2", spec, gates[1])
-        launchRequest("spec3", spec, gates[2])
-        launchRequest("demand1", demand, gates[3])
-        launchRequest("demand2", demand, gates[4])
-        runCurrent()
-        assertEquals(listOf("spec1", "spec2", "demand1", "demand2"), starts)
 
-        val foreground = backgroundScope.launch {
-            scheduler.execute(RadarProvider.LIBREWXR, demand) { starts += "demand3" }
+        (1..6).forEach { index ->
+            gates["spec$index"] = CompletableDeferred()
+            launchRequest("spec$index", speculative = true)
         }
         runCurrent()
-        gates[0].complete(Unit)
+        assertEquals(listOf("spec1", "spec2", "spec3", "spec4"), starts)
+        assertEquals(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT, starts.size)
+
+        (1..5).forEach { index ->
+            gates["demand$index"] = CompletableDeferred()
+            launchRequest("demand$index", speculative = false)
+        }
         runCurrent()
-        assertTrue(foreground.isCompleted)
-        assertEquals("demand3", starts[4])
-        // A speculative slot becomes available only after the foreground has started.
-        assertEquals("spec3", starts[5])
+        assertEquals(
+            listOf("spec1", "spec2", "spec3", "spec4", "demand1", "demand2", "demand3", "demand4"),
+            starts
+        )
+
+        // A foreground request queued behind all eight held attempts outranks earlier speculation.
+        gates.getValue("spec1").complete(Unit)
+        runCurrent()
+        assertEquals("demand5", starts[8])
+        assertFalse("A fifth speculative request must still wait", "spec5" in starts)
+
+        gates.getValue("demand5").complete(Unit)
+        runCurrent()
+        assertEquals("spec5", starts[9])
     }
 
     @Test
     fun pendingPrefetchHasFiniteQueue() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
-        repeat(2) {
+        repeat(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT) {
             backgroundScope.launch { scheduler.execute(RadarProvider.LIBREWXR, RadarRequestPriority(true)) { gate.await() } }
         }
         runCurrent()
@@ -79,7 +87,7 @@ class RadarNetworkSchedulerTest {
     fun synchronouslyInvalidatedSpeculationCannotStartWhileItsCoroutineCancellationIsPending() = runTest {
         val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
         val gate = CompletableDeferred<Unit>()
-        repeat(2) {
+        repeat(RadarNetworkScheduler.MAX_SPECULATIVE_CONCURRENT) {
             backgroundScope.launch { scheduler.execute(RadarProvider.LIBREWXR, RadarRequestPriority(true)) { gate.await() } }
         }
         runCurrent()
