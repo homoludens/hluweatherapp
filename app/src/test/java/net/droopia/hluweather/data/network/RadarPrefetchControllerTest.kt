@@ -2,6 +2,8 @@ package net.droopia.hluweather.data.network
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -14,6 +16,7 @@ import net.droopia.hluweather.data.model.RadarTileCoverage
 import net.droopia.hluweather.data.model.RadarViewportBounds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,11 +34,17 @@ class RadarPrefetchControllerTest {
         val registry = RadarTileRegistry()
         val plan = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
         assertEquals(1, plan.demand.size)
+        assertEquals(frames[3], plan.nextFrame)
+        assertEquals(frames.map { it.identity(host) }, plan.metadataTimeline)
         assertEquals(listOf("/radar/1/", "/radar/3/"),
             plan.speculative.map { key -> frames.first { key.url.contains(it.path + "/") }.path + "/" })
         assertTrue(plan.demand.all { it.coordinate.zoom == 0 })
         assertTrue(plan.speculative.none { it in plan.demand })
         assertEquals(plan.speculative.size, plan.speculative.toSet().size)
+        assertEquals(1, plan.nextFrameCoverage.size)
+        assertTrue(plan.nextFrameCoverage.single().url.contains("/radar/3/"))
+        assertTrue(plan.nextFrameCoverage.all { it.coordinate.zoom == 0 })
+        assertEquals(plan.nextFrameCoverage.size, plan.nextFrameCoverage.toSet().size)
         assertEquals("Neighbors do not retain native source registrations", 1, registry.registeredCount)
         registry.unregister(plan.requestedSource)
         assertEquals(0, registry.registeredCount)
@@ -95,6 +104,13 @@ class RadarPrefetchControllerTest {
         val plan = planRadarTiles(RadarTileRegistry(), refreshed, frames[2].identity(host), viewport)
         assertEquals(1, plan.speculative.size)
         assertTrue(plan.speculative[0].url.contains("/radar/3/"))
+        assertEquals(frames[3], plan.nextFrame)
+
+        val last = planRadarTiles(RadarTileRegistry(), metadata, frames.last().identity(host), viewport)
+        assertNull(last.nextFrame)
+        assertTrue(last.nextFrameCoverage.isEmpty())
+        assertEquals(1, last.speculative.size)
+        assertTrue(last.speculative.single().url.contains("/radar/3/"))
     }
 
     @Test
@@ -173,6 +189,100 @@ class RadarPrefetchControllerTest {
         controller.stop()
         listOf(initial, same, changed).forEach { registry.unregister(it.requestedSource) }
         assertEquals(0, registry.registeredCount)
+    }
+
+    @Test
+    fun nextCoverageOpportunityArrivesAfterInitialCacheMissOnlyOnceForTheMatchingPlan() = runTest {
+        val registry = RadarTileRegistry()
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        val started = mutableListOf<RadarTileKey>()
+        val gates = mutableMapOf<RadarTileKey, CompletableDeferred<Unit>>()
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { key, _ ->
+            started += key
+            gates.getOrPut(key) { CompletableDeferred() }.await()
+            RadarTileHttpResult(200, RadarTilePayload(byteArrayOf(1), 100_000))
+        }, { testScheduler.currentTime })
+        val controller = RadarPrefetchController(backgroundScope, loader)
+        val opportunities = mutableListOf<RadarNextFrameCoverageOpportunity>()
+        backgroundScope.launch {
+            controller.nextFrameCoverageOpportunity.collect { it?.let(opportunities::add) }
+        }
+
+        val plan = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
+        assertFalse(loader.hasFreshCachedCoverage(plan.nextFrameCoverage))
+        controller.replan(plan)
+        runCurrent()
+        assertEquals(plan.speculative, started)
+        assertNull(controller.nextFrameCoverageOpportunity.value)
+
+        plan.nextFrameCoverage.forEach { gates.getValue(it).complete(Unit) }
+        runCurrent()
+        val opportunity = controller.nextFrameCoverageOpportunity.value
+        assertEquals(frames[2].identity(host), opportunity?.requestedFrame)
+        assertEquals(frames[3].identity(host), opportunity?.nextFrame)
+        assertEquals(viewport, opportunity?.viewport)
+        assertTrue(loader.hasFreshCachedCoverage(plan.nextFrameCoverage))
+
+        // Finishing the previous-frame bytes and equivalent recomposition do not create another
+        // opportunity or restart any completed/pending tile consumer.
+        plan.speculative.filterNot { it in plan.nextFrameCoverage }
+            .forEach { gates.getValue(it).complete(Unit) }
+        controller.replan(planRadarTiles(registry, metadata, frames[2].identity(host), viewport))
+        runCurrent()
+        assertEquals(1, opportunities.size)
+        assertEquals(opportunity, opportunities.single())
+
+        controller.stop()
+        registry.unregister(plan.requestedSource)
+        assertNull(controller.nextFrameCoverageOpportunity.value)
+    }
+
+    @Test
+    fun staleMetadataAndViewportCompletionCannotPublishForTheReplacementPlan() = runTest {
+        val registry = RadarTileRegistry()
+        val scheduler = RadarNetworkScheduler(backgroundScope, { testScheduler.currentTime })
+        val gates = mutableMapOf<RadarTileKey, CompletableDeferred<Unit>>()
+        val loader = RadarTileLoader(backgroundScope, scheduler, RadarTileTransport { key, _ ->
+            try {
+                gates.getOrPut(key) { CompletableDeferred() }.await()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                // Model a transport that returns after its obsolete consumer was cancelled.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    gates.getOrPut(key) { CompletableDeferred() }.await()
+                }
+            }
+            RadarTileHttpResult(200, RadarTilePayload(byteArrayOf(1), 100_000))
+        }, { testScheduler.currentTime })
+        val controller = RadarPrefetchController(backgroundScope, loader)
+        val oldPlan = planRadarTiles(registry, metadata, frames[2].identity(host), viewport)
+        controller.replan(oldPlan)
+        runCurrent()
+        val staleKey = oldPlan.nextFrameCoverage.single()
+
+        val changedFrames = frames.mapIndexed { index, frame ->
+            if (index == 3) frame.copy(path = "/radar/3-refreshed") else frame
+        }
+        val refreshed = metadata.copy(frames = changedFrames)
+        val movedViewport = viewport.copy(west = 30.0, east = 40.0, centerLongitude = 35.0)
+        val currentPlan = planRadarTiles(registry, refreshed, frames[2].identity(host), movedViewport)
+        controller.replan(currentPlan)
+        runCurrent()
+        assertTrue(staleKey !in currentPlan.nextFrameCoverage)
+
+        gates.getValue(staleKey).complete(Unit)
+        runCurrent()
+        assertNull(controller.nextFrameCoverageOpportunity.value)
+
+        currentPlan.nextFrameCoverage.forEach { key -> gates.getValue(key).complete(Unit) }
+        runCurrent()
+        val opportunity = controller.nextFrameCoverageOpportunity.value
+        assertEquals(currentPlan.nextFrame?.identity(host), opportunity?.nextFrame)
+        assertEquals(movedViewport, opportunity?.viewport)
+        assertTrue(opportunity?.generation != null)
+
+        controller.stop()
+        registry.unregister(oldPlan.requestedSource)
+        registry.unregister(currentPlan.requestedSource)
     }
 
     @Test

@@ -61,6 +61,24 @@ class RadarTimelineNeighborhoodPlannerTest {
     }
 
     @Test
+    fun next_frame_uses_playback_order_and_does_not_wrap() {
+        val chronological = listOf(10L, 11L, 100L, 1_000L).map(::frame)
+        val unordered = listOf(chronological[3], chronological[2], chronological[0], chronological[1])
+        val metadata = metadata(unordered)
+
+        assertEquals(chronological, RadarTimelineNeighborhoodPlanner.orderedFrames(metadata))
+        assertEquals(
+            chronological[2],
+            RadarTimelineNeighborhoodPlanner.nextFrame(metadata, chronological[1].identity(host))
+        )
+        assertEquals(
+            null,
+            RadarTimelineNeighborhoodPlanner.nextFrame(metadata, chronological.last().identity(host))
+        )
+        assertEquals(null, RadarTimelineNeighborhoodPlanner.nextFrame(metadata(emptyList()), frame(10).identity(host)))
+    }
+
+    @Test
     fun duplicate_frames_are_deduplicated_and_provider_identity_avoids_timestamp_collisions() {
         val before = frame(100, provider = RadarProvider.RAINVIEWER)
         val requested = frame(200, provider = RadarProvider.RAINVIEWER)

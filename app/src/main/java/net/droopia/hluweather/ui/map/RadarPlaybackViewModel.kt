@@ -22,6 +22,7 @@ import net.droopia.hluweather.data.model.RadarFrameIdentity
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarTimelineNeighborhoodPlanner
 import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.repository.RadarRepository
 import kotlin.time.Instant
@@ -245,11 +246,7 @@ class RadarPlaybackViewModel(
         }
         if (metadata.provider != provider || metadata.frames.any { it.provider != provider }) return
 
-        val frames = metadata.frames.sortedWith(
-            compareBy<RadarFrame> { it.timestampSeconds }
-                .thenBy { it.type.ordinal }
-                .thenBy { it.path }
-        )
+        val frames = RadarTimelineNeighborhoodPlanner.orderedFrames(metadata)
         val latestObserved = frames
             .asSequence()
             .filter { it.type == RadarFrameType.OBSERVED }
