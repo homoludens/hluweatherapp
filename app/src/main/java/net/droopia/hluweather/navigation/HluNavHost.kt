@@ -40,6 +40,7 @@ import net.droopia.hluweather.ui.app.MainBottomNavigationBar
 import net.droopia.hluweather.ui.app.MainScreenHeader
 import net.droopia.hluweather.ui.locationpicker.LocationPickerScreen
 import net.droopia.hluweather.ui.locationpicker.LocationPickerViewModel
+import net.droopia.hluweather.ui.about.AboutScreen
 import net.droopia.hluweather.ui.settings.SettingsScreen
 import net.droopia.hluweather.ui.settings.SettingsViewModel
 import net.droopia.hluweather.ui.weather.WeatherScreen
@@ -198,6 +199,7 @@ fun HluNavHost(
                         onBackClick = {
                             navController.popBackStack()
                         },
+                        onAboutClick = { navController.navigate(ABOUT) },
                         onProviderChange = settingsViewModel::setProvider,
                         onRadarProviderChange = settingsViewModel::setRadarProvider,
                         onProviderInfoClick = settingsViewModel::onProviderInfoClick,
@@ -231,6 +233,11 @@ fun HluNavHost(
                         onOpenNotificationSettings = onOpenNotificationSettings,
                         onClearCacheClick = settingsViewModel::clearCache
                     )
+                }
+
+                composable(ABOUT) {
+                    BackHandler { navController.popBackStack() }
+                    AboutScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable(

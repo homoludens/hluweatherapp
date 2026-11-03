@@ -274,7 +274,7 @@ class RadarMapOverlayTest {
     }
 
     @Test
-    fun status_and_attribution_are_nonblocking_and_required_credits_are_visible() {
+    fun status_and_provider_link_are_nonblocking_without_expanded_credits() {
         val emptyRepository = TestRadarRepository(
             RadarMetadataState(isLoading = true)
         )
@@ -286,17 +286,8 @@ class RadarMapOverlayTest {
 
         composeRule.onNodeWithText("Loading radar…").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
-        composeRule.onNodeWithText("Weather radar via LibreWXR (librewxr.net)", substring = true)
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("Upstream may include", substring = true)
-            .assertDoesNotExist()
-        composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "Precipitation data from NOAA Enterprise Rain Rate (RRQPE)",
-            substring = true
-        ).assertIsDisplayed()
-        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
+        assertTagAbsent("radar_attribution_credits")
         assertTagAbsent("radar_timeline_slider")
 
         emptyRepository.updates.value = RadarMetadataState(isLoading = false)
@@ -307,8 +298,7 @@ class RadarMapOverlayTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar unavailable").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
-        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
 
         emptyRepository.updates.value = RadarMetadataState(error = IOException("offline"))
         composeRule.waitForIdle()
@@ -337,17 +327,17 @@ class RadarMapOverlayTest {
             uriHandler = uriHandler
         )
 
-        composeRule.onNodeWithText("Weather radar via LibreWXR (librewxr.net)").assertIsDisplayed()
-        composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
+        assertTagAbsent("radar_attribution_credits")
         assertSourceLink(
-            label = "LibreWXR (librewxr.net)",
+            label = "LibreWXR",
             url = "https://librewxr.net/",
             uriHandler = uriHandler
         )
 
         selectedProvider.value = RadarProvider.RAINVIEWER
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Weather radar via RainViewer").assertIsDisplayed()
+        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
         composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertDoesNotExist()
         assertSourceLink(
             label = "RainViewer",
@@ -381,10 +371,9 @@ class RadarMapOverlayTest {
         )
 
         composeRule.onNodeWithText("Loading radar frame…").assertDoesNotExist()
-        composeRule.onNodeWithText("Weather radar via LibreWXR (librewxr.net)").assertIsDisplayed()
-        composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("Weather radar via RainViewer").assertDoesNotExist()
+        composeRule.onNodeWithText("LibreWXR").assertIsDisplayed()
+        composeRule.onNodeWithText("RainViewer").assertDoesNotExist()
+        assertTagAbsent("radar_attribution_credits")
 
         attributionState.value = attributionPlaybackState(
             selectedProvider = RadarProvider.RAINVIEWER,
@@ -392,7 +381,7 @@ class RadarMapOverlayTest {
             pending = true
         )
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Weather radar via RainViewer").assertIsDisplayed()
+        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
         composeRule.onNodeWithText("EUMETNET OPERA", substring = true).assertDoesNotExist()
 
         attributionState.value = attributionPlaybackState(
@@ -403,7 +392,7 @@ class RadarMapOverlayTest {
         )
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar network unavailable").assertIsDisplayed()
-        composeRule.onNodeWithText("Weather radar via RainViewer").assertIsDisplayed()
+        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
 
         attributionState.value = attributionPlaybackState(
             selectedProvider = RadarProvider.RAINVIEWER,
@@ -411,8 +400,8 @@ class RadarMapOverlayTest {
             pending = true
         )
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Weather radar via RainViewer").assertIsDisplayed()
-        composeRule.onNodeWithText("Weather radar via LibreWXR (librewxr.net)").assertDoesNotExist()
+        composeRule.onNodeWithText("RainViewer").assertIsDisplayed()
+        composeRule.onNodeWithText("LibreWXR").assertDoesNotExist()
     }
 
     @Test
@@ -456,12 +445,23 @@ class RadarMapOverlayTest {
                 .fetchSemanticsNode().boundsInRoot
             val timeline = composeRule.onNodeWithTag("radar_timeline")
                 .fetchSemanticsNode().boundsInRoot
+            val attribution = composeRule.onNodeWithTag("radar_attribution")
+                .fetchSemanticsNode().boundsInRoot
             assertEquals(
-                with(composeRule.density) { 56.dp.toPx() },
+                with(composeRule.density) { 8.dp.toPx() },
                 containerBounds.bottom - timeline.bottom,
                 1f
             )
-            assertTrue("Radar timeline should stay compact", timeline.height <= with(composeRule.density) { 190.dp.toPx() })
+            assertTrue(
+                "Radar attribution should sit 8 dp above the timeline",
+                kotlin.math.abs(
+                    timeline.top - attribution.bottom - with(composeRule.density) { 8.dp.toPx() }
+                ) <= 1f
+            )
+            assertTrue(
+                "Radar timeline should stay compact",
+                timeline.height <= with(composeRule.density) { 190.dp.toPx() }
+            )
             assertReadableContrast(composeRule.onNodeWithTag("radar_timeline").captureToImage())
         }
     }
@@ -624,7 +624,10 @@ class RadarMapOverlayTest {
             .assertIsDisplayed()
         val semantics = node.fetchSemanticsNode().config
         val annotatedText = semantics[SemanticsProperties.Text].single()
-        val link = annotatedText.getLinkAnnotations(0, annotatedText.length).single().item
+        val linkRange = annotatedText.getLinkAnnotations(0, annotatedText.length).single()
+        assertEquals(0, linkRange.start)
+        assertEquals(annotatedText.length, linkRange.end)
+        val link = linkRange.item
         assertTrue("Source text should carry a URL link annotation", link is LinkAnnotation.Url)
         assertEquals(url, (link as LinkAnnotation.Url).url)
         node.assertContentDescriptionEquals("Open $label source link")

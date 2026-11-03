@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Data-source credits and open-source library licenses for HluWeatherApp.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f7f8fc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09111e" media="(prefers-color-scheme: dark)">
+  <title>Credits &amp; Licenses — HluWeatherApp</title>
+  <link rel="icon" href="../settings_design/hluweatherapp_icon.png" type="image/png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="../" aria-label="HluWeatherApp home">
+        <img src="../settings_design/hluweatherapp_icon.png" alt="" width="44" height="44">
+        <span>HluWeather<span class="brand-accent">App</span></span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="../#features">Features</a>
+        <a href="../privacy/">Privacy</a>
+        <a href="./" aria-current="page">Credits</a>
+        <a href="https://github.com/homoludens/hluweatherapp">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="container policy-page">
+    <a class="back-link" href="../">← Back to HluWeatherApp</a>
+    <p class="eyebrow">People, data, and software</p>
+    <h1>Credits &amp; Licenses</h1>
+    <p class="policy-meta">Last updated: <time datetime="2026-11-03">November 3, 2026</time></p>
+    <div class="policy-intro">
+      <p>HluWeatherApp is built with data and software from the providers and projects listed below. Weather, radar, map, geocoding, and routing services are contacted directly by the app when their features are used.</p>
+      <p>The app's source code is licensed under <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License version 3</a>. Service terms and data licenses can change; please follow the linked providers' current terms.</p>
+    </div>
+
+    <section aria-labelledby="weather-data">
+      <h2 id="weather-data">Weather and location data</h2>
+      <ul>
+        <li><strong><a href="https://open-meteo.com/">Open-Meteo</a></strong> provides weather and air-quality forecasts, trip-point forecasts, and geocoding. Open-Meteo API data are offered under <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 (CC BY 4.0)</a>. Please credit “Weather data by Open-Meteo.com.” Open-Meteo's <a href="https://open-meteo.com/en/licence">license and data-sources page</a> identifies upstream datasets and their individual terms.</li>
+        <li><strong><a href="https://api.met.no/">MET Norway</a></strong> provides weather forecasts. Its open data require attribution under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; see the <a href="https://api.met.no/doc/TermsOfService">MET API terms</a>.</li>
+        <li><strong><a href="https://github.com/komoot/photon">Photon by Komoot</a></strong> powers one of the place-search options. Photon software is licensed under <a href="https://github.com/komoot/photon/blob/master/LICENSE">Apache License 2.0</a>; its search data are based on OpenStreetMap and are subject to the <a href="https://www.openstreetmap.org/copyright">OpenStreetMap ODbL terms</a>.</li>
+        <li><strong><a href="https://nominatim.org/">Nominatim</a></strong> (OpenStreetMap) is used for reverse geocoding. The underlying OpenStreetMap data are licensed under the <a href="https://opendatacommons.org/licenses/odbl/1-0/">Open Database License (ODbL) 1.0</a>. The public service has a separate <a href="https://operations.osmfoundation.org/policies/nominatim/">usage policy</a>.</li>
+        <li><strong><a href="https://project-osrm.org/">OSRM (Open Source Routing Machine)</a></strong> calculates driving routes. OSRM software is licensed under the <a href="https://github.com/Project-OSRM/osrm-backend/blob/master/LICENSE.TXT">BSD 2-Clause License</a>; route data are based on OpenStreetMap (ODbL).</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="radar-data">
+      <h2 id="radar-data">Radar data</h2>
+      <ul>
+        <li><strong><a href="https://librewxr.net/">LibreWXR</a></strong> provides one of the precipitation-radar options. Its data sources include EUMETNET OPERA, NOAA Enterprise Rain Rate (RRQPE), and Radar-DPC (Italy; CC BY-SA 4.0 where included). See the <a href="https://github.com/JoshuaKimsey/LibreWXR#data-sources">LibreWXR data-sources details</a> for current credits and terms.</li>
+        <li><strong><a href="https://www.rainviewer.com/">RainViewer</a></strong> provides the other radar option. Its public radar API is for personal, educational, and small-scale community use; see the current <a href="https://www.rainviewer.com/api.html">RainViewer API terms and source information</a>.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="map-data">
+      <h2 id="map-data">Map data and attribution</h2>
+      <p>Map styles and vector tiles are served by <a href="https://openfreemap.org/">OpenFreeMap</a> and use the OpenMapTiles schema and OpenStreetMap data. OpenFreeMap's project is MIT-licensed. OpenMapTiles code is BSD-3-Clause and its cartographic design is CC BY 4.0. OpenStreetMap data are licensed under ODbL 1.0.</p>
+      <p>The map's required attribution is shown by the map renderer: <strong>OpenFreeMap © OpenMapTiles Data from OpenStreetMap</strong>. Read the <a href="https://www.openstreetmap.org/copyright">OpenStreetMap attribution guidance</a>, <a href="https://github.com/openmaptiles/openmaptiles/blob/master/LICENSE.md">OpenMapTiles license</a>, and <a href="https://openfreemap.org/">OpenFreeMap license and terms</a>.</p>
+    </section>
+
+    <section aria-labelledby="libraries">
+      <h2 id="libraries">Open-source libraries</h2>
+      <p>The app uses these primary runtime libraries. Each project's license and source repository are linked; versions are maintained in the project's <a href="https://github.com/homoludens/hluweatherapp/blob/main/gradle/libs.versions.toml">Gradle version catalog</a>.</p>
+      <ul>
+        <li><strong>AndroidX and Jetpack Compose</strong> — Android Core KTX, Compose UI, Material 3 and icons, Activity, Lifecycle, Navigation, DataStore, WorkManager, and Glance. Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>. <a href="https://developer.android.com/jetpack">Project information</a>.</li>
+        <li><strong>Kotlin and kotlinx libraries</strong> — Kotlin standard library, Coroutines, Serialization, and DateTime. Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>. <a href="https://github.com/JetBrains/kotlin">Kotlin source</a>.</li>
+        <li><strong><a href="https://ktor.io/">Ktor Client</a></strong> — HTTP networking. Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</li>
+        <li><strong><a href="https://github.com/maplibre/maplibre-compose">MapLibre Compose</a></strong> — Compose map integration, licensed under <a href="https://github.com/maplibre/maplibre-compose/blob/main/LICENSE">BSD 3-Clause</a>. It uses <a href="https://github.com/maplibre/maplibre-native">MapLibre Native</a>, licensed under <a href="https://github.com/maplibre/maplibre-native/blob/main/platform/android/LICENSE.md">BSD 2-Clause</a>.</li>
+        <li><strong>Google Play services Location</strong> — used only in the Google distribution of the app; subject to <a href="https://developers.google.com/mobile/terms">Google Mobile Developer Services terms</a>.</li>
+      </ul>
+      <p>These entries identify the app's primary direct runtime libraries. Transitive components may carry their own notices; refer to the linked project repositories and license files for their complete notices.</p>
+    </section>
+
+    <section aria-labelledby="app-license">
+      <h2 id="app-license">HluWeatherApp license</h2>
+      <p>The HluWeatherApp source code is distributed under <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License version 3 (GPL-3.0)</a>. The complete license text is available in the <a href="https://github.com/homoludens/hluweatherapp/blob/main/LICENSE">project repository</a>.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>HluWeatherApp</strong>
+        <p>Open-source weather for Android.</p>
+      </div>
+      <nav aria-label="Footer navigation">
+        <a href="../privacy/">Privacy policy</a>
+        <a href="mailto:playstore@droopia.net">Contact</a>
+        <a href="https://github.com/homoludens/hluweatherapp">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

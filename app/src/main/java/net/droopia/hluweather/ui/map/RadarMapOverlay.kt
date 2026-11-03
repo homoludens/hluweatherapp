@@ -54,6 +54,7 @@ import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.io.IOException
 import java.net.URI
 import net.droopia.hluweather.data.model.RadarFrameType
@@ -92,18 +93,27 @@ internal fun RadarMapOverlay(
         )
 
         if (enabled) {
-            RadarTimeline(
-                playbackState = playbackState,
-                selectedProvider = selectedProvider,
-                metadataState = metadataState,
-                onFrameSelected = onFrameSelected,
-                onPlayPause = onPlayPause,
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
-                    .padding(bottom = 56.dp)
-            )
+                    .padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                RadarAttribution(
+                    provider = playbackState.displayedFrame?.provider ?: selectedProvider
+                )
+                RadarTimeline(
+                    playbackState = playbackState,
+                    selectedProvider = selectedProvider,
+                    metadataState = metadataState,
+                    onFrameSelected = onFrameSelected,
+                    onPlayPause = onPlayPause,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -441,21 +451,16 @@ private fun RadarTimeline(
                     }
                 }
             }
-
-            RadarAttribution(
-                provider = playbackState.displayedFrame?.provider ?: selectedProvider
-            )
         }
     }
 }
 
 @Composable
-private fun RadarAttribution(provider: RadarProvider) {
+private fun RadarAttribution(provider: RadarProvider, modifier: Modifier = Modifier) {
     val descriptor = RadarProviderDescriptors[provider]
     val sourceLink = descriptor.sourceLink
     val uriHandler = LocalUriHandler.current
     val safeSourceUrl = safeRadarSourceUrl(sourceLink.url)
-    val sourceText = "Weather radar via ${sourceLink.label}"
     val sourceLabel = buildAnnotatedString {
         if (safeSourceUrl != null) {
             pushLink(
@@ -467,35 +472,28 @@ private fun RadarAttribution(provider: RadarProvider) {
                 )
             )
         }
-        append(sourceText)
+        append(descriptor.displayName)
         if (safeSourceUrl != null) pop()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("radar_attribution"),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+    Surface(
+        modifier = modifier.testTag("radar_attribution"),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        tonalElevation = 2.dp
     ) {
         Text(
             text = sourceLabel,
             modifier = Modifier
-                .semantics { contentDescription = "Open ${sourceLink.label} source link" }
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics { contentDescription = "Open ${descriptor.displayName} source link" }
                 .testTag("radar_attribution_source"),
             style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
                 textDecoration = TextDecoration.Underline
             ),
             color = MaterialTheme.colorScheme.primary
         )
-
-        if (descriptor.credits.isNotEmpty()) {
-            Text(
-                text = descriptor.credits.joinToString(separator = " · "),
-                modifier = Modifier.testTag("radar_attribution_credits"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
     }
 }
 

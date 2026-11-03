@@ -86,3 +86,4 @@ class MainNavigation internal constructor(
 internal const val WEATHER = "weather"
 internal const val WEATHER_ROUTE = "weather_route"
 internal const val SETTINGS = "settings"
+internal const val ABOUT = "about"

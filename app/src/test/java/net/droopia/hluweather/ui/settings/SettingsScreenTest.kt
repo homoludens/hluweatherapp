@@ -507,9 +507,25 @@ class SettingsScreenTest {
         assertEquals("https://homoludens.github.io/hluweatherapp/privacy/", intent.dataString)
     }
 
+    @Test
+    fun about_credits_opens_the_published_page() {
+        renderSettings()
+
+        scrollTo(10)
+        composeRule.onNodeWithTag("settings_credits")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        val intent = requireNotNull(shadowOf(composeRule.activity).nextStartedActivity)
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals("https://homoludens.github.io/hluweatherapp/credits/", intent.dataString)
+    }
+
     private fun renderSettings(
         state: () -> SettingsUiState = { testSettingsState },
         onBackClick: () -> Unit = {},
+        onAboutClick: () -> Unit = {},
         onProviderChange: (WeatherProvider) -> Unit = {},
         onRadarProviderChange: (RadarProvider) -> Unit = {},
         onProviderInfoClick: (WeatherProvider) -> Unit = {},
@@ -540,6 +556,7 @@ class SettingsScreenTest {
                     SettingsScreen(
                         state = state(),
                         onBackClick = onBackClick,
+                        onAboutClick = onAboutClick,
                         onProviderChange = onProviderChange,
                         onRadarProviderChange = onRadarProviderChange,
                         onProviderInfoClick = onProviderInfoClick,

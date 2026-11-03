@@ -141,6 +141,28 @@ class HluNavHostTest {
     }
 
     @Test
+    fun about_screen_shows_app_version_and_returns_to_settings() {
+        val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HluNavHost(
+                    weatherViewModel = weatherViewModel,
+                    locationPickerMapContent = { _, _, _ -> Box(Modifier.fillMaxSize()) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(10)
+        composeRule.onNodeWithTag("settings_about").performClick()
+
+        composeRule.onNodeWithText("Weather, your way").assertIsDisplayed()
+        composeRule.onNodeWithTag("about_app_version").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithTag("settings_about").assertIsDisplayed()
+    }
+
+    @Test
     fun add_location_opens_the_location_picker() {
         val weatherViewModel = WeatherViewModel(MockWeatherRepository(), Svilajnac)
         composeRule.setContent {

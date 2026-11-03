@@ -83,11 +83,13 @@ import android.content.res.Configuration
 import net.droopia.hluweather.ui.theme.HluWeatherTheme
 
 private const val PRIVACY_POLICY_URL = "https://homoludens.github.io/hluweatherapp/privacy/"
+private const val CREDITS_URL = "https://homoludens.github.io/hluweatherapp/credits/"
 
 @Composable
 fun SettingsScreen(
     state: SettingsUiState,
     onBackClick: () -> Unit,
+    onAboutClick: () -> Unit = {},
     onProviderChange: (WeatherProvider) -> Unit,
     onRadarProviderChange: (RadarProvider) -> Unit = {},
     onProviderInfoClick: (WeatherProvider) -> Unit,
@@ -417,6 +419,22 @@ fun SettingsScreen(
                     subtitle = "Information about HluWeatherApp"
                 )
                 HorizontalDivider()
+                ClickableSettingsRow(
+                    icon = Icons.Outlined.Info,
+                    title = "About HluWeatherApp",
+                    subtitle = "App details and version information",
+                    tag = "settings_about",
+                    onClick = onAboutClick
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ClickableSettingsRow(
+                    icon = Icons.Outlined.Info,
+                    title = "Credits & licenses",
+                    subtitle = "Data sources and open-source libraries",
+                    tag = "settings_credits",
+                    onClick = { uriHandler.openUri(CREDITS_URL) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
                 ClickableSettingsRow(
                     icon = Icons.Outlined.Info,
                     title = "Privacy policy",

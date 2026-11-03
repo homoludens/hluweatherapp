@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 
 SITE = Path(__file__).resolve().parents[1] / "docs"
-PAGES = (SITE / "index.html", SITE / "privacy" / "index.html")
+PAGES = (SITE / "index.html", SITE / "privacy" / "index.html", SITE / "credits" / "index.html")
 THEME = SITE.parent / "app/src/main/java/net/droopia/hluweather/ui/theme"
 
 
@@ -174,6 +174,17 @@ class WebsiteTest(unittest.TestCase):
         ):
             with self.subTest(text=text):
                 self.assertIn(text, policy)
+
+    def test_credits_page_covers_data_sources_and_primary_library_licenses(self):
+        credits = PAGES[2].read_text(encoding="utf-8")
+        for text in (
+            "Open-Meteo", "CC BY 4.0", "MET Norway", "Photon", "Nominatim", "OSRM",
+            "LibreWXR", "JoshuaKimsey/LibreWXR#data-sources", "RainViewer", "OpenFreeMap",
+            "OpenMapTiles", "OpenStreetMap", "AndroidX", "Kotlin", "Ktor", "MapLibre",
+            "Apache License 2.0", "BSD 2-Clause", "BSD 3-Clause", "GPL-3.0",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, credits)
 
 
 if __name__ == "__main__":
