@@ -1,8 +1,11 @@
 Android sdk location:
 export ANDROID_HOME=/home/homoludens/Android/Sdk
 export ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk
+
+Emulators
 export ANDROID_AVD_HOME=/home/homoludens/.config/.android/avd/
-<!--~/Android/Sdk/emulator/emulator -list-avds -->
+/home/homoludens/Android/Sdk/emulator/emulator -list-avds
+use small_phone emulator for testing.
 
 simpler code is good.
 simple architecture is good.
