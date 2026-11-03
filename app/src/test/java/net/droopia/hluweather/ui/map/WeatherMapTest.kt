@@ -243,6 +243,10 @@ class WeatherMapTest {
         assertTrue(mapSource.contains("DisappearingScaleBar("))
         assertTrue(mapSource.contains("DisappearingCompassButton("))
         assertTrue(mapSource.contains("MaplibreLogo("))
+        val attributionButtonCall = mapSource
+            .substringAfter("CollapsedFirstAttributionButton(")
+            .substringBefore(")")
+        assertTrue(attributionButtonCall.contains("Alignment.TopStart"))
         assertTrue(mapSource.contains("mapStyle.attributions()"))
         assertTrue(mainSource("ui/weather/WeatherScreen.kt").contains("collapsedAttributionInitially = true"))
         assertFalse(mainSource("ui/locationpicker/LocationPickerScreen.kt").contains("collapsedAttributionInitially = true"))

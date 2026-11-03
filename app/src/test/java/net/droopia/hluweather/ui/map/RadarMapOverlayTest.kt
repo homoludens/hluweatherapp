@@ -180,7 +180,7 @@ class RadarMapOverlayTest {
         setOverlayContent(playback, enabled, opacity, darkTheme = false)
 
         composeRule.onNodeWithText("Observed").assertIsDisplayed()
-        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
+        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_latest_observed_marker").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_timeline_slider")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
@@ -188,7 +188,7 @@ class RadarMapOverlayTest {
             }
 
         composeRule.onNodeWithText("Forecast +10 min").assertIsDisplayed()
-        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
+        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_timeline_slider").run {
             val range = fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo]
             assertEquals(0f..2f, range.range)
@@ -203,7 +203,7 @@ class RadarMapOverlayTest {
     }
 
     @Test
-    fun requested_and_displayed_times_and_rate_limit_error_stay_distinct_and_play_retries() {
+    fun pending_frame_keeps_timeline_text_stable_and_failures_still_show() {
         val playback = playbackViewModel()
         playback.setVisible(true)
         val state = playback.state.value
@@ -214,11 +214,11 @@ class RadarMapOverlayTest {
         val opacity = mutableFloatStateOf(0.75f)
         setOverlayContent(playback, enabled, opacity, darkTheme = false)
 
-        composeRule.onNodeWithText("Loading radar frame…").assertIsDisplayed()
-        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
-        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading radar frame…").assertDoesNotExist()
+        composeRule.onNodeWithText("Observed").assertIsDisplayed()
+        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:10").assertIsDisplayed()
         composeRule.onNodeWithTag("radar_requested_time").assertIsDisplayed()
-        composeRule.onNodeWithTag("radar_displayed_time").assertIsDisplayed()
+        composeRule.onNodeWithTag("radar_displayed_time").assertDoesNotExist()
 
         playback.selectFrame(playback.state.value.frames.last().timestampSeconds)
         val forecastIdentity = requireNotNull(playback.state.value.requestedFrameIdentity)
@@ -233,8 +233,8 @@ class RadarMapOverlayTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Radar rate limit reached").assertIsDisplayed()
-        composeRule.onNodeWithText("Requested · Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
-        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        composeRule.onNodeWithText("Forecast +10 min").assertIsDisplayed()
+        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
         playback.onDisplayChanged(
             RadarDisplayState(
                 requested = forecastIdentity,
@@ -245,7 +245,7 @@ class RadarMapOverlayTest {
         )
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Radar network unavailable").assertIsDisplayed()
-        composeRule.onNodeWithText("Showing · Sun, Nov 1, 2026 • 20:00").assertIsDisplayed()
+        composeRule.onNodeWithText("Sun, Nov 1, 2026 • 20:20").assertIsDisplayed()
         val retryToken = playback.state.value.displayRetryToken
         composeRule.onNodeWithContentDescription("Play radar playback").performClick()
         assertTrue(playback.state.value.displayRetryToken > retryToken)
@@ -380,7 +380,7 @@ class RadarMapOverlayTest {
             playbackStateOverride = attributionState
         )
 
-        composeRule.onNodeWithText("Loading radar frame…").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading radar frame…").assertDoesNotExist()
         composeRule.onNodeWithText("Weather radar via LibreWXR (librewxr.net)").assertIsDisplayed()
         composeRule.onNodeWithText("Radar-DPC (Italy; CC BY-SA 4.0 where included)", substring = true)
             .assertIsDisplayed()
@@ -426,7 +426,7 @@ class RadarMapOverlayTest {
         composeRule.setContent {
             val playbackState by playback.state.collectAsState()
             HluWeatherTheme(darkTheme = darkTheme.value) {
-                Box(Modifier.size(360.dp, 620.dp)) {
+                Box(Modifier.size(360.dp, 620.dp).testTag("radar_overlay_position_container")) {
                     RadarMapOverlay(
                         enabled = enabled.value,
                         onEnabledChange = { enabled.value = it },
@@ -452,7 +452,15 @@ class RadarMapOverlayTest {
             composeRule.onNodeWithTag("radar_timeline").assertIsDisplayed()
             composeRule.onNodeWithTag("radar_attribution").assertIsDisplayed()
 
-            val timeline = composeRule.onNodeWithTag("radar_timeline").fetchSemanticsNode().boundsInRoot
+            val containerBounds = composeRule.onNodeWithTag("radar_overlay_position_container")
+                .fetchSemanticsNode().boundsInRoot
+            val timeline = composeRule.onNodeWithTag("radar_timeline")
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(
+                with(composeRule.density) { 56.dp.toPx() },
+                containerBounds.bottom - timeline.bottom,
+                1f
+            )
             assertTrue("Radar timeline should stay compact", timeline.height <= with(composeRule.density) { 190.dp.toPx() })
             assertReadableContrast(composeRule.onNodeWithTag("radar_timeline").captureToImage())
         }

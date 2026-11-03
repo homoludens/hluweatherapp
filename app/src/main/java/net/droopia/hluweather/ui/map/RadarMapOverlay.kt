@@ -102,7 +102,7 @@ internal fun RadarMapOverlay(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
-                    .padding(bottom = 76.dp)
+                    .padding(bottom = 56.dp)
             )
         }
     }
@@ -307,8 +307,6 @@ private fun RadarTimeline(
         metadataFailure != null -> metadataFailure
         metadataState.isLoading && frames.isEmpty() -> "Loading radar…"
         frames.isEmpty() -> "No radar frames"
-        playbackState.isPending -> "Loading radar frame…"
-        metadataState.isLoading -> "Updating radar…"
         else -> null
     }
 
@@ -337,9 +335,6 @@ private fun RadarTimeline(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    val showRequestedAndDisplayed = playbackState.requestedFrameIdentity != null &&
-                        (playbackState.isPending || playbackState.displayError != null ||
-                            playbackState.requestedFrameIdentity != playbackState.displayedFrameIdentity)
                     if (selectedType != null) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -359,23 +354,11 @@ private fun RadarTimeline(
                         Text("Radar timeline", style = MaterialTheme.typography.labelMedium)
                     }
                     Text(
-                        text = if (showRequestedAndDisplayed) {
-                            "Requested · ${playbackState.requestedFrameTimeLabel ?: "Waiting"}"
-                        } else {
-                            playbackState.requestedFrameTimeLabel ?: "Waiting for radar frames"
-                        },
+                        text = playbackState.requestedFrameTimeLabel ?: "Waiting for radar frames",
                         modifier = Modifier.testTag("radar_requested_time"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (showRequestedAndDisplayed) {
-                        Text(
-                            text = "Showing · ${playbackState.displayedFrameTimeLabel ?: "no frame yet"}",
-                            modifier = Modifier.testTag("radar_displayed_time"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
 
                 IconButton(

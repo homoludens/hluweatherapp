@@ -22,11 +22,11 @@ The main Map destination SHALL display semi-transparent precipitation radar over
 - **THEN** radar remains visible by overzooming supported tiles, without requests above zoom 7 or unsupported color schemes
 
 ### Requirement: Dynamic frames and playback
-The app SHALL obtain the tile host, frame paths and timestamps from current metadata for the selected provider, distinguish observed from forecast frames, and show radar frame times in the device timezone. The timeline SHALL mark the latest observation, allow requesting any available frame, play or pause at approximately 500–800 ms per rendered frame when ready, loop, and stop when Map is not visible. Playback SHALL wait for a pending frame to be displayed before advancing again when loading takes longer than that interval. Forecast offsets SHALL be measured from the latest observation; absent forecasts SHALL not be invented. While a requested frame is pending, the UI SHALL distinguish it from the frame still displayed rather than presenting the old imagery as the newly requested time. Manual timeline selection SHALL pause playback.
+The app SHALL obtain the tile host, frame paths and timestamps from current metadata for the selected provider, distinguish observed from forecast frames, and show radar frame times in the device timezone. The timeline SHALL mark the latest observation, allow requesting any available frame, play or pause at approximately 500–800 ms per rendered frame when ready, loop, and stop when Map is not visible. Playback SHALL wait for a pending frame to be displayed before advancing again when loading takes longer than that interval. Forecast offsets SHALL be measured from the latest observation; absent forecasts SHALL not be invented. While a requested frame is pending, the timeline SHALL keep its text stable apart from the selected frame time and Observed/Forecast designation; it SHALL NOT add a transient loading message or duplicate requested and displayed time rows. Manual timeline selection SHALL pause playback.
 
 #### Scenario: Forecast available
 - **WHEN** the user selects a forecast frame
-- **THEN** its actual local time and Forecast designation and offset from the latest observation are displayed, never Observed, with a pending indication until that frame replaces the displayed imagery
+- **THEN** its local time and Forecast designation and offset from the latest observation are displayed, never Observed, without a transient pending/loading message
 
 #### Scenario: Observations only
 - **WHEN** metadata has observed frames but no forecast frames, including current RainViewer past-only metadata
@@ -38,7 +38,7 @@ The app SHALL obtain the tile host, frame paths and timestamps from current meta
 
 #### Scenario: Playback encounters a cold frame
 - **WHEN** playback requests a frame that takes longer than the playback interval to load
-- **THEN** the previous frame remains visible with an accurate displayed-time indication, playback does not continually supersede the pending frame, and normal cadence resumes after it is displayed
+- **THEN** the previous frame remains visible while it is pending, the timeline continues to show only the requested frame's selected time and type, playback does not continually supersede the pending frame, and normal cadence resumes after it is displayed
 
 #### Scenario: Drag timeline during playback
 - **WHEN** the user manually changes the timeline selection while playback is running
@@ -91,7 +91,7 @@ Radar requests SHALL use reasonable timeouts, bounded exponential retry for tran
 - **THEN** speculative loading stops or waits, retries respect the shared budget and backoff, cached imagery remains usable, and the map remains interactive
 
 ### Requirement: Best-effort continuous radar frame handoff
-For timeline scrubbing and playback within the same provider and loaded map style, the app SHALL attempt to retain the last successfully rendered radar frame while the latest replacement is loading. The intended handoff SHALL be gated by current-viewport tile coverage, staging installation, and a subsequent available map-wide `FrameRendered(Full)` event. A fixed delay or metadata alone SHALL NOT count as readiness. The pinned MapLibre Compose 0.16 event is not a per-source or per-revision acknowledgment and cannot prove that staging tiles were delivered or drawn; therefore this is a best-effort gate, not a guarantee of uninterrupted imagery. A temporary basemap-only interval or opacity discontinuity may occur under this known race; this limitation is accepted for this change and deferred to future work, and behavior SHALL NOT be described as universally blink-free. Rapid selection changes SHALL converge to the most recent request; superseded loads SHALL NOT replace newer selections. Failed, timed-out, or rate-limited requests SHALL preserve the last good frame where the existing failure path does so, with an unobtrusive pending/error indication and an accurate displayed-time label. Before any frame has loaded, ordinary loading/empty states are permitted. Disabling radar SHALL remove all radar imagery even during a handoff.
+For timeline scrubbing and playback within the same provider and loaded map style, the app SHALL attempt to retain the last successfully rendered radar frame while the latest replacement is loading. The intended handoff SHALL be gated by current-viewport tile coverage, staging installation, and a subsequent available map-wide `FrameRendered(Full)` event. A fixed delay or metadata alone SHALL NOT count as readiness. The pinned MapLibre Compose 0.16 event is not a per-source or per-revision acknowledgment and cannot prove that staging tiles were delivered or drawn; therefore this is a best-effort gate, not a guarantee of uninterrupted imagery. A temporary basemap-only interval or opacity discontinuity may occur under this known race; this limitation is accepted for this change and deferred to future work, and behavior SHALL NOT be described as universally blink-free. Rapid selection changes SHALL converge to the most recent request; superseded loads SHALL NOT replace newer selections. Failed, timed-out, or rate-limited requests SHALL preserve the last good frame where the existing failure path does so, with an unobtrusive error indication; the timeline continues to show the selected frame time and type and SHALL NOT flash a pending/loading message. Before any frame has loaded, ordinary loading/empty states are permitted. Disabling radar SHALL remove all radar imagery even during a handoff.
 
 #### Scenario: Scrub to an uncached frame
 - **WHEN** the user selects a time whose current-viewport radar tiles are not ready
@@ -109,16 +109,16 @@ For timeline scrubbing and playback within the same provider and loaded map styl
 - **WHEN** radar is disabled while a replacement is loading or transitioning
 - **THEN** all radar imagery and timeline are hidden and late completions cannot restore them
 
-### Requirement: Two-step radar neighborhood prefetch
-While the main Map and radar are visible, the app SHALL opportunistically prefetch radar image tiles covering the current viewport for up to two available timeline indices before and two after the requested frame, for either provider. Steps SHALL mean adjacent entries in the provider's chronologically ordered timeline, not a hard-coded time interval. The neighborhood SHALL exclude the requested frame, clamp at timeline endpoints without wrapping, deduplicate resources, and reuse downloaded tiles for subsequent display. Prefetching SHALL use bounded storage and concurrency, prioritize the requested frame, avoid unrelated regions and unsupported zoom levels, and obey provider rate limits. Requests made obsolete by selection, viewport, provider, or metadata changes SHALL be cancelled or deprioritized and their completions SHALL NOT alter the active selection. No speculative radar requests SHALL continue when Map/radar is hidden or the app is stopped.
+### Requirement: Adjacent radar frame prefetch
+While the main Map and radar are visible, the app SHALL opportunistically prefetch radar image tiles covering the current viewport for the immediately previous and next available timeline indices around the requested frame, for either provider. Steps SHALL mean adjacent entries in the provider's chronologically ordered timeline, not a hard-coded time interval. The neighborhood SHALL exclude the requested frame, clamp at timeline endpoints without wrapping, deduplicate resources, and reuse downloaded tiles for subsequent display. Prefetching SHALL use bounded storage and concurrency, prioritize the requested frame, avoid unrelated regions and unsupported zoom levels, and obey provider rate limits. Requests made obsolete by selection, viewport, provider, or metadata changes SHALL be cancelled or deprioritized and their completions SHALL NOT alter the active selection. No speculative radar requests SHALL continue when Map/radar is hidden or the app is stopped.
 
 #### Scenario: Middle of timeline
-- **WHEN** the requested frame is at index i with at least two available frames on each side and request budget is available
-- **THEN** prefetch targets are exactly i−2, i−1, i+1, and i+2 for the current viewport, without duplicating the requested frame's tile requests
+- **WHEN** the requested frame is at index i with a previous and next available frame and request budget is available
+- **THEN** prefetch targets are i−1 and i+1 for the current viewport when those indices exist, without duplicating the requested frame's tile requests
 
 #### Scenario: Timeline boundary or short timeline
-- **WHEN** the requested frame is near an endpoint or fewer than five frames exist
-- **THEN** only valid neighboring indices within two steps are prefetched, with no wraparound, invented frames, or duplicate loads
+- **WHEN** the requested frame is at an endpoint or the timeline has fewer than three frames
+- **THEN** only valid immediately adjacent indices are prefetched, with no wraparound, invented frames, or duplicate loads
 
 #### Scenario: Reuse prefetched imagery
 - **WHEN** the user selects a neighboring frame whose viewport tiles have been prefetched and remain valid in cache

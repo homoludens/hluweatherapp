@@ -370,7 +370,11 @@ fun WeatherMap(
                 )
                 DisappearingCompassButton(modifier = Modifier.align(Alignment.TopEnd))
                 MaplibreLogo(Modifier.align(Alignment.BottomStart))
-                CollapsedFirstAttributionButton(Modifier.align(Alignment.BottomEnd))
+                CollapsedFirstAttributionButton(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = 64.dp)
+                )
             } else {
                 include(MapOverlay.Default)
             }
