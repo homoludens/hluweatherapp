@@ -12,6 +12,28 @@ The scoped byte-coverage signal is wired to main-map-only optional renderer prep
 
 Available controlled tests and sampled recordings can assess **observed** flicker reduction, but must state capture limits and residual gaps. Neither perfect physical-presentation capture nor a renderer completion fence is required by the revised plan. `MapEvent.FrameRendered` is optional diagnostics, not a gate. The older internal `MapAdapter.Callbacks.onFrame(fps)` belongs to the inspected 0.15.0 source; the pinned 0.16.0 adapter uses `onEvent`.
 
+## Task 4.1 fixture update — 2026-11-03
+
+Added `app/src/androidTest/java/net/droopia/hluweather/ui/map/RadarAheadOfSelectionRuntimeTest.kt` with two focused Google debug OpenGL fixtures. The both-provider case preloads only each high-zoom planned tile set, waits for ahead-of-selection optional source installation, checks tiny-positive opacity and exact source/layer reuse, and deliberately holds native provider delivery past the 50 ms warm-up. It asserts acceptance while delivery is still held and eventual sampled-color convergence after release, without treating submission or samples as readiness or universal no-gap proof. It also requests an uncached optional coarse parent through the optional alias and expects a cache miss with no HTTP, checks the planned coarse zoom cap and stationary no-delayed-detail behavior, and covers transparent PNG and HTTP 204/no-content imagery. Sampled held pixels are logged with `residualGapPossible=true`; they are observational only.
+
+The invalidation fixture covers changed planned-tile/viewport input, selection of a different frame, actual style replacement plus a new style epoch, provider switch, zero-opacity hide/restore, and lifecycle-stop/resume controller inputs. It releases delayed callbacks only after the exact optional registration has been removed, then checks for stale-layer/source resurrection and a maximum of two native registrations/layers. At initial fixture authoring, device execution was **NOT RUN** because no connected device or configured AVD was available; the follow-up below records the later runtime pass. Physical presentation and actual gap count/duration are **NOT MEASURED**.
+
+Google debug Android-test Kotlin compilation: **PASS** — `ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ANDROID_AVD_HOME=/home/homoludens/.config/.android/avd ./gradlew :app:compileGoogleDebugAndroidTestKotlin --console=plain` (`BUILD SUCCESSFUL in 4s`, 24 actionable tasks: 1 executed, 23 up-to-date). An initial compilation attempt found fixture Kotlin errors; those were fixed before this passing run. Unit suites, APK assembly, and release builds were not run for task 4.1. Runtime verification and task completion are recorded below; historical readiness-gate evidence is preserved unchanged.
+
+### Runtime follow-up — 2026-11-03
+
+The first race-fixture run with phase diagnostics timed out at **`provider candidate installed`**. The production controller requires an optional candidate to share the selected request's lifetime, including style epoch. The fixture had replaced the style and selected `afterStyle` at epoch 2 but constructed the later provider, opacity, and lifecycle candidates with the default epoch 1. Those post-replacement fixture requests now use epoch 2; the deliberately stale style candidate remains at epoch 1. No production code or assertions were changed. Named `await` phases now make any future timeout identify its transition.
+
+On the user-approved `small_phone` AVD (API 35, `emulator-5554`), the focused race method passed, then the complete fixture class passed. The coordinator reran the full class: **2 tests, 0 failures, 0 errors, 0 skipped** (11.831 s and 5.461 s; suite 17.292 s). Final rerun command:
+
+```sh
+ANDROID_HOME=/home/homoludens/Android/Sdk ANDROID_SDK_ROOT=/home/homoludens/Android/Sdk ANDROID_AVD_HOME=/home/homoludens/.config/.android/avd ./gradlew :app:connectedGoogleDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=net.droopia.hluweather.ui.map.RadarAheadOfSelectionRuntimeTest --console=plain
+```
+
+The runtime assertions cover the listed source-release, invalidation, opacity, lifecycle, two-slot, stale-resurrection, and no-extra-network cases. Visual gap count/duration, physical presentation, and capture completeness remain **NOT MEASURED**; sampled screenshots are observational only. Task 4.1 is complete and marked in `tasks.md`. No broad test suite or APK/release build was run; the task-scoped commit follows coordinator checks.
+
+Whitespace checks found no trailing whitespace in the new fixture or this verification file. Repository-wide `git diff --check` is blocked by trailing whitespace at `AGENTS.md:7`, in an environment-updated instruction file outside this task; `AGENTS.md` was not edited as task work.
+
 ## Historical readiness-gated investigation (superseded scope)
 
 Everything below records the **previous** plan and its audit results. References there to task 1.1, design decision 1, blocked downstream tasks, required complete capture, or approval boundaries are historical and must not override the revised artifacts above. Preserve these facts and NOT RUN results; they have not been converted into passing tests or claims that a native signal exists.
