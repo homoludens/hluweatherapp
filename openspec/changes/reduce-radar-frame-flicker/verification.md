@@ -1,4 +1,16 @@
-# Radar native readiness gate verification
+# Radar flicker reduction verification
+
+## Current scope — two-slot plan revision, 2026-11-03
+
+The user requested a plan to reduce flickering **without a MapLibre readiness signal**, recalling double buffering with two frames. The current proposal/spec/design/tasks now use ahead-of-selection preparation, proposed 50 ms app-timed warm-up for unprepared replacements, and proposed 50 ms hidden-resource retirement, while retaining command-acceptance acknowledgment and the existing 600 ms playback interval. The timers are heuristics, not proof of drawable pixels. Already warmed frames do not repeat warm-up; initial loading without a visible front has no artificial warm-up.
+
+All revised implementation tasks remain unchecked: **0/10 complete**. The old native-readiness/capture proof is no longer an implementation gate. No production/dependency code was changed or application tests/builds run for this planning revision; the revised mechanism's functional, native, and visual-effectiveness checks are **NOT RUN**. Planning validation does not count as implementation verification.
+
+Available controlled tests and sampled recordings can assess **observed** flicker reduction, but must state capture limits and residual gaps. Neither perfect physical-presentation capture nor a renderer completion fence is required by the revised plan. `MapEvent.FrameRendered` is optional diagnostics, not a gate. The older internal `MapAdapter.Callbacks.onFrame(fps)` belongs to the inspected 0.15.0 source; the pinned 0.16.0 adapter uses `onEvent`.
+
+## Historical readiness-gated investigation (superseded scope)
+
+Everything below records the **previous** plan and its audit results. References there to task 1.1, design decision 1, blocked downstream tasks, required complete capture, or approval boundaries are historical and must not override the revised artifacts above. Preserve these facts and NOT RUN results; they have not been converted into passing tests or claims that a native signal exists.
 
 ## Decision — 2026-11-03
 

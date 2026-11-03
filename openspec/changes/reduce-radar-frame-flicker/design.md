@@ -1,133 +1,120 @@
 ## Context
 
-See `proposal.md` for motivation and `specs/weather-radar/spec.md` for the behavior contract. Planning starts from clean revision `73fcfe8879e960aa02ae5f07baecc5f58b01bfcb`, which includes the radar speedup. The user reports brief disappearance, not a brightness pulse; no new device trace has been captured during planning.
+See `proposal.md` and the delta spec. The user explicitly replaced the previous readiness-gated approach with best-effort double buffering that does not depend on a MapLibre readiness signal. Keep the previous audit in `verification.md` as historical evidence, not an active gate. No implementation has passed yet.
 
-The current implementation already owns two native raster slots. `RadarRenderController` waits for app-side byte coverage and installation, calls `MapLibreRadarBackend.promote`, immediately records the replacement as displayed, and removes the predecessor. The backend changes both opacities in one owner-thread block, but that is not proof that the renderer has consumed drawable replacement tiles. `RadarMapResourceProvider` observes failures, not decode/upload completion. Existing `awaitFullRender` comments and archived native evidence explicitly document that map-wide Full events can refer to an older update. Re-enabling the diagnostic flag is therefore not a fix.
+The existing `RadarRenderController` already uses two slots, but creates staging only after the requested selection changes. `RadarPrefetchController` warms compressed bytes, not a native layer. The improvement is to install the next frame into the spare native slot while the current frame is still displayed, and reuse it when selected. Existing unconditional staging removal must not destroy that matching prepared slot.
 
-Adjacent prefetch currently warms compressed bytes for i−1 and i+1; it does not prepare a native slot during the current frame's approximately 600 ms display interval. All native resource loads currently call the loader as demand. An unrequested native layer must not silently convert speculation into foreground HTTP work.
+Keep MapLibre Compose 0.16.0, the two-level coarse tile policy, 256-pixel requests/1024-point display tiles, caps 5/10, eight total/four speculative requests, RainViewer's existing 90/minute budget and 20-attempt reserve, and cache/privacy policies. Baseline for comparison is speedup revision `73fcfe8879e960aa02ae5f07baecc5f58b01bfcb`.
 
-The implemented predecessor `speed-up-radar-loading` is still an active, completed change and its delta is not synced to the main radar spec. This design builds on its coarse-only policy and request limits. This follow-up replaces its acceptance-only playback/handoff contract; it does not restore the older detailed tile policy or full-map barriers. Spec finalization order is predecessor first, this change second, only when separately requested.
+The predecessor `speed-up-radar-loading` is implemented but its delta is not synced into the main spec. Separately requested finalization must apply that predecessor first, then this follow-up; do not revert its loading optimizations or acceptance semantics.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Eliminate premature removal of the old frame during same-provider, same-style, unchanged-tile-set handoffs, with actual native evidence rather than additional timing guesses.
-- Reuse the existing two-slot architecture and overlap next-frame native preparation with the existing playback interval.
-- Make readiness, promotion, acknowledgment, rollback, and resource ownership explicit across request and render-thread races.
-- Preserve coarse source settings, transport/scheduler capacity, cache/privacy policies, provider budgets, and interactive map behavior.
-- Prove the result at individual presented-frame granularity; slower polling screenshots cannot establish absence of a millisecond-scale gap.
+- Give native delivery/decoding a head start during the current 600 ms interval, reducing the observed gap without new rendering architecture.
+- Bound app-controlled warm-up, retirement, memory, and cancellation; keep foreground work and latest selection authoritative.
+- Measure observed flicker and visible latency honestly rather than claiming timing proves native readiness.
 
 **Non-Goals:**
-- Crossfades, opacity animations, fixed grace periods, configurable quality/speed modes, progressive detail, larger byte caches, or extra speculative timeline neighbors.
-- A custom radar compositor, a maintained MapLibre fork, private/reflection-based native access, or an automatic dependency upgrade. If needed, these require a new approval before expanding the change.
-- Uninterrupted imagery during provider/style replacement, initial map loading, or newly exposed viewport regions. Normal empty weather data is not flicker.
-- New persisted state, provider/API changes, attribution changes, unrelated maps, release signing, or release builds.
+- Source-specific readiness certificates, render-generation fences, proof of every physical presentation, or guaranteed gap-free handoff.
+- Dependency upgrades, internal API access, native forks, custom compositors, crossfades, deliberate full-opacity overlap, new settings/caches, or additional speculative timeline neighbors.
+- Uninterrupted provider/style/surface transitions, newly exposed viewport coverage, unrelated UI/maps, persistent-data migration, or release builds/signing.
 
 ## Decisions
 
-### 1. Make native capability proof a blocking gate, not an assumed API
+### 1. Use two slots ahead of selection, not two readiness events
 
-Before production integration, audit the pinned MapLibre Compose 0.16.0 public platform APIs and the renderer ordering they expose. Establish the smallest usable contract for both:
-
-1. **Drawable readiness:** the installed slot has successfully prepared its required current-viewport native tiles, including valid empty tiles, in the render update that will be used for promotion.
-2. **Rendered swap acknowledgment:** a completion tied to the particular opacity/source update establishes that the renderer has consumed that swap, allowing predecessor retirement and playback acknowledgment.
-
-The proof may use an appropriately ordered source-specific native query plus a correlated render completion; it need not require a newly invented event type. It must demonstrate why stale renderer snapshots, callbacks from a removed/recreated source, surface recreation, and unrelated Full events cannot satisfy it. Successful HTTP callbacks prove delivery only, not decoding or draw readiness. A native cache hit must satisfy the same contract without requiring a new provider callback.
-
-Use a controlled OpenGL probe with a blue basemap and distinct opaque radar colors at the selected layer opacity. Independently hold native delivery while app bytes are cached, exercise any controllable preparation/render-update boundary, inject/replay stale observations, and keep unrelated basemap work pending. Verify that a ready certificate cannot appear early and that both opacity changes are consumed in one render update without an intermediate empty or double-opacity frame. Also check that tiny-positive staging actually receives native preparation on the installed runtime. Document API symbols, ordering argument, exact version/device, probe commands, and raw results in implementation-time `verification.md`.
-
-**Go/no-go:** downstream tasks require a demonstrated contract and passing probe, not simply a source-loaded boolean or a plausible event sequence. If the pinned public API cannot express the contract, or a device/capture facility needed to prove it is unavailable, leave the production renderer unchanged, record the gate as blocked/not run, and ask for the smallest explicit scope or verification decision. Do not auto-upgrade dependencies, create a fork/compositor, weaken readiness to a timeout, or mark the change implemented. This is a deliberate implementation gate; the plan does not claim current API feasibility has already been established.
-
-**Alternatives:** waiting for one/two Full events, sleeping for several milliseconds, or waiting only for native resource delivery are rejected because none excludes the documented race. Broad rendering replacement is deferred rather than implicitly approved.
-
-### 2. Bind readiness and swap evidence to explicit ownership
-
-Extend the radar backend boundary with the proven operations from decision 1. Keep the smallest internal readiness/swap records needed to bind evidence to:
-
-- provider/host/frame identity;
-- canonical coarse viewport tile set;
-- map/surface/style lifetime and unique native slot/source lifetime;
-- current selection generation, preparation generation, and native render update/swap revision as applicable.
-
-Do not equate the existing app-side `styleEpoch` or a render event counter with a native update revision. Those are useful invalidation inputs, not evidence that a submitted raster update was consumed. Recheck identity, viewport, native failures, source existence/volatility, selected opacity, and selection generation on the native owner thread immediately before promotion. Consume only an acknowledgment for that same swap. Opacity-only changes must not accidentally validate previously invisible imagery.
-
-Keep observation lifecycle under the backend: register before native demand, cancel on invalidation, and release source leases only after native removal or confirmed map destruction. Late callbacks are inert. Treat valid transparent PNGs and successful no-content tiles as terminal coverage, not as missing signal.
-
-**Alternative:** a global ready flag or URL-keyed delivery counter is smaller but cannot distinguish reused frame resources, cache hits, stale viewport coverage, or source replacement.
-
-### 3. Retain two slots and make the swap/retirement state machine explicit
-
-The existing controller remains the sole owner of native radar slots and latest-selection arbitration. Use two physical slots at most, regardless of role:
+The controller owns at most two live source/layer pairs, with distinct current-front and back/retired roles:
 
 ```text
-front A + spare
-   -> front A + preparing B
-   -> front A + drawable B
-   -> guarded hard swap A -> B, retain A's resources
-   -> correlated rendered-swap acknowledgment
-   -> front B + spare (A removed)
+Current display interval (~600 ms):
+  A: visible  ------------------------------------+
+  B: spare -> cached bytes -> install -> warm -----+-> selected
+
+Switch:
+  submit B at selected opacity; submit A at zero
+  acknowledge B as accepted (not proven drawn)
+  retain hidden A briefly -> remove -> prepare C
 ```
 
-Preparing B can represent either an actual request or optional next-playback preparation. Optional preparation never changes `requested`, `displayed`, `pending`, or current errors. A compatible prepared B can be adopted by the real request without rebuilding it; otherwise cancel/remove it before allocating the replacement. Do not recreate and throw away a matching prepared slot at the start of every reconciliation, as the current unconditional staging cleanup would do.
+Keep staging at `min(selectedOpacity, 0.001f)` so native tile demand is not disabled by zero opacity. Preparing an unrequested frame never changes requested/displayed identity, pending status, error, or the playback timer. Reuse B when frame identity, canonical coarse tile set, style/surface lifetime, and source registration still match. A different request cancels B and takes the spare slot. Physical native sources can be removed/recreated as slots recycle; no raster-source retargeting API is required.
 
-The front stays at the user's selected opacity until a current readiness certificate allows the guarded swap. Keep raster fade and opacity transitions disabled. Set replacement to the current opacity and predecessor to zero in the proven single native render update; do not intentionally stack two visible 75%-opacity frames. Record an in-progress swap and retain predecessor ownership until acknowledgment. Publish `displayed`/clear pending and recycle the predecessor only on that acknowledgment, not in the native mutation guard merely because setters returned.
+**Alternative:** only downloading more bytes leaves native preparation until selection. A third slot or a full timeline's native layers is unnecessary and increases memory/cleanup complexity.
 
-Handle cancellation after native mutation but before coroutine resumption without losing ownership. If a replacement fails before acknowledgment, preserve or restore the previous same-provider front using the latest valid generation, then retire failed resources safely. A new request arriving during an unacknowledged swap must resolve or safely supersede that swap before reusing either slot. A failed removal retains the lease and prevents allocation of a third slot; it does not erase the remaining front. Never hold the short cross-thread ownership lock while suspending or waiting for readiness.
+### 2. Use small bounded timers as heuristics, explicitly not readiness
 
-Hide/stop/provider/style invalidations still fence queued native work immediately. Opacity zero hides imagery without accepting an invisible render as readiness; restoring positive opacity re-establishes the visible handoff contract. A tile-set change invalidates readiness but does not intentionally clear a compatible front's existing coverage. Retain the existing bounded 45-second requested-handoff timeout unless the feasibility proof reveals a specific need to revisit it; optional preparation does not extend that deadline or surface its own timeout as a display error.
+Initial proposed internal defaults are **50 ms warm-up** and **50 ms hidden-predecessor retention**, injected with a monotonic clock/scheduler for deterministic tests. They are tunable implementation constants, not settings or claims about GPU latency.
 
-**Alternatives:** holding the predecessor visible underneath an unready replacement causes stale precipitation/brightness artifacts; a third slot increases lifetime complexity and memory. Neither is necessary for the chosen serial two-slot protocol.
+- Warm-up starts at the later of accepted native installation and successful complete app-side coarse byte coverage for that exact slot/viewport. Coverage and installation remain mandatory; elapsed time never substitutes for them. For optional preparation coverage is checked cache-only.
+- Once an actual request adopts matching B, revalidate byte freshness/cache-control and ownership. Wait only `max(0, 50 ms - elapsedCompatibleWarmup)`. A fully warmed B adds **zero** warm-up at selection. Reset age if coverage or viewport/lifetime became incompatible. Non-cacheable or failed warmup is not reused.
+- If there is no visible front, skip this artificial warm-up: initial loading keeps the current speed-first behavior.
+- Submit B at the latest chosen opacity before submitting A at zero in the existing guarded owner-thread block; keep raster fade/opacity transitions disabled. Do not insert a deliberately visible overlap. This callback is **not an atomic render transaction**; an intermediate native state or late decode can still cause a pulse/gap.
+- Record accepted promotion under the same mutation guard as ownership, as in the existing fast path. Retain A hidden for up to 50 ms from accepted promotion, then remove it without a frame event. This retention protects ownership/cleanup but **does not hide a blank**, since A is already transparent. New demand may remove A early to obtain the spare slot.
+- Keep the existing 45-second requested-operation timeout; the optional preparation and cleanup waits must never serialize a new request behind an uninterruptible timer. Do not repeat/extend a warm-up for the same eligible request.
 
-### 4. Prepare only the next playback frame, using valid cached bytes
+Warm-up is chosen because a few tens of milliseconds can give native decode/upload time when ahead-of-time preparation missed. Its effectiveness is empirical. No chosen delay can prove that replacement pixels exist, and an intentionally held native delivery longer than the grace may still blank after promotion.
 
-Expose playback activity and the next chronological non-wrapping frame identity as renderer inputs, derived from the same ordered metadata as the playback loop. After the current handoff is acknowledged and its old slot removed, try preparing i+1 while i's existing display interval runs. Existing byte prefetch remains i−1/i+1 and uses the unchanged shared scheduler. No native preparation when paused, hidden, stopped, at opacity zero, or when there is no valid i+1. Playback still loops to index 0 at the boundary, but that wrap request uses the normal safe foreground path instead of extending the speculative neighborhood.
+**Alternatives:** a 600 ms extra delay undoes the speedup. Full/Idle or a fixed count of render callbacks reintroduces event dependence without source readiness. Crossfading/retaining A visibly under B can ghost precipitation and brighten transparent rasters; exclude it from this plan.
 
-Add the minimum per-live-source/lease context in the radar resource bridge to distinguish **unrequested preparation** from **requested demand**. For unrequested preparation, force `RadarTileLoader.load(..., cacheOnly = true)` regardless of a native cache/network loading hint; never call ordinary foreground coverage loading to warm that frame. Native coarse parent/fallback requests are subject to this rule too. If any required native resource is missing, stale, non-cacheable, or unusable, discard that optional slot without a user-facing error; let existing byte prefetch progress, and retry only after a relevant cache/input change or the eventual actual request, not a tight polling/recreation loop.
+### 3. Keep ownership guards; replace the readiness audit with implementable invariants
 
-This avoids introducing a new speculative network scheduler or weakening rate accounting. A matching successful prepared slot may become requested demand under the controller's guarded ownership transition. A partially failed preparation is removed and recreated as ordinary requested work; do not assume a previously failed native source will retry by itself. Keep remote-key HTTP deduplication and source registration leases intact. Because registry aliases currently derive from frame identity and can be shared, preparation policy must not be stored as an ambiguous global flag on a remote URL; role ownership must be explicit and conflicting live roles resolved without letting warmup bypass cache-only access.
+The controller remains the single owner of front, optional/demand back, and hidden-retired roles, counting all roles toward the two-slot cap. Use separate selection/preparation/cleanup generations and immutable slot IDs so obsolete timers, prefetch completions, and removals cannot affect reused ownership. The main-map backend remains responsible for native source/layer validation, volatile configuration, and actual removal.
 
-Pause/manual selection, metadata identity changes, tile-set changes, provider/style/surface changes, and lifecycle stop invalidate the preparation generation. Foreground staging always owns the spare slot first. Optional work must not hold a controller mutex across a wait that prevents a real request from cancelling/preempting it.
+Cancellation after partially applied promotion must retain enough state for the current generation to restore the compatible old front before removing a failed back. After a promotion was accepted, do not let cancellation of its coroutine leave displayed bookkeeping claiming A. Later failures cannot be called pre-promotion failures or guaranteed detectable from byte coverage. A failed removal retains its lease and blocks allocation of a third slot, but must not deliberately clear the current front. Never hold the short cross-thread lock across suspension.
 
-**Alternatives:** larger byte prefetch does not prepare GPU resources; letting native warmup issue demand HTTP can consume the foreground reserve and download unplanned fallback tiles. Cache-only preparation is smaller and preserves existing network policies, though its hit rate is deliberately best effort.
+Pause cancels only unrequested preparation. Manual selection pauses but may adopt a matching installed back rather than needlessly destroying it; withdraw its optional owner without removing a slot now owned by demand. Disabling radar, lifecycle stop, provider/style/surface change, or incompatible visible tile set invalidate outgoing timers/preparation. At zero opacity stop optional preparation and hide live slots; positive restoration uses current compatible state or a new normal demand request, without any invisible-render handshake. Empty/transparent/204 tiles remain successful coverage.
 
-### 5. Keep the playback interval, but start it from completed handoff
+**Alternative:** a global ready boolean, shared cleanup timer, or role-only lookup can mutate the wrong slot after rapid B→C requests. Existing request fencing plus explicit slot generations is sufficient; no native render revision is introduced.
 
-Keep `RADAR_PLAYBACK_INTERVAL_MILLIS = 600` and requested/displayed separation. `onDisplayChanged` continues to accept only the current provider/request. Its displayed acknowledgment now means the native-ready swap was rendered according to the proven contract, not screenshot-based runtime color detection. Start the next display interval only then; preparing a neighbor is not a new selection and cannot restart that interval.
+### 4. Warm the next frame from the existing byte cache, with scoped retry opportunities
 
-Thread playback/preparation inputs through the main map only. The timeline continues showing selected time/type with no loading flash or duplicate displayed row. Manual scrubbing pauses playback and converges to the newest selection. Startup has no retained front and can use normal loading until the same readiness/acknowledgment contract is satisfied. Preparation failure is silent; failure of the actual requested frame retains existing error/pause behavior.
+While playing, use the same metadata order as playback to target only i+1 when it exists without wrapping. Byte prefetch stays i−1/i+1. At the final entry, playback still loops to index 0 via ordinary requested loading; do not add speculative wraparound. Foreground demand gets the spare slot before optional work. Begin optional native preparation when the front is accepted, hidden predecessor cleanup has yielded a spare slot, and all next-frame coarse bytes are valid in cache.
 
-**Alternative:** continuing to advance from command acceptance can supersede imagery before it is drawn; adding a second 600 ms preparation interval would undo the perceived speedup.
+Expose a small plan-scoped byte-prefetch progress notification from `RadarPrefetchController` for completion of next-frame coverage. Check once on a new target/viewport and reconsider when that matching coverage completes; otherwise bytes arriving during the display interval would never trigger native preparation. This is app-cache progress, **not renderer readiness**. Do not add periodic polling or recreate the same failed optional source on every recomposition. Retry a failed optional attempt only for a new matching coverage opportunity/input, or actual demand.
 
-### 6. Verify continuity and visible speed, not just callbacks
+All native requests for an unrequested back, including coarse parent/fallback URLs, must force `RadarTileLoader.load(cacheOnly = true)` regardless of native request hints. Missing or unusable **required planned-viewport** bytes abandon optional preparation silently. Native may also request optional coarse parents that byte prefetch never downloaded: return a cache miss for those without HTTP, do not invent an empty weather tile, and do not discard an otherwise covered back solely for an optional-parent miss. This distinction matters because the earlier native trace requested zoom-1 fallbacks as well as planned zoom-5 tiles. Verify that the pinned runtime still demands/decodes the cached planned tiles in this case; if it cannot, abandon that optional attempt and report the hit-rate limitation. Do not call ordinary network-capable `awaitCoverage` to warm an unrequested frame. Existing speculative HTTP work remains in the existing prefetch scheduler, with unchanged limits, deduplication, retries, and budgets.
 
-Run narrow tests while implementing each unit; reserve radar-wide regression and Google debug assembly for final integration. Existing acceptance-before-native-delivery tests intentionally describe the old contract and must be replaced for the new default, while preserving their coverage of coarse requests and lifecycle ownership. Keep historical verification evidence intact.
+Use an unambiguous per-native-registration alias/lease identity to carry cache-only versus actual-demand ownership and the required planned tile set; keep remote `RadarTileKey` identity unchanged for shared HTTP/cache deduplication. A native alias must not select an arbitrary same-frame lease or inherit another map/source's demand privilege. Adoption may switch that exact live registration to demand only after the latest real selection owns it. Obsolete registrations fail closed; a warmup with failed required tiles is removed before normal demand recreates the source rather than assuming native will retry a prior failure. Preserve no-store behavior and release leases only after native removal/map destruction.
 
-The native fixture must capture or inspect every presented frame in the handoff window at the actual refresh rate, or use an equivalent proven native render-output assertion. Repeated `takeScreenshot` polling or a recording that drops frames is insufficient to exclude the reported gap. Record capture cadence and missing frames; if completeness cannot be established, continuity is not passed. Check a grid covering the viewport/tile edges, not just a center pixel. For nonempty red/green radar over blue at 75% opacity, every sampled handoff output must match one expected single-layer composite within a documented tolerance, never blue-only or the two-layer composite. Tiny staging tolerance must not hide a full-opacity overlap. Run at least 100 controlled transitions per provider identity, including delayed native delivery, warm cache, and prepared reuse; add separate empty/transparent and lifecycle/race cases.
+**Alternative:** letting native warmup issue HTTP as demand consumes foreground capacity and unplanned parent tiles. Conversely, rejecting every source for a missing optional parent would defeat much of high-zoom preparation despite all planned tiles being cached. Keep cache-only fallback misses separate from required coverage failures, with no policy expansion or general telemetry.
 
-Use the current speedup revision above as the baseline, not the pre-speedup implementation. On the same device/viewport/provider/frame fixture, alternate at least 30 paired warm/adjacent trials and five paired cold trials. Record selection-to-first-visible-replacement, readiness, rendered-swap acknowledgment, gap count/duration, HTTP attempts/bytes, requested zooms, source/lease counts, and bounded native memory behavior separately. For warm/prepared adjacent transitions, median and p95 first-visible-replacement latency must not exceed the baseline by more than one measured display refresh interval; there must be no added fixed delay or extra display interval. Cold paths can wait for genuine preparation, but must retain old imagery and unchanged tile/network policies. If the warm target fails, investigate and resolve or obtain an explicit user-approved trade-off rather than claiming speed preservation.
+### 5. Preserve acceptance-based playback and keep render callbacks nonessential
 
-Repeat a live visual check for both providers with actual radar signal when available; if a provider has no signal, report that run unavailable instead of treating a blank map as a continuity pass. Synthetic tests establish renderer behavior, not live-provider speed. Record exact commands, revisions/APK hashes, device/GPU/capture details, result counts, and unavailable checks in `verification.md`. Do not fabricate results or mark required verification passed when it was not run.
+Keep `RADAR_PLAYBACK_INTERVAL_MILLIS = 600`, stable selected-time/type text, and the existing exact requested/provider filtering in `onDisplayChanged`. `displayed` still means accepted/submitted, not visually confirmed. Start the display interval on accepted promotion; optional preparation and hidden cleanup do not restart or postpone it. Do not add a second interval for preparation. Preparation failures are silent; actual requested-load failures keep current error/pause/retry semantics.
 
-**Alternative:** controller acknowledgment timings and low-frequency screenshots are easier but miss the very defect being fixed.
+`MapEvent.FrameRendered(stats)` in pinned 0.16.0 reports that an engine frame finished, not which radar update it consumed. Its Full mode can belong to older map state. It can be logged for performance diagnostics but is not an eligibility, acknowledgment, or retirement gate. The older [`MapAdapter.Callbacks.onFrame(fps)` in 0.15.0](https://github.com/maplibre/maplibre-compose/blob/v0.15.0/lib/maplibre-compose/src/commonMain/kotlin/org/maplibre/compose/map/MapAdapter.kt) is internal frame-rate reporting; the inspected 0.16.0 adapter uses `onEvent`, not `onFrame`. Neither internal adapter access nor an upgrade is needed. Tests with no events, only Partial events, and delayed/out-of-order Full events must have the same controller timer behavior.
+
+**Alternative:** changing acknowledgment to a rendered-swap proof is precisely the blocked former scope. Preserve the fast path rather than renaming timers or callbacks as proof.
+
+### 6. Measure reduction, not universal absence, of flicker
+
+Use narrow controller tests with virtual time to prove the two-slot cap, no double warm-up, no artificial initial delay, completion with zero render events, bounded hidden retirement, and latest-generation cancellation. Resource tests prove unrequested native warmup starts zero HTTP attempts, including fallback/cache-miss paths. Integration tests prove byte-prefetch completion starts optional native preparation without selection changes and without a polling loop.
+
+On Google debug OpenGL instrumentation, use distinct nonempty red/green radar over a blue basemap at 75% opacity, checking center and tile-edge locations. Exercise normal/warm/next-frame reuse, valid empty/transparent/204 results, rapid scrubbing, lifecycle/style/provider/viewport/opacity changes, cache misses, and native delivery intentionally delayed beyond 50 ms. The latter demonstrates the accepted limitation; it must not be relabeled a continuity guarantee or used to block implementation pending a new native API. Still require functional convergence, error handling, two-slot/lease bounds, and no stale resurrection.
+
+Compare the speedup baseline with the revision using the same device, provider identities, viewport, capture method, and controlled tile fixture. Run at least 20 alternating paired warm/adjacent transitions and five paired cold replacements per provider identity. Record accepted-submission time and first observed replacement pixels separately, observed basemap-only gaps and durations, brightness/ghosting, capture cadence/limitations, requested zooms, HTTP attempts, warmup reuse rate, and source/lease counts. Record median/p95 as descriptive statistics, not a guarantee from a small sample.
+
+The intended outcome is fewer/shorter **observed** gaps on reproducible nonempty fixtures, no added full playback interval, no new HTTP work from native preparation, zero extra warm-up for already warmed frames, and no coarse/network policy regressions. Actual native latency can exceed the app timer. If there is no observed reduction, investigate the timing/preparation hit rate and ask before declaring this change effective or expanding to overlap/forks/compositors. Make a live visual check where radar signal is available; no-signal or unavailable device/capture checks are not passed. Available recordings/screenshot samples are permitted, but cannot establish zero missed refreshes or universally blink-free output. Preserve raw evidence and missing checks honestly.
+
+**Alternative:** the former gate demanded complete physical-presentation proof before any implementation. The revised user-approved goal is measurable best-effort reduction, so that proof is no longer a prerequisite.
 
 ## Risks / Trade-offs
 
-- **Pinned runtime cannot expose sufficient readiness or swap ordering** → Task 1.1 blocks integration; request approval for the minimum dependency/native change rather than silently widening scope.
-- **A native callback precedes render consumption or a cached tile bypasses observations** → Prove ordering with controlled gates and stale evidence; use source/lifetime/revision correlation rather than delivery counts.
-- **Warmup cache misses include native parent tiles not planned by byte prefetch** → Abandon optional preparation without new HTTP or an error; requested loading remains authoritative. Measure hit rate before considering any separately approved policy expansion.
-- **Temporary extra native memory** → Strictly two live slots, no new decoded-image cache, cleanup tests across long loops, and no new preparation while retirement is pending.
-- **A delayed swap acknowledgment holds both slots** → Bounded timeout and generation-safe restore/cleanup; new demand can invalidate optional work and no third source is created.
-- **Transparent images hide a false success/failure** → Explicit no-content/transparent terminal semantics and separate nonempty synthetic continuity fixtures.
-- **Sampling misses a one-refresh gap** → Require complete presented-frame evidence or equivalent native output assertions; label incomplete capture not passed.
-- **Stronger readiness adds latency** → Move preparation into the existing display interval and enforce the warm/adjacent comparison target above. Do not promise identical cold latency or universal continuity beyond the defined scope.
-- **Spec finalization order restores old requirements** → Sync/archive the predecessor before this change only when requested; review the composed radar contract and retain its coarse/budget requirements.
+- **50 ms is shorter than actual native preparation** → Residual flicker is explicitly possible; prepare early, measure, and tune the bounded constant rather than claim readiness.
+- **Cold manual selection gains up to 50 ms app delay** → Keep the front through that delay, overlap preparation with playback, skip warm-up for initial loading, and reuse elapsed warm-up for prepared frames.
+- **Retaining hidden A does not cover missing B pixels** → Do not call hidden retirement a visual fallback; the main mitigation is warming B ahead of selection.
+- **Two opacity setters can publish intermediate state** → Submit replacement first with no deliberate overlap, measure pulses, and keep the documented best-effort limitation; no atomic-render claim.
+- **Cache-only warmup lacks native fallback bytes** → Never fetch or fabricate them for warmup; distinguish optional-parent misses from missing required tiles, verify native planned-tile demand, and fall back to ordinary demand if the optional attempt cannot proceed.
+- **Delayed timer/cache completion mutates a newer slot** → Exact registration/slot/generation guards and deterministic cancellation tests.
+- **Native memory/leasing grows during rapid playback** → At most two live pairs, no decoded-image cache, early hidden-retired removal for demand, and no third allocation after failed cleanup.
+- **Sampling misses a millisecond gap** → Report observed results and capture limits, never zero-flicker proof. Missing required empirical verification remains not run.
 
 ## Migration Plan
 
-1. Complete the native capability/capture gate and record the demonstrated contract. If blocked, stop here with no production behavior change.
-2. Implement the minimal readiness adapter and generation-safe two-slot protocol behind the radar backend boundary; verify focused tests before wiring it into the main map.
-3. Add cache-only next-frame preparation and align playback acknowledgment, preserving the current network/source settings and controls.
-4. Run controlled native continuity and speed comparisons, live visual checks when available, then final radar regressions and `:app:assembleGoogleDebug`. Update documentation/evidence without replacing historical failed or unavailable results.
-5. No preference, cache schema, provider URL, or persistent-data migration is required. If rollback is needed, revert only this change's readiness/preparation/playback integration to the existing acceptance-only renderer while retaining the speedup's coarse tiles and eight/four request limits; explicitly restore the documented flicker limitation. Do not discard unrelated work.
+1. Implement the timer-driven two-slot controller against a recording backend; no API-feasibility gate is needed. Verify virtual-time cancellation, ownership, and event independence.
+2. Adapt the existing native backend and per-registration cache-only/demand bridge without changing dependencies or remote cache keys.
+3. Wire next-frame planning, scoped prefetch opportunities, renderer adoption, and unchanged acceptance-based playback into the main map only.
+4. Run focused native tests and empirical comparisons, then relevant final regressions and `:app:assembleGoogleDebug`. Record results under the revised scope while retaining historical audits.
+5. No persistent-data migration is required. Rollback affects only ahead-of-time preparation/timers and their wiring; preserve the speedup's coarse tiles, transport capacity, provider budgets, and acceptance-only renderer semantics. Do not discard unrelated work or sync/archive specs without a separate request.
 
-The exact existing API mechanism and capture method are deliverables of the blocking first task, not established facts or silently deferred product decisions. Any result requiring a different rendering architecture or dependency ownership returns for approval before remaining tasks execute.
+The 50 ms defaults are proposed initial trial values, not measured results. Adjusting those internal constants after empirical comparison stays within this design; introducing deliberate visible overlap, a new rendering API, or a different architecture requires approval.
