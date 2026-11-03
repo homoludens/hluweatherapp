@@ -147,7 +147,7 @@ class RadarBufferedRendererRuntimeTest {
                             rollbackApplied.complete(Unit)
                         }
                     }
-                    controllerRef.set(RadarRenderController(ui, controlled))
+                    controllerRef.set(RadarRenderController(ui, controlled, waitForFullRender = true))
                 }
                 val controller = requireNotNull(controllerRef.get())
                 fun request(time: Long): RadarRenderRequest {
@@ -222,7 +222,7 @@ class RadarBufferedRendererRuntimeTest {
     }
 
     @Test
-    fun realControllerKeepsFrontUntilDelayedNativeTilesAndSwapRender() = runBlocking {
+    fun defaultControllerAcceptsCoverageBeforeNativeDeliveryWithoutRenderBarriers() = runBlocking {
         val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val ui = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val registry = RadarTileRegistry()
@@ -256,7 +256,6 @@ class RadarBufferedRendererRuntimeTest {
         val mapRef = AtomicReference<MapState?>()
         val controllerRef = AtomicReference<RadarRenderController?>()
         val backendRef = AtomicReference<MapLibreRadarBackend?>()
-        val renders = ConcurrentLinkedQueue<Pair<Long, RenderStats>>()
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
@@ -275,15 +274,15 @@ class RadarBufferedRendererRuntimeTest {
                 }
                 await { mapRef.get()?.style?.loadState == StyleLoadState.Ready && mapRef.get()?.viewport != null }
                 val map = requireNotNull(mapRef.get())
-                ui.launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
-                    map.events.collect { event ->
-                        (event as? MapEvent.FrameRendered)?.stats?.let { renders.add(System.nanoTime() to it) }
-                    }
-                }
                 scenario.onActivity {
                     val backend = MapLibreRadarBackend(map, registry, loader, bridge, ui)
                     backendRef.set(backend)
-                    controllerRef.set(RadarRenderController(ui, backend))
+                    val noBarriers = object : RadarRenderBackend by backend {
+                        override suspend fun awaitFullRender(
+                            slot: RadarRenderSlot, viewport: RadarRenderRequest, guard: RadarMutationGuard
+                        ) = error("Default controller must not wait for full-map render events")
+                    }
+                    controllerRef.set(RadarRenderController(ui, noBarriers))
                 }
                 val controller = requireNotNull(controllerRef.get())
                 fun request(time: Long): RadarRenderRequest {
@@ -302,25 +301,8 @@ class RadarBufferedRendererRuntimeTest {
                 val frontLayer = map.withPlatformMap {
                     this.map.styleLayerIds().single { it.startsWith("hlu-radar-layer-") }
                 }
-                val nativeCallsBeforeMemoryRender = nativeCalls.size
-                val transportCallsBeforeMemoryRender = transportCalls.size
-                val memoryBarrierAt = System.nanoTime()
-                withTimeout(30_000) {
-                    requireNotNull(backendRef.get()).awaitFullRender(RadarRenderSlot(1, first), first) { mutation ->
-                        mutation()
-                        true
-                    }
-                }
-                val memoryFulls = renders.count { (time, stats) ->
-                    time > memoryBarrierAt && stats.mode == RenderStats.Mode.Full
-                }
-                assertTrue("An already loaded native source still requires new Full events", memoryFulls >= 2)
-                assertEquals("A native in-memory render should not need resource callbacks", nativeCallsBeforeMemoryRender, nativeCalls.size)
-                assertEquals("A native in-memory render should not redownload", transportCallsBeforeMemoryRender, transportCalls.size)
-                println("RADAR_BUFFERED_NATIVE_MEMORY_FULLS=$memoryFulls callbacks=$nativeCallsBeforeMemoryRender")
                 scenario.onActivity { controller.update(second, RadarProvider.RAINVIEWER) }
                 await { nativeCalls.any { registry.resolve(it.url)?.url?.contains("1700000002") == true } }
-                val installedAt = System.nanoTime()
                 await { transportCalls.any { it.contains("1700000002") } }
                 val ids = map.withPlatformMap { this.map.styleLayerIds() }
                 val radarIds = ids.filter { it.startsWith("hlu-radar-layer-") }
@@ -335,52 +317,20 @@ class RadarBufferedRendererRuntimeTest {
                     pendingPixels.all(::isRed))
                 assertEquals(first.identity, controller.state.value.displayed)
                 downloadGate.complete(Unit)
-                val coverageLease = registry.register(second.config.host, second.config.frame)
-                try {
-                    withTimeout(30_000) { loader.awaitCoverage(second.coordinates.map(coverageLease::tile)) }
-                } finally {
-                    registry.unregister(coverageLease)
+                // Application coverage and installation suffice even while native delivery is
+                // blocked. Acceptance is not evidence of decoded or visible radar pixels.
+                await { controller.state.value.displayed == second.identity }
+                await { registry.registeredCount == 1 }
+                assertTrue(!gate.isCompleted)
+                assertTrue(!controller.state.value.pending)
+                assertTrue(map.withPlatformMap { !this.map.styleLayerExists(frontLayer) })
+                val promotedOpacity = map.withPlatformMap {
+                    this.map.layerProperty(staging, "raster-opacity")!!.decodeToString().toFloat()
                 }
-                val coverageAt = System.nanoTime()
-                assertTrue("App byte coverage is not a substitute for a native render", isRed(pixel()))
-                assertEquals(first.identity, controller.state.value.displayed)
-                // Native responses remain blocked even though the app has all the bytes. Drive
-                // actual native partial frames and check the front after each, rather than using
-                // a sleep as evidence that the old frame was retained.
-                repeat(2) {
-                    val repaintAt = System.nanoTime()
-                    map.withPlatformMap { this.map.requestRepaint() }
-                    await { renders.any { (time, stats) -> time > repaintAt && stats.mode == RenderStats.Mode.Partial } }
-                    val opacities = map.withPlatformMap {
-                        radarIds.associateWith { this.map.layerProperty(it, "raster-opacity")!!.decodeToString().toFloat() }
-                    }
-                    assertEquals("Front must not be hidden while native responses are blocked", 0.75f, opacities.getValue(frontLayer), 0f)
-                    assertEquals("Staging must not be promoted while native responses are blocked", 0.001f, opacities.getValue(staging), 0f)
-                    assertEquals(first.identity, controller.state.value.displayed)
-                    assertTrue("Blocked native delivery must keep the red front visible", isRed(pixel()))
-                }
-                val releaseAt = System.nanoTime()
+                assertEquals(0.75f, promotedOpacity, 0f)
                 gate.complete(Unit)
-                val transitionPixels = mutableListOf<Int>()
-                withTimeout(30_000) {
-                    while (controller.state.value.displayed != second.identity || transitionPixels.none(::isGreen)) {
-                        transitionPixels += pixel()
-                        delay(35)
-                    }
-                }
-                repeat(3) { transitionPixels += pixel(); delay(35) }
-                val acknowledgedAt = System.nanoTime()
-                val eligibleRenders = renders.filter { (time, stats) ->
-                    time > releaseAt && time < acknowledgedAt && stats.mode == RenderStats.Mode.Full
-                }.map { it.second.frameCount }
-                assertTrue("Native Full renders must follow installation, coverage and native delivery: $eligibleRenders",
-                    installedAt < coverageAt && coverageAt < releaseAt && eligibleRenders.size >= 4 &&
-                        eligibleRenders.zipWithNext().all { it.first < it.second })
-                assertTrue("No sampled handoff image may be a blank blue map: $transitionPixels",
-                    transitionPixels.all { isRed(it) || isGreen(it) })
+                awaitColor(red = false)
                 println("RADAR_BUFFERED_PENDING_PIXELS=$pendingPixels")
-                println("RADAR_BUFFERED_TRANSITION_PIXELS=$transitionPixels")
-                println("RADAR_BUFFERED_POST_DELIVERY_FULL_FRAMES=$eligibleRenders")
                 await { runBlocking { map.withPlatformMap { this.map.styleLayerIds().count { it.startsWith("hlu-radar-layer-") } == 1 } } }
                 assertTrue(nativeCalls.isNotEmpty() && nativeCalls.all { it.storagePolicy == MapResourceLoadRequest.StoragePolicy.Volatile })
                 scenario.onActivity { controller.update(null, RadarProvider.RAINVIEWER) }
@@ -454,7 +404,7 @@ class RadarBufferedRendererRuntimeTest {
                             if (managed.value) BackgroundLayer("compose-owned", opacity = const(0f))
                         }
                         SideEffect { mapRef.set(map) }
-                        WeatherRadarRenderer(map, resources, radar.value, selected.value) {
+                        WeatherRadarRenderer(map, resources, radar.value, selected.value, metadata = null, retryToken = 0) {
                             display.set(it)
                             displayHistory.add(it)
                         }
@@ -470,7 +420,7 @@ class RadarBufferedRendererRuntimeTest {
                 val first = config(1700000001)
                 val third = config(1700000003)
                 await { display.get().displayed == first.frame.identity(first.host) }
-                println("RADAR_COMPOSED_STEP=first-rendered")
+                println("RADAR_COMPOSED_STEP=first-accepted")
                 phase("first-red-pixel")
                 awaitColor(red = true)
                 val map = requireNotNull(mapRef.get())
@@ -493,7 +443,7 @@ class RadarBufferedRendererRuntimeTest {
                 scenario.onActivity { radar.value = third }
                 phase("frame-c-display-ack")
                 await { display.get().displayed == third.frame.identity(third.host) }
-                println("RADAR_COMPOSED_STEP=rapid-selection-rendered")
+                println("RADAR_COMPOSED_STEP=rapid-selection-accepted")
                 phase("frame-c-green-pixel")
                 awaitColor(red = false)
                 gateB.complete(Unit)
@@ -569,7 +519,6 @@ class RadarBufferedRendererRuntimeTest {
                 println("RADAR_COMPOSED_STEP=resumed-rendered")
                 val afterResume = frameEvents.filter { it.first >= resumedAt && it.second.mode == RenderStats.Mode.Full }
                     .map { it.second.frameCount }
-                assertTrue("Resume must be acknowledged after native Full render events", afterResume.isNotEmpty())
                 println("RADAR_COMPOSED_RESUME_FULL_COUNTS before=$beforeStop after=$afterResume")
                 scenario.onActivity { selected.value = RadarProvider.LIBREWXR }
                 phase("provider-cleared")

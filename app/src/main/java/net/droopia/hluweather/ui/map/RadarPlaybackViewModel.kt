@@ -151,7 +151,8 @@ class RadarPlaybackViewModel(
 
     /**
      * Accept renderer state only for the exact currently requested provider/frame identity. The
-     * renderer may report the old same-provider front while a replacement is pending.
+     * renderer may report the old same-provider front while a replacement is pending. In the
+     * default renderer, displayed means the guarded promotion was accepted, not that pixels drew.
      */
     fun onDisplayChanged(display: RadarDisplayState) {
         val current = _state.value
@@ -176,7 +177,7 @@ class RadarPlaybackViewModel(
             displayedFrameTimeLabel = displayedFrame?.let {
                 Instant.fromEpochSeconds(it.timestampSeconds).dateTimeText(timeZone())
             },
-            isPending = error == null && display.displayed != requested,
+            isPending = error == null && (display.pending || display.displayed != requested),
             displayError = error
         )
         if (error != null) pause()
@@ -188,7 +189,8 @@ class RadarPlaybackViewModel(
 
         _state.value = current.copy(
             isPlaying = true,
-            isPending = current.requestedFrameIdentity != current.displayedFrameIdentity,
+            isPending = current.isPending || current.requestedFrameIdentity != current.displayedFrameIdentity ||
+                current.displayError != null,
             displayError = null,
             displayRetryToken = current.displayRetryToken + if (current.displayError != null) 1 else 0
         )
@@ -313,7 +315,7 @@ class RadarPlaybackViewModel(
         }
     }
 
-    /** Returns only when this exact request is displayed or the wait must stop/rebind. */
+    /** Returns only when this exact request is accepted or the wait must stop/rebind. */
     private suspend fun awaitDisplayed(identity: RadarFrameIdentity): RadarPlaybackState? {
         val result = state.first { current ->
             !current.isVisible || !current.isPlaying ||
@@ -372,7 +374,9 @@ class RadarPlaybackViewModel(
             forecastOffsetSeconds = offsetSeconds,
             forecastOffsetLabel = offsetSeconds?.formatForecastOffset(),
             isPending = if (forcePending) {
-                isVisible && identity != null && identity != displayedFrameIdentity
+                isVisible && identity != null &&
+                    (identity != requestedFrameIdentity || identity != displayedFrameIdentity ||
+                        isPending || retryToken != displayRetryToken)
             } else {
                 isPending
             },

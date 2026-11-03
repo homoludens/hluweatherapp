@@ -4,15 +4,19 @@ package net.droopia.hluweather.ui.map
 
 import androidx.lifecycle.viewModelScope
 import java.time.ZoneId
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -25,6 +29,7 @@ import net.droopia.hluweather.data.model.RadarFrameIdentity
 import net.droopia.hluweather.data.model.RadarFrameType
 import net.droopia.hluweather.data.model.RadarMetadata
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.RadarTileCoordinate
 import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.repository.RadarRepository
 import org.junit.Assert.assertEquals
@@ -165,6 +170,66 @@ class RadarPlaybackViewModelTest {
             assertEquals(observed1, viewModel.state.value.requestedFrame)
             assertTrue(viewModel.state.value.isPending)
             viewModel.pause()
+        }
+    }
+
+    @Test
+    fun playback_waits_for_controller_coverage_and_viewport_acceptance_without_render_events() = runTest {
+        val repository = TestRadarRepository(backgroundScope)
+        withViewModel(repositories(repository)) { viewModel ->
+            val observed = frame("2026-11-01T20:00:00Z")
+            val forecast = frame("2026-11-01T20:10:00Z", RadarFrameType.FORECAST)
+            val metadata = metadata(observed, forecast)
+            val backend = PlaybackBackend()
+            val controller = RadarRenderController(backgroundScope, backend)
+            val initialCoordinates = listOf(RadarTileCoordinate(3, 1, 1))
+            backgroundScope.launch { controller.state.collect(viewModel::onDisplayChanged) }
+            backgroundScope.launch {
+                viewModel.state.map { it.requestedFrameIdentity }.distinctUntilChanged().collect { identity ->
+                    if (identity != null) {
+                        val selected = metadata.frames.single { it.identity(metadata.host) == identity }
+                        controller.update(
+                            RadarRenderRequest(WeatherMapRadarConfig(metadata.host, selected), initialCoordinates, 1),
+                            identity.provider
+                        )
+                    }
+                }
+            }
+            viewModel.setVisible(true)
+            repository.publish(metadata)
+            runCurrent()
+            viewModel.play(); runCurrent()
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS * 3); runCurrent()
+            assertEquals(observed, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
+
+            backend.ready(1); runCurrent()
+            assertEquals(observed, viewModel.state.value.displayedFrame)
+            assertFalse(viewModel.state.value.isPending)
+            // The identity is unchanged, but a new viewport still needs its own accepted coverage.
+            controller.update(
+                RadarRenderRequest(
+                    WeatherMapRadarConfig(metadata.host, observed),
+                    listOf(RadarTileCoordinate(3, 2, 2)), 1
+                ), RadarProvider.LIBREWXR
+            )
+            runCurrent()
+            assertEquals(observed, viewModel.state.value.displayedFrame)
+            assertTrue(viewModel.state.value.isPending)
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS * 3); runCurrent()
+            assertEquals(observed, viewModel.state.value.requestedFrame)
+            backend.ready(2); runCurrent()
+            assertFalse(viewModel.state.value.isPending)
+            advanceTimeBy(RADAR_PLAYBACK_INTERVAL_MILLIS); runCurrent()
+            assertEquals(forecast, viewModel.state.value.requestedFrame)
+            assertTrue(viewModel.state.value.isPending)
+            backend.ready(3); runCurrent()
+            assertEquals(forecast, viewModel.state.value.displayedFrame)
+            assertFalse(viewModel.state.value.isPending)
+            assertEquals(setOf(3L), backend.activeSlots)
+            viewModel.pause()
+            controller.close()
+            assertTrue(backend.activeSlots.isEmpty())
         }
     }
 
@@ -399,6 +464,35 @@ class RadarPlaybackViewModelTest {
         viewModel.onDisplayChanged(
             RadarDisplayState(requested = requested, displayed = displayed, pending = displayed != requested)
         )
+    }
+
+    private class PlaybackBackend : RadarRenderBackend {
+        val activeSlots = mutableSetOf<Long>()
+        private val coverage = mutableMapOf<Long, CompletableDeferred<Unit>>()
+        override fun create(slot: RadarRenderSlot) {
+            activeSlots += slot.id
+            coverage[slot.id] = CompletableDeferred()
+        }
+        override suspend fun install(slot: RadarRenderSlot, opacity: Float, guard: RadarMutationGuard) {
+            check(guard {})
+        }
+        override suspend fun paint(slot: RadarRenderSlot, opacity: Float, guard: RadarMutationGuard) {
+            check(guard {})
+        }
+        override suspend fun promote(
+            next: RadarRenderSlot, previous: RadarRenderSlot?, opacity: Float, guard: RadarMutationGuard
+        ) {
+            check(guard {})
+        }
+        override suspend fun rollback(
+            failed: RadarRenderSlot, previous: RadarRenderSlot?, opacity: Float, guard: RadarMutationGuard
+        ) = error("Default accepted promotions must not be rolled back")
+        override suspend fun awaitCoverage(slot: RadarRenderSlot) = coverage.getValue(slot.id).await()
+        override suspend fun awaitFullRender(
+            slot: RadarRenderSlot, viewport: RadarRenderRequest, guard: RadarMutationGuard
+        ) = error("Default playback must not wait for full-map render events")
+        override suspend fun remove(slot: RadarRenderSlot) { activeSlots.remove(slot.id) }
+        fun ready(id: Long) { coverage.getValue(id).complete(Unit) }
     }
 
     private class TestRadarRepository(scope: CoroutineScope) : RadarRepository {

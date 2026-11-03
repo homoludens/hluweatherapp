@@ -26,7 +26,7 @@ internal data class RadarRenderRequest(
     val identity: RadarFrameIdentity get() = config.frame.identity(config.host)
 }
 
-/** Renderer state only; playback/UI acknowledgment policy is owned by the caller. */
+/** In speed-first mode, displayed means submitted to the native map, not confirmed drawn. */
 data class RadarDisplayState(
     val requested: RadarFrameIdentity? = null,
     val displayed: RadarFrameIdentity? = null,
@@ -67,14 +67,15 @@ internal interface RadarRenderBackend {
 }
 
 /**
- * Two slots, latest request wins. A retained old slot cannot be recycled until the promoted
- * revision has rendered. All public calls and coroutine continuations run on the owning UI scope;
- * the lock also arbitrates with the native owner thread at the instant it applies a command.
+ * Two slots, latest request wins. By default, coverage and accepted paint commands suffice;
+ * optional conservative render barriers remain available for diagnostics. All continuations run on
+ * the owning UI scope; the lock also arbitrates with the native owner thread when it applies a command.
  */
 internal class RadarRenderController(
     private val scope: CoroutineScope,
     private val backend: RadarRenderBackend,
-    private val timeoutMillis: Long = 45_000
+    private val timeoutMillis: Long = 45_000,
+    private val waitForFullRender: Boolean = false
 ) {
     private val lock = Any()
     private val mutex = Mutex()
@@ -91,6 +92,8 @@ internal class RadarRenderController(
         val opacity: Float,
         var failed: Boolean = false
     )
+    // Promotion may throw after applying some native properties but before its guard completes.
+    private var promoting: Promotion? = null
     private var unacknowledged: Promotion? = null
     private var frontVisible = false
     private var nextSlot = 0L
@@ -121,16 +124,20 @@ internal class RadarRenderController(
                     val retain = front?.let { it.request.styleEpoch == styleEpoch && it.request.identity.provider == provider } == true
                     if (!retain) removeAll()
                     else {
+                        promoting?.let { restoreAttempted(it, token, it.opacity) }
                         staging?.let { backend.remove(it); staging = null }
                         unacknowledged?.let { rollback(it, token, it.opacity) }
                         staging?.let { backend.remove(it); staging = null }
+                        if (!waitForFullRender) retired?.let { backend.remove(it); retired = null }
                     }
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                if (serial.get() == token) {
-                    mutableState.value = mutableState.value.copy(error = "$message; restore failed: ${error.message}")
+                synchronized(lock) {
+                    if (serial.get() == token) {
+                        mutableState.value = mutableState.value.copy(error = "$message; restore failed: ${error.message}")
+                    }
                 }
             }
         }
@@ -158,13 +165,19 @@ internal class RadarRenderController(
         synchronized(lock) {
             if (serial.get() != token) false else {
                 mutation()
-                onApplied()
-                true
+                // A native callback can synchronously invalidate this request on the owner thread.
+                if (serial.get() != token) false else {
+                    onApplied()
+                    true
+                }
             }
         }
     }
 
     private suspend fun reconcile(token: Long, request: RadarRenderRequest?, provider: RadarProvider?) {
+        // Written under the same guard as the native swap. A timeout/cancellation can happen after
+        // the owner thread applied the swap but before its coroutine continuation resumes.
+        var accepted = false
         try {
             mutex.withLock {
                 if (serial.get() != token) return
@@ -177,12 +190,13 @@ internal class RadarRenderController(
                     if (request == null || request.config.frame.provider != provider) return
                 }
 
-                // A cancelled request may have left an installed staging slot, but never removes
-                // the current front. Unique slot IDs make removal safe even after supersession.
-                staging?.let { backend.remove(it); staging = null }
                 if (request == null || serial.get() != token) return
-
                 val opacity = request.config.opacity.coerceIn(0f, 1f)
+
+                // A failed or cancelled mutation may have changed either opacity before throwing.
+                // Restore with the latest generation (at zero when hiding) before removing staging.
+                promoting?.let { restoreAttempted(it, token, opacity) }
+                staging?.let { backend.remove(it); staging = null }
                 if (opacity == 0f) {
                     // A hidden, unacknowledged promotion must not later be acknowledged by a
                     // Full render of an invisible layer. Restore it before the next visible request.
@@ -191,8 +205,15 @@ internal class RadarRenderController(
                     }
                     front?.let { backend.paint(it, 0f, guard(token)) }
                     retired?.let { backend.paint(it, 0f, guard(token)) }
-                    frontVisible = false
-                    mutableState.value = mutableState.value.copy(pending = false)
+                    synchronized(lock) {
+                        if (serial.get() == token) {
+                            frontVisible = false
+                            mutableState.value = mutableState.value.copy(pending = false)
+                        }
+                    }
+                    if (!waitForFullRender && serial.get() == token) {
+                        retired?.let { backend.remove(it); retired = null }
+                    }
                     return
                 }
 
@@ -202,29 +223,34 @@ internal class RadarRenderController(
                 staging?.let { backend.remove(it); staging = null }
 
                 // A cancelled selection may have applied a swap even when there was no old slot.
-                // Require its later render before acknowledging it or recycling either slot.
+                // Conservative diagnostics require its later render before recycling either slot.
                 if (unacknowledged != null || retired != null) {
                     val current = requireNotNull(front)
-                    withTimeout(timeoutMillis) { backend.awaitFullRender(current, request, guard(token)) }
-                    if (serial.get() != token) return
-                    if (unacknowledged != null) {
-                        unacknowledged = null
-                        mutableState.value = mutableState.value.copy(displayed = current.request.identity)
+                    if (waitForFullRender) {
+                        withTimeout(timeoutMillis) { backend.awaitFullRender(current, request, guard(token)) }
                     }
+                    val stillCurrent = synchronized(lock) {
+                        if (serial.get() != token) false else {
+                            if (unacknowledged != null) {
+                                unacknowledged = null
+                                mutableState.value = mutableState.value.copy(displayed = current.request.identity)
+                            }
+                            true
+                        }
+                    }
+                    if (!stillCurrent) return
                     retired?.let { backend.remove(it); retired = null }
                 }
 
                 val current = front
                 if (current != null && frontVisible) {
-                    backend.paint(current, opacity, guard(token))
-                    if (serial.get() != token) return
-                    if (current.request.identity == request.identity &&
+                    val sameFrame = current.request.identity == request.identity &&
                         current.request.coordinates == request.coordinates &&
                         current.request.styleEpoch == request.styleEpoch
-                    ) {
-                        mutableState.value = mutableState.value.copy(pending = false, error = null)
-                        return
-                    }
+                    backend.paint(current, opacity, guard(token) {
+                        if (sameFrame) mutableState.value = mutableState.value.copy(pending = false, error = null)
+                    })
+                    if (serial.get() != token || sameFrame) return
                 }
 
                 val next = RadarRenderSlot(++nextSlot, request)
@@ -236,34 +262,91 @@ internal class RadarRenderController(
                         backend.install(next, minOf(opacity, STAGING_OPACITY), guard(token))
                         coverage.await()
                     }
-                    backend.awaitFullRender(next, request, guard(token))
+                    if (waitForFullRender) backend.awaitFullRender(next, request, guard(token))
+                    synchronized(lock) {
+                        if (serial.get() != token) throw CancellationException("Obsolete radar promotion")
+                        promoting = Promotion(next, current, opacity)
+                    }
                     backend.promote(next, current, opacity, guard(token) {
+                        promoting = null
                         front = next
                         staging = null
                         retired = current
                         frontVisible = true
-                        unacknowledged = Promotion(next, current, opacity)
+                        if (waitForFullRender) {
+                            unacknowledged = Promotion(next, current, opacity)
+                        } else {
+                            // Acknowledge in the native mutation guard so cancellation cannot leave
+                            // an accepted promotion recorded as the old frame. This is not draw proof.
+                            accepted = true
+                            mutableState.value = mutableState.value.copy(
+                                displayed = request.identity, pending = false, error = null
+                            )
+                        }
                     })
-                    // Do not report a displayed frame or recycle its predecessor merely because
-                    // the paint commands were accepted; wait for the promoted revision to render.
-                    backend.awaitFullRender(next, request, guard(token))
+                    if (waitForFullRender) backend.awaitFullRender(next, request, guard(token))
                 }
-                if (serial.get() != token) return
-                unacknowledged = null
-                mutableState.value = mutableState.value.copy(displayed = request.identity, pending = false, error = null)
+                val stillCurrent = synchronized(lock) {
+                    if (serial.get() != token) false else {
+                        if (waitForFullRender) {
+                            unacknowledged = null
+                            mutableState.value = mutableState.value.copy(
+                                displayed = request.identity, pending = false, error = null
+                            )
+                        }
+                        true
+                    }
+                }
+                if (!stillCurrent) return
                 retired?.let { backend.remove(it); retired = null }
             }
         } catch (error: CancellationException) {
-            if (error is kotlinx.coroutines.TimeoutCancellationException && serial.get() == token) {
-                fail(token, request, "Radar rendering timed out")
+            if (error is kotlinx.coroutines.TimeoutCancellationException) {
+                val outcome = failureOutcome(token) { accepted }
+                if (outcome != null) {
+                    if (outcome == token) cleanupAccepted(token)
+                    else fail(outcome, request, "Radar rendering timed out")
+                }
             } else {
+                // Usually a new request/close owns cleanup. If only this child was cancelled,
+                // finish it in a sibling job instead of retaining an accepted predecessor forever.
+                val outcome = failureOutcome(token) { accepted }
+                if (outcome != null) scope.launch {
+                    if (outcome == token) cleanupAccepted(token)
+                    else fail(outcome, request, "Radar rendering cancelled")
+                }
                 throw error
             }
         } catch (error: Exception) {
-            if (serial.get() == token) {
-                fail(token, request, error.message ?: "Radar unavailable")
+            val outcome = failureOutcome(token) { accepted }
+            if (outcome != null) {
+                if (outcome == token) cleanupAccepted(token)
+                else fail(outcome, request, error.message ?: "Radar unavailable")
             }
         }
+    }
+
+    /** Return the original token for an accepted swap, a new failure token, or null if obsolete. */
+    private fun failureOutcome(token: Long, accepted: () -> Boolean): Long? = synchronized(lock) {
+        if (serial.get() != token) null else if (accepted()) token else serial.incrementAndGet()
+    }
+
+    private suspend fun cleanupAccepted(token: Long) {
+        try {
+            mutex.withLock {
+                if (serial.get() != token) return
+                retired?.let { backend.remove(it); retired = null }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Retain the lease if native removal failed; the next request or close retries it.
+        }
+    }
+
+    /** Repair a possibly partial swap before releasing its staging source. */
+    private suspend fun restoreAttempted(promotion: Promotion, token: Long, opacity: Float) {
+        backend.rollback(promotion.next, promotion.previous, opacity, guard(token) { promoting = null })
     }
 
     private suspend fun rollback(promotion: Promotion, token: Long, opacity: Float) {
@@ -284,26 +367,33 @@ internal class RadarRenderController(
         mutex.withLock {
             if (serial.get() != token) return
             try {
+                promoting?.let { restoreAttempted(it, token, it.opacity) }
                 unacknowledged?.let { rollback(it, token, it.opacity) }
                 staging?.let { backend.remove(it); staging = null }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                if (serial.get() == token) {
-                    mutableState.value = mutableState.value.copy(pending = false, error = "$message; restore failed: ${error.message}")
+                synchronized(lock) {
+                    if (serial.get() == token) {
+                        mutableState.value = mutableState.value.copy(pending = false, error = "$message; restore failed: ${error.message}")
+                    }
                 }
                 return
             }
-            if (serial.get() != token) return
-            mutableState.value = mutableState.value.copy(pending = false, error = message)
+            synchronized(lock) {
+                if (serial.get() != token) return
+                mutableState.value = mutableState.value.copy(pending = false, error = message)
+            }
 
-            // Keep the failed slot hidden until the restored front has actually rendered. If that
-            // render also fails, the next request resumes this barrier before reusing the slot.
+            // Diagnostic mode retains the failed slot until the restored front has rendered.
+            // Otherwise cleanup needs no render events; failed removals are retried later.
             val restored = front
             val failed = retired
             if (restored != null && failed != null && request != null) {
                 try {
-                    withTimeout(timeoutMillis) { backend.awaitFullRender(restored, request, guard(token)) }
+                    if (waitForFullRender) {
+                        withTimeout(timeoutMillis) { backend.awaitFullRender(restored, request, guard(token)) }
+                    }
                     if (serial.get() == token) {
                         backend.remove(failed)
                         retired = null
@@ -319,7 +409,12 @@ internal class RadarRenderController(
 
     /** Invalidate queued native commands immediately; cleanup may finish after the map closes. */
     suspend fun close() {
-        synchronized(lock) { serial.incrementAndGet() }
+        synchronized(lock) {
+            serial.incrementAndGet()
+            input = null
+            selectedProvider = null
+            mutableState.value = RadarDisplayState()
+        }
         work?.cancel()
         mutex.withLock { removeAll() }
     }
@@ -330,6 +425,7 @@ internal class RadarRenderController(
         retired = null
         front = null
         frontVisible = false
+        promoting = null
         unacknowledged = null
     }
 
