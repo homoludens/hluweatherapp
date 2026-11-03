@@ -53,13 +53,13 @@ class RadarResourceRuntimeTest {
     @Test
     fun volatileHookRendersAndCoversNativeTilesAcrossCameraCases() = runBlocking {
         val cameras = listOf(
-            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 32.0, target = Position(179.5, 20.0), zoom = 3.6), 5),
-            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 0.0, target = Position(-179.5, -20.0), zoom = 3.3), 4),
-            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 35.0, tilt = 45.0, target = Position(179.5, 50.0), zoom = 3.6), 5),
-            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 12.0, tilt = 60.0, target = Position(24.9, 60.2), zoom = 9.0), 7),
-            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 45.0, target = Position(25.0, 60.0), zoom = 9.0), 7),
-            CameraCase(RadarProvider.LIBREWXR, CameraPosition(bearing = 18.0, target = Position(540.0, 0.0), zoom = 0.0), 1),
-            CameraCase(RadarProvider.LIBREWXR, CameraPosition(bearing = 27.0, target = Position(24.9, 60.2), zoom = 14.0), 12)
+            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 32.0, target = Position(179.5, 20.0), zoom = 3.6), 3),
+            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 0.0, target = Position(-179.5, -20.0), zoom = 3.3), 2),
+            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 35.0, tilt = 45.0, target = Position(179.5, 50.0), zoom = 3.6), 3),
+            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 12.0, tilt = 60.0, target = Position(24.9, 60.2), zoom = 9.0), 5),
+            CameraCase(RadarProvider.RAINVIEWER, CameraPosition(bearing = 45.0, target = Position(25.0, 60.0), zoom = 9.0), 5),
+            CameraCase(RadarProvider.LIBREWXR, CameraPosition(bearing = 18.0, target = Position(540.0, 0.0), zoom = 1.0), 0),
+            CameraCase(RadarProvider.LIBREWXR, CameraPosition(bearing = 27.0, target = Position(24.9, 60.2), zoom = 14.0), 10)
         )
         LocalTileServer(png(Color.BLUE)).use { server ->
             for ((index, case) in cameras.withIndex()) {
@@ -86,7 +86,13 @@ class RadarResourceRuntimeTest {
                         return bridge.load(request).also(results::add)
                     }
                 }
-                server.style = style(server.port, source.template, maxZoom = RadarProviderDescriptors[case.provider].nativeMaxZoom)
+                val descriptor = RadarProviderDescriptors[case.provider]
+                server.style = style(
+                    server.port,
+                    source.template,
+                    maxZoom = RadarTileCoverage.renderMaxZoom(descriptor),
+                    tileSize = RadarTileCoverage.RENDER_TILE_SIZE
+                )
                 val cache = testCache("coverage-$index")
                 val runtime = createMapRuntime(radarMapRuntimeOptions(cache, bridge).copy(resourceProvider = recording))
                 val viewport = AtomicReference<Viewport?>()
@@ -101,7 +107,7 @@ class RadarResourceRuntimeTest {
                     assertTrue("No layer means no radar demand", accepted.isEmpty())
                     val bounds = radarViewportBounds(requireNotNull(viewport.get()), case.camera)
                     val coverage = RadarTileCoverage.tiles(bounds, RadarProviderDescriptors[case.provider])
-                    assertEquals(setOf(case.nativeZoom), coverage.map { it.zoom }.toSet())
+                    assertEquals(setOf(case.coarseZoom), coverage.map { it.zoom }.toSet())
                     // Real native display must reuse the exact bytes prefetched by the shared loader.
                     coverage.forEach { loader.load(source.tile(it), speculative = true) }
                     val prefetched = network.size
@@ -113,13 +119,16 @@ class RadarResourceRuntimeTest {
                         snapshotter.capture(MapSnapshotRequest(512, 512, cameraPosition = case.camera))
                     }
                     val center = image.toPixelMap()[256, 256]
+                    val nativeCoordinates = accepted.mapNotNull { registry.resolve(it.url)?.coordinate }
+                    println("RADAR_RESOURCE_NATIVE_CASE=provider=${case.provider} zoom=${case.camera.zoom} " +
+                        "coverage=$coverage native=$nativeCoordinates results=${results.map { it::class.simpleName }} network=${network.size}")
                     assertTrue("Radar must actually render over the basemap: $center", center.red > 0.9f && center.blue < 0.1f)
                     assertTrue("Native style and basemap must be declined", declined.any { it.kind == MapResourceKind.Style } && declined.any { it.url.contains("/base/") })
                     assertTrue("Radar callbacks must be volatile", accepted.isNotEmpty() && accepted.all { it.storagePolicy == MapResourceLoadRequest.StoragePolicy.Volatile })
                     assertTrue("The real hook must return bytes", results.any { it is MapResourceLoad.Bytes })
-                    val emitted = accepted.mapNotNull { registry.resolve(it.url)?.coordinate }.toSet()
+                    val emitted = nativeCoordinates.toSet()
                     assertTrue("No native radar tiles emitted", emitted.isNotEmpty())
-                    assertEquals(setOf(case.nativeZoom), emitted.map { it.zoom }.toSet())
+                    assertEquals(setOf(case.coarseZoom), emitted.map { it.zoom }.toSet())
                     assertTrue("Viewport coverage misses native tiles ${emitted - coverage.toSet()} for $bounds", coverage.containsAll(emitted))
                     assertEquals("Native display must reuse prefetched bytes: ${accepted.map { it.loadingMethod }}", prefetched, network.size)
                 } finally {
@@ -199,7 +208,7 @@ class RadarResourceRuntimeTest {
         }
     }
 
-    private data class CameraCase(val provider: RadarProvider, val camera: CameraPosition, val nativeZoom: Int)
+    private data class CameraCase(val provider: RadarProvider, val camera: CameraPosition, val coarseZoom: Int)
 
     private fun testCache(name: String) = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
         .resolve("radar-$name-${System.nanoTime()}").apply { mkdirs() }
@@ -212,11 +221,11 @@ class RadarResourceRuntimeTest {
             }
         }
 
-    private fun style(port: Int, radar: String, other: String? = null, maxZoom: Int = 7): String {
+    private fun style(port: Int, radar: String, other: String? = null, maxZoom: Int = 7, tileSize: Int = 256): String {
         val extra = other?.let { ",\"cacheable\":{\"type\":\"raster\",\"tiles\":[\"$it\"],\"tileSize\":256,\"maxzoom\":7}" }.orEmpty()
         return """{"version":8,"sources":{
           "base":{"type":"raster","tiles":["http://127.0.0.1:$port/base/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":7},
-          "radar":{"type":"raster","tiles":["$radar"],"tileSize":256,"maxzoom":$maxZoom}$extra
+          "radar":{"type":"raster","tiles":["$radar"],"tileSize":$tileSize,"maxzoom":$maxZoom}$extra
         },"layers":[{"id":"base","type":"raster","source":"base","paint":{"raster-fade-duration":0}}]}""".trimIndent()
     }
 

@@ -266,7 +266,7 @@ class RadarBufferedRendererRuntimeTest {
                                 "empty":{"type":"geojson","data":{"type":"FeatureCollection","features":[]}}},
                                 "layers":[{"id":"base","type":"background","paint":{"background-color":"#0000ff"}},
                                 {"id":"labels","type":"symbol","source":"empty"}]}"""),
-                            initialCameraPosition = CameraPosition(zoom = 0.0)
+                            initialCameraPosition = CameraPosition(zoom = 9.0)
                         )
                         SideEffect { mapRef.set(map) }
                         MaplibreMap(Modifier.fillMaxSize(), state = map, overlay = {})
@@ -295,6 +295,11 @@ class RadarBufferedRendererRuntimeTest {
                 }
                 val first = request(1700000001)
                 val second = request(1700000002)
+                val expectedCoarseZoom = RadarTileCoverage.renderMaxZoom(
+                    RadarProviderDescriptors[RadarProvider.RAINVIEWER]
+                )
+                assertTrue("High-zoom viewport must use the coarse render cap", second.coordinates.isNotEmpty() &&
+                    second.coordinates.all { it.zoom == expectedCoarseZoom })
                 scenario.onActivity { controller.update(first, RadarProvider.RAINVIEWER) }
                 await { controller.state.value.displayed == first.identity }
                 awaitColor(red = true)
@@ -330,6 +335,30 @@ class RadarBufferedRendererRuntimeTest {
                 assertEquals(0.75f, promotedOpacity, 0f)
                 gate.complete(Unit)
                 awaitColor(red = false)
+                val secondNativeCoordinates = nativeCalls.mapNotNull { call ->
+                    registry.resolve(call.url)?.takeIf { it.url.contains("1700000002") }?.coordinate
+                }
+                assertTrue("MapLibre must request native radar tiles for the promoted frame", secondNativeCoordinates.isNotEmpty())
+                assertTrue("MapLibre must request the planned coarse zoom $expectedCoarseZoom: $secondNativeCoordinates",
+                    secondNativeCoordinates.any { it.zoom == expectedCoarseZoom })
+                assertTrue("Native requests must not exceed the coarse render cap $expectedCoarseZoom: $secondNativeCoordinates",
+                    secondNativeCoordinates.all { it.zoom <= expectedCoarseZoom })
+                val frameTransportCount = transportCalls.count { it.contains("1700000002") }
+                delay(5_000) // Keep the camera stationary to catch any deferred detail-upgrade pass.
+                val settledNativeCoordinates = nativeCalls.mapNotNull { call ->
+                    registry.resolve(call.url)?.takeIf { it.url.contains("1700000002") }?.coordinate
+                }
+                assertTrue("The planned coarse zoom must remain requested: $settledNativeCoordinates",
+                    settledNativeCoordinates.any { it.zoom == expectedCoarseZoom })
+                assertTrue("No detailed native request may exceed the coarse render cap $expectedCoarseZoom: $settledNativeCoordinates",
+                    settledNativeCoordinates.all { it.zoom <= expectedCoarseZoom })
+                assertEquals("Stationary viewport must not trigger later detail downloads", frameTransportCount,
+                    transportCalls.count { it.contains("1700000002") })
+                println("RADAR_NATIVE_COARSE_REQUESTS=zooms=${settledNativeCoordinates.map { it.zoom }.distinct().sorted()} " +
+                    "callbacks=${settledNativeCoordinates.size} coordinates=${settledNativeCoordinates.distinct().sortedWith(
+                        compareBy<net.droopia.hluweather.data.model.RadarTileCoordinate> { it.zoom }
+                            .thenBy { it.x }.thenBy { it.y }
+                    )} networkAttempts=$frameTransportCount delayedNetworkAttempts=0 stationaryObservationMs=5000")
                 println("RADAR_BUFFERED_PENDING_PIXELS=$pendingPixels")
                 await { runBlocking { map.withPlatformMap { this.map.styleLayerIds().count { it.startsWith("hlu-radar-layer-") } == 1 } } }
                 assertTrue(nativeCalls.isNotEmpty() && nativeCalls.all { it.storagePolicy == MapResourceLoadRequest.StoragePolicy.Volatile })
