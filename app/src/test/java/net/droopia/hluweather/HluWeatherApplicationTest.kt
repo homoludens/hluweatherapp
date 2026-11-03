@@ -125,8 +125,8 @@ class HluWeatherApplicationTest {
         assertEquals(R.drawable.hluweatherapp_icon, icon)
         assertEquals("hluweatherapp_icon", application.resources.getResourceEntryName(icon))
         assertEquals("drawable", application.resources.getResourceTypeName(icon))
-        assertEquals(42, packageInfo.versionCode)
-        assertEquals("3.6.3", packageInfo.versionName)
+        assertEquals(44, packageInfo.versionCode)
+        assertEquals("3.7.3", packageInfo.versionName)
     }
 
     @Test
