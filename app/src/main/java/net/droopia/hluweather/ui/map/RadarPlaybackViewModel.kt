@@ -27,6 +27,7 @@ import net.droopia.hluweather.data.repository.RadarMetadataState
 import net.droopia.hluweather.data.repository.RadarRepository
 import kotlin.time.Instant
 
+/** Display time after accepted promotion; preparation and renderer events are not clock inputs. */
 internal const val RADAR_PLAYBACK_INTERVAL_MILLIS = 600L
 
 data class RadarPlaybackState(
@@ -37,6 +38,7 @@ data class RadarPlaybackState(
     val frames: List<RadarFrame> = emptyList(),
     val requestedFrame: RadarFrame? = null,
     val requestedFrameIdentity: RadarFrameIdentity? = null,
+    /** Accepted/submitted by the renderer, not confirmation that native pixels were drawn. */
     val displayedFrame: RadarFrame? = null,
     val displayedFrameIdentity: RadarFrameIdentity? = null,
     val displayedFrameTimeLabel: String? = null,
@@ -286,6 +288,8 @@ class RadarPlaybackViewModel(
                 continue
             }
             requestedIdentity = readyIdentity
+            // Only an exact accepted display starts this single interval. Optional preparation
+            // and native render diagnostics deliberately do not restart or postpone it.
             delay(RADAR_PLAYBACK_INTERVAL_MILLIS)
 
             val current = _state.value

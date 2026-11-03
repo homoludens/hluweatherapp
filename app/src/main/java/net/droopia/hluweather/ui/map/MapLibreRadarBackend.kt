@@ -32,7 +32,10 @@ import org.maplibre.compose.sources.TileCoordinateSystem
 import org.maplibre.compose.sources.TileSetOptions
 import org.maplibre.compose.sources.isVolatile
 
-/** Counts actual Full events locally; native frameCount can reset when a surface is recreated. */
+/**
+ * Counts Full events for opt-in diagnostics; native frameCount may reset, and this is not a
+ * playback acknowledgment.
+ */
 internal class RadarFullRenderEvents {
     private val mutableOrdinal = MutableStateFlow(0L)
     val ordinal = mutableOrdinal.asStateFlow()

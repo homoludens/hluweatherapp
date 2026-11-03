@@ -198,6 +198,8 @@ fun WeatherScreen(
     } else {
         null
     }
+    // Renderer-only preparation hint: playback retains selection ownership until its accepted
+    // display interval ends.
     val radarNextPlaybackFrame = if (radarStateForProvider.isPlaying && selectedRadar != null) {
         radarStateForProvider.metadata?.let { metadata ->
             radarStateForProvider.requestedFrameIdentity?.let { requested ->
