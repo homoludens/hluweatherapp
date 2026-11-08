@@ -1,0 +1,60 @@
+{
+  "type": "Feature",
+  "properties": {
+    "meta": {
+      "units": {
+        "air_temperature": "celsius",
+        "dew_point_temperature": "celsius",
+        "relative_humidity": "%",
+        "wind_speed": "m/s",
+        "wind_from_direction": "degrees",
+        "precipitation_amount": "mm",
+        "probability_of_precipitation": "%"
+      }
+    },
+    "timeseries": [
+      {
+        "time": "2026-11-09T09:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "air_temperature": 8.4,
+              "dew_point_temperature": 5.4,
+              "relative_humidity": 82.0,
+              "wind_speed": 3.4,
+              "wind_from_direction": 245.0
+            }
+          },
+          "next_1_hours": {
+            "summary": {"symbol_code": "rain"},
+            "details": {
+              "precipitation_amount": 0.2,
+              "probability_of_precipitation": 40.0
+            }
+          }
+        }
+      },
+      {
+        "time": "2026-11-09T10:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "air_temperature": 9.1,
+              "dew_point_temperature": 5.5,
+              "relative_humidity": 78.0,
+              "wind_speed": 3.6,
+              "wind_from_direction": 250.0
+            }
+          },
+          "next_6_hours": {
+            "summary": {"symbol_code": "rain"},
+            "details": {
+              "precipitation_amount": 4.5,
+              "probability_of_precipitation": 70.0
+            }
+          }
+        }
+      }
+    ]
+  }
+}

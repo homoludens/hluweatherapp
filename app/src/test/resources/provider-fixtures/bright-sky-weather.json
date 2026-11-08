@@ -1,0 +1,60 @@
+{
+  "weather": [
+    {
+      "timestamp": "2026-11-09T09:00:00+01:00",
+      "source_id": 6007,
+      "temperature": 8.4,
+      "dew_point": 5.4,
+      "relative_humidity": 82,
+      "precipitation": 0.0,
+      "precipitation_probability": null,
+      "precipitation_probability_6h": null,
+      "wind_speed": 12.2,
+      "wind_direction": 245,
+      "condition": "dry",
+      "icon": "cloudy"
+    },
+    {
+      "timestamp": "2026-11-09T10:00:00+01:00",
+      "source_id": 7001,
+      "temperature": 9.1,
+      "dew_point": 5.5,
+      "relative_humidity": 78,
+      "precipitation": 0.2,
+      "precipitation_probability": 40,
+      "precipitation_probability_6h": 70,
+      "wind_speed": 13.0,
+      "wind_direction": 250,
+      "condition": "rain",
+      "icon": "rain"
+    }
+  ],
+  "sources": [
+    {
+      "id": 6007,
+      "dwd_station_id": "01766",
+      "wmo_station_id": "10315",
+      "station_name": "Example SYNOP station",
+      "observation_type": "synop",
+      "first_record": "2026-11-09T00:00:00+01:00",
+      "last_record": "2026-11-09T09:00:00+01:00",
+      "lat": 52.13,
+      "lon": 7.70,
+      "height": 47.8,
+      "distance": 12000
+    },
+    {
+      "id": 7001,
+      "dwd_station_id": null,
+      "wmo_station_id": null,
+      "station_name": "Example forecast source",
+      "observation_type": "forecast",
+      "first_record": "2026-11-09T10:00:00+01:00",
+      "last_record": "2026-11-16T00:00:00+01:00",
+      "lat": 52.52,
+      "lon": 13.419,
+      "height": 40.0,
+      "distance": 0
+    }
+  ]
+}

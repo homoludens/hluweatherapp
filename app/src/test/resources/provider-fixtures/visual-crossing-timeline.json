@@ -1,0 +1,70 @@
+{
+  "queryCost": 0,
+  "latitude": 52.52,
+  "longitude": 13.419,
+  "resolvedAddress": "Berlin, Germany",
+  "address": "52.52,13.419",
+  "timezone": "Europe/Berlin",
+  "tzoffset": 1.0,
+  "currentConditions": {
+    "datetime": "10:00:00",
+    "datetimeEpoch": 1794214800,
+    "temp": 8.4,
+    "feelslike": 6.9,
+    "humidity": 82.0,
+    "dew": 5.4,
+    "precip": 0.0,
+    "windspeed": 12.2,
+    "winddir": 245.0,
+    "conditions": "Overcast",
+    "icon": "cloudy"
+  },
+  "days": [
+    {
+      "datetime": "2026-11-09",
+      "datetimeEpoch": 1794178800,
+      "tempmax": 9.1,
+      "tempmin": 5.0,
+      "precip": 0.2,
+      "conditions": "Rain, Overcast",
+      "icon": "rain",
+      "sunrise": "07:12:00",
+      "sunriseEpoch": 1794204720,
+      "sunset": "16:18:00",
+      "sunsetEpoch": 1794237480,
+      "moonphase": 0.63,
+      "hours": [
+        {
+          "datetime": "10:00:00",
+          "datetimeEpoch": 1794214800,
+          "offsetseconds": 3600,
+          "temp": 8.4,
+          "feelslike": 6.9,
+          "humidity": 82.0,
+          "dew": 5.4,
+          "precip": 0.0,
+          "precipprob": 0,
+          "windspeed": 12.2,
+          "winddir": 245.0,
+          "conditions": "Overcast",
+          "icon": "cloudy"
+        },
+        {
+          "datetime": "11:00:00",
+          "datetimeEpoch": 1794218400,
+          "offsetseconds": 3600,
+          "temp": 9.1,
+          "feelslike": 7.8,
+          "humidity": 78.0,
+          "dew": 5.5,
+          "precip": 0.2,
+          "precipprob": 35,
+          "windspeed": 13.0,
+          "winddir": 250.0,
+          "conditions": "Rain, Overcast",
+          "icon": "rain"
+        }
+      ]
+    }
+  ]
+}

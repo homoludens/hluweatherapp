@@ -1,0 +1,22 @@
+{
+  "latitude": 52.52,
+  "longitude": 13.419,
+  "timezone": "Europe/Berlin",
+  "current": {
+    "time": "2026-11-09T10:00",
+    "european_aqi": 42,
+    "pm10": 12.5,
+    "pm2_5": 8.2
+  },
+  "hourly": {
+    "time": ["2026-11-09T10:00", "2026-11-09T11:00"],
+    "european_aqi": [42, 45],
+    "pm10": [12.5, 13.1],
+    "pm2_5": [8.2, 8.7]
+  },
+  "hourly_units": {
+    "european_aqi": "European AQI",
+    "pm10": "μg/m³",
+    "pm2_5": "μg/m³"
+  }
+}

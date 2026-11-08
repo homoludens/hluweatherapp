@@ -1,0 +1,24 @@
+{
+  "timezone": "Europe/Berlin",
+  "days": [
+    {
+      "datetime": "2026-11-09",
+      "hours": [
+        {
+          "datetime": "10:00:00",
+          "datetimeEpoch": 1794214800,
+          "aqieur": 3,
+          "pm2p5": 8.2,
+          "pm10": 12.5
+        },
+        {
+          "datetime": "11:00:00",
+          "datetimeEpoch": 1794218400,
+          "aqieur": 4,
+          "pm2p5": 8.7,
+          "pm10": 13.1
+        }
+      ]
+    }
+  ]
+}

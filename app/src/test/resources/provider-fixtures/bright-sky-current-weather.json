@@ -1,0 +1,35 @@
+{
+  "weather": {
+    "timestamp": "2026-11-09T09:30:00+01:00",
+    "source_id": 6007,
+    "temperature": 8.4,
+    "dew_point": 5.4,
+    "relative_humidity": 82,
+    "condition": "dry",
+    "icon": "partly-cloudy-day",
+    "precipitation_10": 0.0,
+    "precipitation_30": 0.0,
+    "precipitation_60": 0.0,
+    "wind_speed_10": 11.8,
+    "wind_speed_30": 12.0,
+    "wind_speed_60": 12.2,
+    "wind_direction_10": 240,
+    "wind_direction_30": 243,
+    "wind_direction_60": 245
+  },
+  "sources": [
+    {
+      "id": 6007,
+      "dwd_station_id": "01766",
+      "wmo_station_id": "10315",
+      "station_name": "Example SYNOP station",
+      "observation_type": "synop",
+      "first_record": "2026-11-09T00:00:00+01:00",
+      "last_record": "2026-11-09T09:30:00+01:00",
+      "lat": 52.13,
+      "lon": 7.70,
+      "height": 47.8,
+      "distance": 12000
+    }
+  ]
+}
