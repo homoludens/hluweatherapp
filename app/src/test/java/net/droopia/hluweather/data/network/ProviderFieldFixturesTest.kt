@@ -39,6 +39,11 @@ class ProviderFieldFixturesTest {
             metNoTimeseries[1].at("data", "next_6_hours", "details", "probability_of_precipitation").jsonPrimitive.double,
             0.0
         )
+        assertEquals(
+            90.0,
+            metNoTimeseries[1].at("data", "next_12_hours", "details", "probability_of_precipitation").jsonPrimitive.double,
+            0.0
+        )
 
         val visualCrossing = fixture("visual-crossing-timeline.json")
         val visualAir = fixture("visual-crossing-air-quality.json")

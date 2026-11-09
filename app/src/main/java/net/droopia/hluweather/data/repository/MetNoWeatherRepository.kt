@@ -3,6 +3,7 @@ package net.droopia.hluweather.data.repository
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.DateTimeUnit
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
@@ -64,8 +65,23 @@ private fun MetNoResponse.toWeatherForecast(
     val displayTimeZone = resolvedZone.zone
     val today = fetchedAt.toLocalDateTime(displayTimeZone).date
     val lastDate = today.plus(7, DateTimeUnit.DAY)
-    val hourly = properties.timeseries
+    val normalizedHours = properties.timeseries
         .mapIndexed { index, timeSeries -> timeSeries.toNormalizedHour(index) }
+    // MET's one-hour probability ends at timestamp + 1h. Key by that instant so
+    // sparse series cannot shift it to a later row.
+    val probabilityByHourEnding = normalizedHours.mapNotNull { hour ->
+        hour.oneHourProbability?.let { probability ->
+            (hour.forecast.time + 1.hours) to probability
+        }
+    }.toMap()
+    val hourly = normalizedHours
+        .map { hour ->
+            hour.copy(
+                forecast = hour.forecast.copy(
+                    precipitationProbability = probabilityByHourEnding[hour.forecast.time]
+                )
+            )
+        }
         .filter { hour ->
             val date = hour.forecast.time.toLocalDateTime(displayTimeZone).date
             date >= today && date < lastDate
@@ -91,7 +107,8 @@ private fun MetNoResponse.toWeatherForecast(
 
 private data class NormalizedHour(
     val forecast: HourForecast,
-    val precipitation: Double?
+    val precipitation: Double?,
+    val oneHourProbability: Int?
 )
 
 private fun MetNoTimeSeries.toNormalizedHour(index: Int): NormalizedHour {
@@ -108,6 +125,9 @@ private fun MetNoTimeSeries.toNormalizedHour(index: Int): NormalizedHour {
     val period = data?.next1Hours ?: data?.next6Hours
     val symbol = period?.summary?.symbolCode.toWeatherSymbol()
     val precipitation = period?.details?.precipitationAmount
+    val oneHourProbability = data?.next1Hours?.details?.probabilityOfPrecipitation
+        ?.takeIf { it.isFinite() && it in 0.0..100.0 }
+        ?.roundToInt()
     return NormalizedHour(
         forecast = HourForecast(
             time = timestamp,
@@ -122,7 +142,8 @@ private fun MetNoTimeSeries.toNormalizedHour(index: Int): NormalizedHour {
             windSpeedKmh = details.windSpeed?.times(3.6),
             windDirectionDegrees = details.windDirection
         ),
-        precipitation = precipitation
+        precipitation = precipitation,
+        oneHourProbability = oneHourProbability
     )
 }
 

@@ -21,7 +21,7 @@ class KtorMetNoApi(
 ) : MetNoApi {
 
     override suspend fun forecast(location: WeatherLocation): MetNoResponse {
-        val response = client.get("$baseUrl/weatherapi/locationforecast/2.0/compact") {
+        val response = client.get("$baseUrl/weatherapi/locationforecast/2.0/complete") {
             parameter("lat", location.latitude)
             parameter("lon", location.longitude)
             location.altitude?.let { parameter("altitude", it) }

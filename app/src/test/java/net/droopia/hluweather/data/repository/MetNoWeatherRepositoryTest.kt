@@ -17,11 +17,14 @@ import net.droopia.hluweather.data.network.MetNoApi
 import net.droopia.hluweather.data.network.MetNoData
 import net.droopia.hluweather.data.network.MetNoDetails
 import net.droopia.hluweather.data.network.MetNoInstant
+import net.droopia.hluweather.data.network.MetNoPrecipitationDetails
+import net.droopia.hluweather.data.network.MetNoProperties
 import net.droopia.hluweather.data.network.MetNoResponse
 import net.droopia.hluweather.data.network.MetNoSummary
 import net.droopia.hluweather.data.network.MetNoTimeSeries
 import net.droopia.hluweather.data.network.MetNoTimeSeriesData
-import net.droopia.hluweather.data.network.MetNoProperties
+import net.droopia.hluweather.ui.settings.PersistedSettings
+import net.droopia.hluweather.widget.toWeatherWidgetState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
@@ -218,6 +221,83 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
+    fun one_hour_probability_maps_to_its_matching_hour_ending_row_and_widget_state() = runTest {
+        val forecast = repository(
+            responseWithTimeseries(
+                timeSeries(
+                    "rain_day",
+                    time = "2026-09-10T00:00:00Z",
+                    precipitationProbability = 40.4,
+                    windSpeed = 3.4
+                ),
+                timeSeries(
+                    "rain_day",
+                    time = "2026-09-10T01:00:00Z",
+                    precipitationProbability = 0.0
+                ),
+                timeSeries(
+                    "rain_day",
+                    time = "2026-09-10T02:00:00Z",
+                    next6Probability = 75.0,
+                    next12Probability = 90.0
+                ),
+                timeSeries("rain_day", time = "2026-09-10T03:00:00Z")
+            ),
+            clock = fixedClock(Instant.parse("2026-09-10T00:30:00Z"))
+        ).getForecast(location)
+
+        assertEquals(4, forecast.hourly.size)
+        assertEquals(listOf(null, 40, 0, null), forecast.hourly.map { it.precipitationProbability })
+        assertEquals(20.0, forecast.hourly[3].temperature, 0.0)
+        assertEquals(12.24, forecast.hourly.first().windSpeedKmh!!, 0.0001)
+
+        val widget = ForecastLoad(forecast).toWeatherWidgetState(
+            settings = PersistedSettings(),
+            clock = fixedClock(Instant.parse("2026-09-10T00:30:00Z"))
+        )
+        assertEquals(listOf(40, 0, null), widget.hours.map { it.precipitationProbability })
+        assertEquals(listOf("40%", "0%", "—"), widget.hours.map { it.precipitationProbabilityText })
+        assertEquals(
+            listOf(
+                "Rain probability 40 percent",
+                "Rain probability 0 percent",
+                "Rain probability unavailable"
+            ),
+            widget.hours.map { it.precipitationProbabilityContentDescription }
+        )
+    }
+
+    @Test
+    fun one_hour_probability_does_not_jump_across_a_sparse_timestamp() = runTest {
+        val forecast = repository(
+            responseWithTimeseries(
+                timeSeries(
+                    "rain_day",
+                    time = "2026-09-10T00:00:00Z",
+                    precipitationProbability = 75.0
+                ),
+                timeSeries(
+                    "rain_day",
+                    time = "2026-09-10T02:00:00Z",
+                    precipitationProbability = 35.0
+                ),
+                timeSeries("rain_day", time = "2026-09-10T03:00:00Z")
+            ),
+            clock = fixedClock(Instant.parse("2026-09-10T00:30:00Z"))
+        ).getForecast(location)
+
+        assertEquals(
+            listOf(
+                Instant.parse("2026-09-10T00:00:00Z"),
+                Instant.parse("2026-09-10T02:00:00Z"),
+                Instant.parse("2026-09-10T03:00:00Z")
+            ),
+            forecast.hourly.map { it.time }
+        )
+        assertEquals(listOf(null, null, 35), forecast.hourly.map { it.precipitationProbability })
+    }
+
+    @Test
     fun getForecast_uses_next_six_hours_when_next_hour_data_is_absent() = runTest {
         val forecast = repository(
             response = responseWithTimeseries(
@@ -342,8 +422,13 @@ class MetNoWeatherRepositoryTest {
         dewPoint: Double? = 10.0,
         windSpeed: Double? = null,
         windDirection: Double? = null,
+        precipitationProbability: Double? = null,
         next6Symbol: String? = null,
-        next6Precipitation: Double? = null
+        next6Precipitation: Double? = null,
+        next6Probability: Double? = null,
+        next12Symbol: String? = null,
+        next12Precipitation: Double? = null,
+        next12Probability: Double? = null
     ) = MetNoTimeSeries(
         time = time,
         data = MetNoTimeSeriesData(
@@ -353,15 +438,21 @@ class MetNoWeatherRepositoryTest {
             next1Hours = symbol?.let {
                 MetNoData(
                     summary = MetNoSummary(it),
-                    precipitationAmount = precipitation
+                    details = MetNoPrecipitationDetails(precipitation, precipitationProbability)
                 )
             },
-            next6Hours = next6Symbol?.let {
+            next6Hours = if (next6Symbol != null || next6Precipitation != null || next6Probability != null) {
                 MetNoData(
-                    summary = MetNoSummary(it),
-                    precipitationAmount = next6Precipitation
+                    summary = next6Symbol?.let(::MetNoSummary),
+                    details = MetNoPrecipitationDetails(next6Precipitation, next6Probability)
                 )
-            }
+            } else null,
+            next12Hours = if (next12Symbol != null || next12Precipitation != null || next12Probability != null) {
+                MetNoData(
+                    summary = next12Symbol?.let(::MetNoSummary),
+                    details = MetNoPrecipitationDetails(next12Precipitation, next12Probability)
+                )
+            } else null
         )
     )
 

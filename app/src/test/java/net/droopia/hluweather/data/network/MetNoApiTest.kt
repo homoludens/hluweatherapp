@@ -25,7 +25,7 @@ import org.junit.function.ThrowingRunnable
 class MetNoApiTest {
 
     @Test
-    fun forecast_sends_compact_request_with_identifying_user_agent_and_altitude() = runTest {
+    fun forecast_sends_complete_request_with_identifying_user_agent_and_altitude() = runTest {
         var capturedRequest: HttpRequestData? = null
         val client = mockClient { request ->
             capturedRequest = request
@@ -41,7 +41,7 @@ class MetNoApiTest {
         val request = requireNotNull(capturedRequest)
         assertEquals(HttpMethod.Get, request.method)
         assertEquals("api.met.no", request.url.host)
-        assertEquals("/weatherapi/locationforecast/2.0/compact", request.url.encodedPath)
+        assertEquals("/weatherapi/locationforecast/2.0/complete", request.url.encodedPath)
         assertEquals("44.8176", request.url.parameters["lat"])
         assertEquals("20.4633", request.url.parameters["lon"])
         assertEquals("198", request.url.parameters["altitude"])
@@ -50,6 +50,21 @@ class MetNoApiTest {
             request.headers[HttpHeaders.UserAgent]
         )
         assertEquals(1, response.properties.timeseries.size)
+        assertEquals(
+            0.0,
+            response.properties.timeseries.single().data?.next1Hours?.details?.probabilityOfPrecipitation!!,
+            0.0
+        )
+        assertEquals(
+            70.0,
+            response.properties.timeseries.single().data?.next6Hours?.details?.probabilityOfPrecipitation!!,
+            0.0
+        )
+        assertEquals(
+            80.0,
+            response.properties.timeseries.single().data?.next12Hours?.details?.probabilityOfPrecipitation!!,
+            0.0
+        )
 
         client.close()
     }
@@ -69,6 +84,24 @@ class MetNoApiTest {
             .forecast(WeatherLocation("nis", "Nis", 44.8176, 20.4633))
 
         assertNull(requireNotNull(capturedRequest).url.parameters["altitude"])
+        client.close()
+    }
+
+    @Test
+    fun forecast_preserves_an_explicitly_unavailable_probability() = runTest {
+        val client = mockClient {
+            respond(
+                content = validResponse.replace(
+                    "\"probability_of_precipitation\": 0.0",
+                    "\"probability_of_precipitation\": null"
+                ),
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+
+        val response = KtorMetNoApi(client, "https://api.met.no").forecast(location)
+
+        assertNull(response.properties.timeseries.single().data?.next1Hours?.details?.probabilityOfPrecipitation)
         client.close()
     }
 
@@ -115,7 +148,18 @@ class MetNoApiTest {
                       "instant": { "details": { "air_temperature": 20.0 } },
                       "next_1_hours": {
                         "summary": { "symbol_code": "clearsky_day" },
-                        "details": { "precipitation_amount": 0.0 }
+                        "details": {
+                          "precipitation_amount": 0.0,
+                          "probability_of_precipitation": 0.0
+                        }
+                      },
+                      "next_6_hours": {
+                        "summary": { "symbol_code": "rain" },
+                        "details": { "probability_of_precipitation": 70.0 }
+                      },
+                      "next_12_hours": {
+                        "summary": { "symbol_code": "rain" },
+                        "details": { "probability_of_precipitation": 80.0 }
                       }
                     }
                   }

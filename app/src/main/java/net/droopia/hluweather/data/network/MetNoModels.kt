@@ -23,7 +23,8 @@ data class MetNoTimeSeries(
 data class MetNoTimeSeriesData(
     val instant: MetNoInstant? = null,
     @SerialName("next_1_hours") val next1Hours: MetNoData? = null,
-    @SerialName("next_6_hours") val next6Hours: MetNoData? = null
+    @SerialName("next_6_hours") val next6Hours: MetNoData? = null,
+    @SerialName("next_12_hours") val next12Hours: MetNoData? = null
 )
 
 @Serializable
@@ -58,5 +59,6 @@ data class MetNoSummary(
 
 @Serializable
 data class MetNoPrecipitationDetails(
-    @SerialName("precipitation_amount") val precipitationAmount: Double? = null
+    @SerialName("precipitation_amount") val precipitationAmount: Double? = null,
+    @SerialName("probability_of_precipitation") val probabilityOfPrecipitation: Double? = null
 )

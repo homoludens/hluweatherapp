@@ -52,6 +52,13 @@
               "precipitation_amount": 4.5,
               "probability_of_precipitation": 70.0
             }
+          },
+          "next_12_hours": {
+            "summary": {"symbol_code": "rain"},
+            "details": {
+              "precipitation_amount": 8.0,
+              "probability_of_precipitation": 90.0
+            }
           }
         }
       }
