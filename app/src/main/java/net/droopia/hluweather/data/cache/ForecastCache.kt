@@ -174,25 +174,28 @@ private data class CurrentDto(
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
     val pm2_5: Double? = null,
-    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX,
+    val europeanAqiScale: String = EuropeanAqiScale.NUMERIC_INDEX.name,
     val provenance: CurrentWeatherProvenance = CurrentWeatherProvenance.UNSPECIFIED,
     val validTime: String? = null
 ) {
-    fun toCurrentWeather() = CurrentWeather(
-        temperature,
-        apparentTemperature,
-        humidity,
-        dewPoint,
-        precipitation,
-        condition.toWeatherCondition(),
-        isDay,
-        europeanAqi,
-        pm10,
-        pm2_5,
-        europeanAqiScale,
-        provenance,
-        validTime?.let(Instant::parse)
-    )
+    fun toCurrentWeather(): CurrentWeather {
+        val scale = europeanAqiScale.toEuropeanAqiScaleOrNull()
+        return CurrentWeather(
+            temperature = temperature,
+            apparentTemperature = apparentTemperature,
+            humidity = humidity,
+            dewPoint = dewPoint,
+            precipitation = precipitation,
+            condition = condition.toWeatherCondition(),
+            isDay = isDay,
+            europeanAqi = europeanAqi.takeIf { scale != null },
+            pm10 = pm10,
+            pm2_5 = pm2_5,
+            europeanAqiScale = scale ?: EuropeanAqiScale.NUMERIC_INDEX,
+            provenance = provenance,
+            validTime = validTime?.let(Instant::parse)
+        )
+    }
 }
 
 @Serializable
@@ -212,26 +215,29 @@ private data class HourDto(
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
     val pm2_5: Double? = null,
-    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
+    val europeanAqiScale: String = EuropeanAqiScale.NUMERIC_INDEX.name
 ) {
-    fun toHourForecast() = HourForecast(
-        time = Instant.parse(time),
-        temperature = temperature,
-        apparentTemperature = apparentTemperature,
-        humidity = humidity,
-        dewPoint = dewPoint,
-        precipitation = precipitation,
-        precipitationProbability = precipitationProbability,
-        condition = condition.toWeatherCondition(),
-        isDay = isDay,
-        windSpeedKmh = windSpeedKmh,
-        windDirectionDegrees = windDirectionDegrees,
-        evapotranspiration = evapotranspiration,
-        europeanAqi = europeanAqi,
-        pm10 = pm10,
-        pm2_5 = pm2_5,
-        europeanAqiScale = europeanAqiScale
-    )
+    fun toHourForecast(): HourForecast {
+        val scale = europeanAqiScale.toEuropeanAqiScaleOrNull()
+        return HourForecast(
+            time = Instant.parse(time),
+            temperature = temperature,
+            apparentTemperature = apparentTemperature,
+            humidity = humidity,
+            dewPoint = dewPoint,
+            precipitation = precipitation,
+            precipitationProbability = precipitationProbability,
+            condition = condition.toWeatherCondition(),
+            isDay = isDay,
+            windSpeedKmh = windSpeedKmh,
+            windDirectionDegrees = windDirectionDegrees,
+            evapotranspiration = evapotranspiration,
+            europeanAqi = europeanAqi.takeIf { scale != null },
+            pm10 = pm10,
+            pm2_5 = pm2_5,
+            europeanAqiScale = scale ?: EuropeanAqiScale.NUMERIC_INDEX
+        )
+    }
 }
 
 @Serializable
@@ -276,7 +282,7 @@ private fun WeatherForecast.toDto() = ForecastDto(
         current.europeanAqi,
         current.pm10,
         current.pm2_5,
-        current.europeanAqiScale,
+        current.europeanAqiScale.name,
         current.provenance,
         current.validTime?.toString()
     ),
@@ -297,7 +303,7 @@ private fun WeatherForecast.toDto() = ForecastDto(
             it.europeanAqi,
             it.pm10,
             it.pm2_5,
-            it.europeanAqiScale
+            it.europeanAqiScale.name
         )
     },
     daily = daily.map {
@@ -318,6 +324,9 @@ private fun WeatherForecast.toDto() = ForecastDto(
 
 private fun String.toWeatherProvider(): WeatherProvider? =
     WeatherProvider.entries.firstOrNull { it.name == this }
+
+private fun String.toEuropeanAqiScaleOrNull(): EuropeanAqiScale? =
+    EuropeanAqiScale.entries.firstOrNull { it.name == this }
 
 private fun String.toWeatherCondition(): WeatherCondition =
     WeatherCondition.entries.firstOrNull { it.name == this } ?: WeatherCondition.UNKNOWN

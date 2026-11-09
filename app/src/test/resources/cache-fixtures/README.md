@@ -1,0 +1,1 @@
+`forecast-cache-before-aqi-scale.json` is a frozen `weather.forecast_cache` JSON payload in the cache DTO format at commit `3a0cfe0`. It has non-null numeric AQI values and intentionally omits the later AQI-scale and current-provenance fields. Keep it as a literal fixture rather than regenerating it with the current serializer, so missing-field compatibility stays under test.

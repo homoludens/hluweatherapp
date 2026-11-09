@@ -1,0 +1,61 @@
+[
+  {
+    "provider": "OPEN_METEO",
+    "locationKey": "saved:svilajnac",
+    "forecast": {
+      "location": {
+        "id": "svilajnac",
+        "name": "Svilajnac",
+        "latitude": 44.238,
+        "longitude": 21.197,
+        "altitude": 105
+      },
+      "provider": "OPEN_METEO",
+      "fetchedAt": "2026-09-10T12:00:00Z",
+      "current": {
+        "temperature": 23.5,
+        "apparentTemperature": 24.0,
+        "humidity": 52,
+        "dewPoint": 13.1,
+        "precipitation": 0.0,
+        "condition": "CLEAR",
+        "isDay": true,
+        "europeanAqi": 42.0,
+        "pm10": 12.5,
+        "pm2_5": 8.2
+      },
+      "hourly": [
+        {
+          "time": "2026-09-10T13:00:00Z",
+          "temperature": 24.5,
+          "apparentTemperature": 24.5,
+          "humidity": 49,
+          "dewPoint": 13.0,
+          "precipitation": 0.0,
+          "precipitationProbability": 0,
+          "condition": "PARTLY_CLOUDY",
+          "isDay": true,
+          "windSpeedKmh": 18.0,
+          "windDirectionDegrees": 225.0,
+          "evapotranspiration": 0.2,
+          "europeanAqi": 43.0,
+          "pm10": 12.6,
+          "pm2_5": 8.3
+        }
+      ],
+      "daily": [
+        {
+          "date": "2026-09-10",
+          "condition": "CLEAR",
+          "temperatureMin": 15.0,
+          "temperatureMax": 25.0,
+          "precipitation": 0.0,
+          "sunrise": "2026-09-10T04:30:00Z",
+          "sunset": "2026-09-10T17:15:00Z"
+        }
+      ],
+      "moonPhase": 0.5,
+      "timezone": "Europe/Belgrade"
+    }
+  }
+]

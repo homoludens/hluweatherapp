@@ -4,17 +4,33 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import net.droopia.hluweather.data.model.EuropeanAqiScale
+import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.CurrentWeatherProvenance
+import net.droopia.hluweather.data.model.WeatherForecast
+import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
+import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.data.repository.Svilajnac
+import net.droopia.hluweather.data.repository.WeatherSource
 import net.droopia.hluweather.data.repository.buildMockForecast
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -151,23 +167,66 @@ class ForecastCacheTest {
     }
 
     @Test
-    fun cached_numeric_aqi_without_a_scale_remains_a_numeric_index() = runTest {
-        val store = dataStore(backgroundScope)
-        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:numeric-aqi")
-        val base = fixedForecast()
-        val forecast = base.copy(
-            current = base.current.copy(europeanAqi = 42.0),
-            hourly = base.hourly.map { it.copy(europeanAqi = 42.0) }
-        )
+    fun pre_scale_numeric_aqi_fixture_remains_numeric_after_datastore_recreation() = runTest {
+        val file = temporaryFolder.newFile("legacy-forecast-cache.preferences_pb")
         val entriesKey = stringPreferencesKey("weather.forecast_cache")
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val fixture = preChangeAqiFixture()
 
-        ForecastCache(store).put(key, forecast)
+        assertTrue("europeanAqiScale" !in fixture)
+        val firstScope = processScope()
+        try {
+            processDataStore(firstScope, file).edit { it[entriesKey] = fixture }
+        } finally {
+            stopProcessScope(firstScope)
+        }
 
-        assertTrue("europeanAqiScale" !in requireNotNull(store.data.first()[entriesKey]))
+        val reopenedScope = processScope()
+        try {
+            val reopenedStore = processDataStore(reopenedScope, file)
+            val reopenedCache = ForecastCache(reopenedStore)
+            val restored = requireNotNull(reopenedCache.get(key))
+            assertEquals(WeatherProvider.OPEN_METEO, restored.provider)
+            assertEquals(Svilajnac, restored.location)
+            assertEquals(42.0, restored.current.europeanAqi!!, 0.0)
+            assertEquals(12.5, restored.current.pm10!!, 0.0)
+            assertEquals(8.2, restored.current.pm2_5!!, 0.0)
+            assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.current.europeanAqiScale)
+            assertEquals(43.0, restored.hourly.single().europeanAqi!!, 0.0)
+            assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.hourly.single().europeanAqiScale)
+
+            reopenedCache.put(key, restored)
+            assertTrue("europeanAqiScale" !in requireNotNull(reopenedStore.data.first()[entriesKey]))
+        } finally {
+            stopProcessScope(reopenedScope)
+        }
+    }
+
+    @Test
+    fun unknown_aqi_scale_makes_only_aqi_unavailable_without_discarding_forecast() = runTest {
+        val store = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val fixtureEntry = preChangeAqiFixtureEntry()
+        val originalForecast = fixtureEntry.getValue("forecast").jsonObject
+        val current = originalForecast.getValue("current").jsonObject
+            .withField("europeanAqiScale", JsonPrimitive("FUTURE_SCALE"))
+        val hourly = originalForecast.getValue("hourly").jsonArray.map { hour ->
+            hour.jsonObject.withField("europeanAqiScale", JsonPrimitive("FUTURE_SCALE"))
+        }
+        val forecast = originalForecast
+            .withField("current", current)
+            .withField("hourly", JsonArray(hourly))
+        store.edit { it[stringPreferencesKey("weather.forecast_cache")] =
+            JsonArray(listOf(fixtureEntry.withField("forecast", forecast))).toString()
+        }
+
         val restored = requireNotNull(ForecastCache(store).get(key))
+
+        assertNull(restored.current.europeanAqi)
         assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.current.europeanAqiScale)
+        assertNull(restored.hourly.single().europeanAqi)
         assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.hourly.first().europeanAqiScale)
-        assertEquals(42.0, restored.current.europeanAqi!!, 0.0)
+        assertEquals(23.5, restored.current.temperature, 0.0)
     }
 
     @Test
@@ -208,27 +267,112 @@ class ForecastCacheTest {
     }
 
     @Test
-    fun new_providers_keep_separate_cache_identity_after_cache_recreation() = runTest {
-        val store = dataStore(backgroundScope)
+    fun new_providers_keep_separate_cache_identity_after_datastore_recreation() = runTest {
+        val file = temporaryFolder.newFile("new-provider-forecast-cache.preferences_pb")
         val providers = listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY)
-        val cache = ForecastCache(store)
         val forecasts = providers.associateWith { provider ->
-            fixedForecast().copy(provider = provider)
+            val base = fixedForecast().copy(provider = provider)
+            if (provider == WeatherProvider.VISUAL_CROSSING) {
+                base.copy(
+                    current = base.current.copy(
+                        europeanAqi = 3.0,
+                        europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
+                    ),
+                    hourly = base.hourly.map {
+                        it.copy(
+                            europeanAqi = 3.0,
+                            europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
+                        )
+                    }
+                )
+            } else {
+                base.copy(
+                    current = base.current.copy(
+                        provenance = CurrentWeatherProvenance.OBSERVATION,
+                        validTime = Instant.parse("2026-09-10T11:45:00Z")
+                    )
+                )
+            }
+        }
+        val cacheKey = providers.associateWith { provider ->
+            ForecastCacheKey(provider, "saved:${Svilajnac.id}")
         }
 
-        forecasts.forEach { (provider, forecast) ->
-            cache.put(ForecastCacheKey(provider, "saved:shared"), forecast)
+        val firstScope = processScope()
+        try {
+            val cache = ForecastCache(processDataStore(firstScope, file))
+            forecasts.forEach { (provider, forecast) -> cache.put(cacheKey.getValue(provider), forecast) }
+        } finally {
+            stopProcessScope(firstScope)
         }
 
-        val reloadedCache = ForecastCache(store)
-        forecasts.forEach { (provider, forecast) ->
-            assertEquals(forecast, reloadedCache.get(ForecastCacheKey(provider, "saved:shared")))
+        val reopenedScope = processScope()
+        try {
+            val reloadedCache = ForecastCache(processDataStore(reopenedScope, file))
+            forecasts.forEach { (provider, forecast) ->
+                assertEquals(forecast, reloadedCache.get(cacheKey.getValue(provider)))
+            }
+            assertNull(reloadedCache.get(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:${Svilajnac.id}")))
+            assertEquals(cacheKey.values.toSet(), reloadedCache.entries().toSet())
+
+            val offlineBrightSky = object : WeatherSource {
+                override val provider = WeatherProvider.BRIGHT_SKY
+                override suspend fun getForecast(location: WeatherLocation): WeatherForecast =
+                    error("Bright Sky is offline")
+            }
+            val repository = CachingWeatherRepository(
+                sources = mapOf(WeatherProvider.BRIGHT_SKY to offlineBrightSky),
+                cache = reloadedCache
+            )
+            val stale = repository.getForecast(
+                WeatherProvider.BRIGHT_SKY,
+                ActiveLocation.Saved(Svilajnac)
+            )
+            assertEquals(forecasts.getValue(WeatherProvider.BRIGHT_SKY), stale.forecast)
+            assertEquals(WeatherProvider.BRIGHT_SKY, stale.forecast.provider)
+            assertTrue(stale.isStale)
+        } finally {
+            stopProcessScope(reopenedScope)
         }
-        assertNull(reloadedCache.get(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:shared")))
-        assertEquals(
-            providers.map { ForecastCacheKey(it, "saved:shared") }.toSet(),
-            reloadedCache.entries().toSet()
-        )
+    }
+
+    @Test
+    fun unknown_cache_fields_and_provider_values_do_not_hide_known_entries() = runTest {
+        val store = dataStore(backgroundScope)
+        val cache = ForecastCache(store)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
+        val entry = preChangeAqiFixtureEntry()
+        val originalForecast = entry.getValue("forecast").jsonObject
+        val current = originalForecast.getValue("current").jsonObject
+            .withField("futureCurrentField", JsonPrimitive(true))
+        val hourly = originalForecast.getValue("hourly").jsonArray.map { hour ->
+            hour.jsonObject.withField("futureHourlyField", JsonPrimitive("ignored"))
+        }
+        val known = entry
+            .withField("futureCacheEntryField", JsonPrimitive(1))
+            .withField(
+                "forecast",
+                originalForecast
+                    .withField("futureForecastField", JsonPrimitive("ignored"))
+                    .withField("current", current)
+                    .withField("hourly", JsonArray(hourly))
+            )
+        val unknownProvider = entry.withField("provider", JsonPrimitive("FUTURE_PROVIDER"))
+        val entriesKey = stringPreferencesKey("weather.forecast_cache")
+        store.edit { it[entriesKey] = JsonArray(listOf(known, unknownProvider)).toString() }
+
+        assertEquals(listOf(key), cache.entries())
+        assertEquals(WeatherProvider.OPEN_METEO, requireNotNull(cache.get(key)).provider)
+    }
+
+    @Test
+    fun corrupt_serialized_cache_is_treated_as_empty() = runTest {
+        val store = dataStore(backgroundScope)
+        val cache = ForecastCache(store)
+        store.edit { it[stringPreferencesKey("weather.forecast_cache")] = "[{not valid json" }
+
+        assertNull(cache.get(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")))
+        assertTrue(cache.entries().isEmpty())
     }
 
     @Test
@@ -263,6 +407,26 @@ class ForecastCacheTest {
     }
 
     private fun cache(scope: CoroutineScope): ForecastCache = ForecastCache(dataStore(scope))
+
+    private fun processScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun processDataStore(scope: CoroutineScope, file: java.io.File) =
+        PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+
+    private suspend fun stopProcessScope(scope: CoroutineScope) {
+        scope.cancel()
+        scope.coroutineContext[Job]?.join()
+    }
+
+    private fun preChangeAqiFixture(): String = requireNotNull(
+        javaClass.classLoader?.getResourceAsStream("cache-fixtures/forecast-cache-before-aqi-scale.json")
+    ).bufferedReader().use { it.readText() }
+
+    private fun preChangeAqiFixtureEntry(): JsonObject =
+        Json.parseToJsonElement(preChangeAqiFixture()).jsonArray.single().jsonObject
+
+    private fun JsonObject.withField(name: String, value: JsonElement): JsonObject =
+        JsonObject(this + (name to value))
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
