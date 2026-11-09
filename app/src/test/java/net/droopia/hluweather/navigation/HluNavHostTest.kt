@@ -131,9 +131,11 @@ class HluNavHostTest {
         }
 
         composeRule.onNodeWithContentDescription("Settings").performClick()
-        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(9)
-        composeRule.onNodeWithText("About").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings_privacy_policy").performClick()
+        composeRule.onNodeWithTag("settings_scroll").performScrollToIndex(10)
+        composeRule.onNodeWithTag("settings_privacy_policy")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
 
         val intent = requireNotNull(shadowOf(composeRule.activity).nextStartedActivity)
         assertEquals(Intent.ACTION_VIEW, intent.action)

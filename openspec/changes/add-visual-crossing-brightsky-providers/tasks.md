@@ -24,4 +24,4 @@
 
 ## 5. End-to-End Verification
 
-- [ ] 5.1 [low] Run the relevant provider, cache, settings, forecast, widget, and notification tests and final Google debug build, then exercise both providers and MET probability on the `small_phone` emulator with offline/limited-coverage states; record exact results and explicitly mark any unavailable live or device checks as not run.
+- [x] 5.1 [low] Run the relevant provider, cache, settings, forecast, widget, and notification tests and final Google debug build, then exercise both providers and MET probability on the `small_phone` emulator with offline/limited-coverage states; record exact results and explicitly mark any unavailable live or device checks as not run.
