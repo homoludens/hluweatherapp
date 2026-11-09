@@ -6,7 +6,9 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.JsonObject
@@ -14,6 +16,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.CurrentWeatherProvenance
+import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -111,7 +114,11 @@ private fun BrightSkyWeatherResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly,
-        daily = emptyList(),
+        daily = recordCandidates.asSequence()
+            .filter { it.source.isForecast() }
+            .toList()
+            .nearestRecordsPerInstant()
+            .toCompleteUtcDays(today, afterForecast),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = zone.id,
         timezoneIsUtcFallback = true
@@ -158,6 +165,51 @@ private fun List<TimedBrightSkyRecord>.nearestRecordsPerInstant(): List<TimedBri
             )
         }
         .sortedBy { it.time }
+
+private fun List<TimedBrightSkyRecord>.toCompleteUtcDays(
+    firstDate: LocalDate,
+    afterDate: LocalDate
+): List<DayForecast> {
+    val zone = TimeZone.of("UTC")
+    val recordsByTime = associateBy { it.time }
+    return recordsByTime.values
+        .asSequence()
+        .map { it.time.toLocalDateTime(zone).date }
+        .filter { it >= firstDate && it < afterDate }
+        .distinct()
+        .sorted()
+        .mapNotNull { date ->
+            val start = date.atStartOfDayIn(zone)
+            val end = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
+            val hourCount = ((end - start).inWholeSeconds / SECONDS_PER_HOUR).toInt()
+            val expectedTimes = List(hourCount) { index -> start + index.toLong().hours }
+            val dayHours = expectedTimes.map { recordsByTime[it]?.hour ?: return@mapNotNull null }
+            val precipitationValues = expectedTimes.map { recordsByTime[it + 1.hours]?.hour?.precipitation }
+            val precipitation = if (precipitationValues.all { it != null && it.isFinite() && it >= 0.0 }) {
+                precipitationValues.sumOf { requireNotNull(it) }
+            } else {
+                null
+            }
+            val condition = dayHours.asSequence()
+                .map { it.condition }
+                .filter { it != WeatherCondition.UNKNOWN }
+                .groupingBy { it }
+                .eachCount()
+                .maxByOrNull { it.value }
+                ?.key ?: WeatherCondition.UNKNOWN
+
+            DayForecast(
+                date = date,
+                condition = condition,
+                temperatureMin = dayHours.minOf { it.temperature },
+                temperatureMax = dayHours.maxOf { it.temperature },
+                precipitation = precipitation,
+                sunrise = null,
+                sunset = null
+            )
+        }
+        .toList()
+}
 
 private fun BrightSkyCurrentWeatherResponse.observationOrNull(now: Instant): CurrentWeather? {
     val record = weather ?: return null
@@ -407,3 +459,5 @@ private fun Double?.valid(minimum: Double, maximum: Double): Double? =
 private fun Int?.percentage(): Int? = this?.takeIf { it in 0..100 }
 
 private fun Double?.percentage(): Int? = valid(0.0, 100.0)?.toInt()
+
+private const val SECONDS_PER_HOUR = 3_600L

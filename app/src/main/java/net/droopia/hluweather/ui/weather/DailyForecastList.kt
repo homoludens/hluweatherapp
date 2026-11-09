@@ -55,7 +55,7 @@ fun DailyForecastList(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (forecast.timezoneIsUtcFallback) {
-            item { Text("Location time unavailable; times shown in UTC. Daily summaries unavailable.") }
+            item { Text("Location time unavailable; times and approximate daily summaries use UTC dates.") }
         }
         itemsIndexed(forecast.daily) { index, day ->
             DailyRow(

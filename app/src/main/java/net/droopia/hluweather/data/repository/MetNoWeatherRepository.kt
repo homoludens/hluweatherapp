@@ -91,7 +91,7 @@ private fun MetNoResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly.map { it.forecast },
-        daily = emptyList(),
+        daily = hourly.map { it.forecast }.toApproximateDailySummaries(displayTimeZone),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = displayTimeZone.id,
         timezoneIsUtcFallback = true

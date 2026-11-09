@@ -222,7 +222,12 @@ class VisualCrossingWeatherRepositoryTest {
 
         assertEquals("UTC", forecast.timezone)
         assertTrue(forecast.timezoneIsUtcFallback)
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(1, forecast.daily.size)
+        assertEquals("2026-11-09", forecast.daily.single().date.toString())
+        assertEquals(8.4, forecast.daily.single().temperatureMin, 0.0)
+        assertEquals(9.1, forecast.daily.single().temperatureMax, 0.0)
+        assertNull(forecast.daily.single().sunrise)
+        assertNull(forecast.daily.single().sunset)
         assertEquals(MoonPhaseCalculator.phase(forecast.fetchedAt), forecast.moonPhase, 0.0)
     }
 

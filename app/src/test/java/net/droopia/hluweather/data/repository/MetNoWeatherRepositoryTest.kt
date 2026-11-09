@@ -54,11 +54,15 @@ class MetNoWeatherRepositoryTest {
         assertEquals(WeatherCondition.RAIN, forecast.hourly[2].condition)
         assertEquals(false, forecast.hourly[2].isDay)
 
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(1, forecast.daily.size)
+        assertEquals("2026-09-10", forecast.daily.single().date.toString())
+        assertEquals(5.0, forecast.daily.single().temperatureMin, 0.0)
+        assertEquals(20.0, forecast.daily.single().temperatureMax, 0.0)
+        assertEquals(3.75, forecast.daily.single().precipitation!!, 0.0)
     }
 
     @Test
-    fun uses_utc_instants_instead_of_the_device_zone_and_omits_local_days() = runTest {
+    fun groups_approximate_daily_values_by_utc_instead_of_the_device_zone() = runTest {
         val original = java.util.TimeZone.getDefault()
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
         try {
@@ -72,7 +76,7 @@ class MetNoWeatherRepositoryTest {
             ).getForecast(location)
             assertEquals("UTC", midnight.timezone)
             assertTrue(midnight.timezoneIsUtcFallback)
-            assertTrue(midnight.daily.isEmpty())
+            assertEquals(listOf("2026-03-28", "2026-03-29"), midnight.daily.map { it.date.toString() })
             val zone = java.time.ZoneId.of("UTC")
             assertEquals(listOf("22h", "23h", "00h", "01h"), midnight.hourly.map { it.time.hourText(zone) })
 
@@ -83,6 +87,7 @@ class MetNoWeatherRepositoryTest {
                 ), fixedClock(Instant.parse("2026-10-25T00:15:00Z"))
             ).getForecast(location)
             assertEquals(listOf("00h", "01h"), repeated.hourly.map { it.time.hourText(zone) })
+            assertEquals(listOf("2026-10-25"), repeated.daily.map { it.date.toString() })
             val table = repeated.toHourlyTableData(Instant.parse("2026-10-25T01:15:00Z"))
             assertEquals(listOf(Instant.parse("2026-10-25T01:00:00Z")), table.hourItems.map { it.hour.time })
         } finally {
@@ -91,11 +96,11 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
-    fun fallbackUsesUtcWithoutInventingLocalDailyExtrema() = runTest {
+    fun fallbackUsesUtcAndGroupsAvailableValuesIntoApproximateDailySummaries() = runTest {
         val forecast = repository(aggregatedResponse).getForecast(location)
         assertEquals("UTC", forecast.timezone)
         assertTrue(forecast.timezoneIsUtcFallback)
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(1, forecast.daily.size)
         assertEquals(3, forecast.hourly.size)
     }
 
@@ -114,7 +119,7 @@ class MetNoWeatherRepositoryTest {
             clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
         ).getForecast(location)
 
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(listOf("2026-09-10", "2026-09-15", "2026-09-16"), forecast.daily.map { it.date.toString() })
         assertEquals(5, forecast.hourly.size)
         assertEquals(Instant.parse("2026-09-16T22:00:00Z"), forecast.hourly.last().time)
     }
@@ -306,11 +311,11 @@ class MetNoWeatherRepositoryTest {
         assertEquals(false, forecast.current.isDay)
         assertEquals(4.5, forecast.current.precipitation!!, 0.0)
         assertEquals(4.5, forecast.hourly.single().precipitation!!, 0.0)
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(4.5, forecast.daily.single().precipitation!!, 0.0)
     }
 
     @Test
-    fun getForecast_transitions_to_next_six_hours_and_omits_daily_values_without_location_zone() = runTest {
+    fun getForecast_transitions_to_next_six_hours_and_summarizes_approximate_utc_day() = runTest {
         val forecast = repository(
             response = responseWithTimeseries(
                 timeSeries(
@@ -338,7 +343,10 @@ class MetNoWeatherRepositoryTest {
 
         assertEquals(WeatherCondition.RAIN, forecast.hourly[1].condition)
         assertEquals(1.0, forecast.hourly[1].precipitation!!, 0.0)
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(1, forecast.daily.size)
+        assertEquals(5.0, forecast.daily.single().temperatureMin, 0.0)
+        assertEquals(20.0, forecast.daily.single().temperatureMax, 0.0)
+        assertEquals(3.75, forecast.daily.single().precipitation!!, 0.0)
     }
 
     @Test

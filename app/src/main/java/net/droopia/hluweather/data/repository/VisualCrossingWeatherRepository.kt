@@ -96,16 +96,15 @@ private fun VisualCrossingTimelineResponse.toWeatherForecast(
         throw WeatherRepositoryException("Missing usable Visual Crossing hourly data")
     }
 
-    // The upstream day keys are local civil dates. Without a verified location
-    // zone, retain the explicit UTC fallback rather than assigning those days
-    // to UTC dates by guesswork.
-    val daily = if (resolvedZone.isUtcFallback) {
+    val providerDaily = if (resolvedZone.isUtcFallback) {
         emptyList()
     } else {
         days.orEmpty()
             .mapNotNull { it.toDayForecast(today, afterForecast) }
             .sortedBy { it.forecast.date }
     }
+    val daily = providerDaily.map { it.forecast }
+        .ifEmpty { hourly.toApproximateDailySummaries(zone) }
 
     val moonPhase = if (resolvedZone.isUtcFallback) {
         null
@@ -124,7 +123,7 @@ private fun VisualCrossingTimelineResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly,
-        daily = daily.map { it.forecast },
+        daily = daily,
         moonPhase = moonPhase,
         timezone = zone.id,
         timezoneIsUtcFallback = resolvedZone.isUtcFallback

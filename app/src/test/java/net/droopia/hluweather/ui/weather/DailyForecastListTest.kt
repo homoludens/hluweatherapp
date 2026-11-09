@@ -66,6 +66,25 @@ class DailyForecastListTest {
     }
 
     @Test
+    fun labels_utc_daily_summaries_as_approximate_when_location_zone_is_unavailable() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.fromEpochSeconds(0L)
+        ).copy(timezone = "UTC", timezoneIsUtcFallback = true)
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                DailyForecastList(forecast = forecast, onDaySelected = {})
+            }
+        }
+
+        composeRule.onNodeWithText(
+            "Location time unavailable; times and approximate daily summaries use UTC dates."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithTag("daily_card_0").assertIsDisplayed()
+    }
+
+    @Test
     fun daily_list_uses_16dp_edge_spacing_and_card_gaps() {
         val forecast = buildMockForecast(
             location = Svilajnac,

@@ -314,7 +314,7 @@ class BrightSkyWeatherRepositoryTest {
     }
 
     @Test
-    fun utc_fallback_keeps_hourly_instants_but_omits_local_daily_summaries() = runTest {
+    fun utc_fallback_groups_complete_forecast_days_by_utc_date() = runTest {
         val start = Instant.parse("2026-11-09T00:00:00Z")
         val queriedZones = mutableListOf<TimeZone>()
         val records = localDayRecords(start, 24)
@@ -333,7 +333,11 @@ class BrightSkyWeatherRepositoryTest {
         assertEquals(listOf(TimeZone.of("UTC")), queriedZones)
         assertTrue(forecast.timezoneIsUtcFallback)
         assertEquals("UTC", forecast.timezone)
-        assertTrue(forecast.daily.isEmpty())
+        assertEquals(1, forecast.daily.size)
+        assertEquals("2026-11-09", forecast.daily.single().date.toString())
+        assertEquals(1.0, forecast.daily.single().temperatureMin, 0.0)
+        assertEquals(24.0, forecast.daily.single().temperatureMax, 0.0)
+        assertEquals(24.0, forecast.daily.single().precipitation!!, 0.0)
         assertEquals(records.size, forecast.hourly.size)
         assertEquals(records.mapNotNull { it.timestamp?.let(Instant::parse) }, forecast.hourly.map { it.time })
     }
