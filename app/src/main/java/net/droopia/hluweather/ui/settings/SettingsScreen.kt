@@ -161,6 +161,24 @@ fun SettingsScreen(
                     onInfoClick = { onProviderInfoClick(WeatherProvider.MET_NO) },
                     onClick = { onProviderChange(WeatherProvider.MET_NO) }
                 )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ProviderRow(
+                    title = WeatherProvider.VISUAL_CROSSING.title,
+                    subtitle = "Global forecasts; air quality where available",
+                    selected = state.provider == WeatherProvider.VISUAL_CROSSING,
+                    tag = "settings_provider_visual_crossing",
+                    onInfoClick = { onProviderInfoClick(WeatherProvider.VISUAL_CROSSING) },
+                    onClick = { onProviderChange(WeatherProvider.VISUAL_CROSSING) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ProviderRow(
+                    title = WeatherProvider.BRIGHT_SKY.title,
+                    subtitle = "Weather data from the German Weather Service",
+                    selected = state.provider == WeatherProvider.BRIGHT_SKY,
+                    tag = "settings_provider_bright_sky",
+                    onInfoClick = { onProviderInfoClick(WeatherProvider.BRIGHT_SKY) },
+                    onClick = { onProviderChange(WeatherProvider.BRIGHT_SKY) }
+                )
             }
         }
 

@@ -21,6 +21,8 @@ class CachingWeatherRepository(
     private val now: () -> Instant = { Clock.System.now() }
 ) : WeatherRepository {
 
+    internal val registeredProviders: Set<WeatherProvider> = sources.keys.toSet()
+
     init {
         validateSources()
     }

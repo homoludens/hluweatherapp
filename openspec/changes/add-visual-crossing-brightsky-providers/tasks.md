@@ -13,7 +13,7 @@
 
 ## 3. Selection, Cache, and Lifecycle
 
-- [ ] 3.1 [low] Register both new providers in settings, persistent preferences, application routing, cache identity, and forecast-based background consumers without changing radar or route weather; verify selection, restart, old preferences, invalid-value fallback, and unrelated settings with focused repository/settings tests.
+- [x] 3.1 [low] Register both new providers in settings, persistent preferences, application routing, cache identity, and forecast-based background consumers without changing radar or route weather; verify selection, restart, old preferences, invalid-value fallback, and unrelated settings with focused repository/settings tests.
 - [ ] 3.2 [high] Preserve provider/location identity across in-flight forecast changes, stale fallback, widgets, and notifications so late results and credits cannot overwrite the current selection; verify delayed success, failure, cancellation, provider/location switches, and cache isolation with deterministic concurrency tests.
 - [ ] 3.3 [low] Extend forecast serialization compatibly for new providers and AQI scales while preserving old cached numeric entries; verify pre-change fixtures, new-provider round trips, corrupt/unknown fields, process restart, and stale matching-provider fallback.
 

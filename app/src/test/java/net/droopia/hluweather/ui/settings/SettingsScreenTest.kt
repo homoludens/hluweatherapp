@@ -292,6 +292,36 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun new_weather_providers_are_selectable_without_changing_radar_selection() {
+        val state = mutableStateOf(
+            testSettingsState.copy(radarProvider = RadarProvider.RAINVIEWER)
+        )
+        val weatherChanges = mutableListOf<WeatherProvider>()
+
+        renderSettings(
+            state = { state.value },
+            onProviderChange = { provider ->
+                weatherChanges += provider
+                state.value = state.value.copy(provider = provider)
+            }
+        )
+
+        composeRule.onNodeWithTag("settings_provider_visual_crossing").performClick()
+        composeRule.onNodeWithTag("settings_provider_visual_crossing").assertIsSelected()
+        assertEquals(WeatherProvider.VISUAL_CROSSING, state.value.provider)
+        assertEquals(RadarProvider.RAINVIEWER, state.value.radarProvider)
+
+        composeRule.onNodeWithTag("settings_provider_bright_sky").performClick()
+        composeRule.onNodeWithTag("settings_provider_bright_sky").assertIsSelected()
+        assertEquals(WeatherProvider.BRIGHT_SKY, state.value.provider)
+        assertEquals(RadarProvider.RAINVIEWER, state.value.radarProvider)
+        assertEquals(
+            listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY),
+            weatherChanges
+        )
+    }
+
+    @Test
     fun radar_provider_selector_reports_each_choice_and_is_independent_from_weather_provider() {
         val state = mutableStateOf(
             testSettingsState.copy(

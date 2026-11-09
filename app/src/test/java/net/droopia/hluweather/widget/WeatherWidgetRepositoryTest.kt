@@ -215,6 +215,23 @@ class WeatherWidgetRepositoryTest {
     }
 
     @Test
+    fun selected_new_provider_is_used_for_widget_forecast_requests() = runTest {
+        val location = savedLocation("belgrade", "Belgrade")
+
+        listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY).forEach { provider ->
+            val request = resolve(
+                settings = PersistedSettings(provider = provider),
+                mode = LocationMode.SAVED_LOCATION,
+                active = ActiveLocation.Saved(location),
+                locations = listOf(location)
+            )
+
+            assertEquals(provider, request?.provider)
+            assertEquals(provider, request?.identity?.provider)
+        }
+    }
+
+    @Test
     fun current_request_identity_matches_repository_rounding_and_includes_altitude_and_provider() = runTest {
         val first = resolve(
             settings = PersistedSettings(provider = WeatherProvider.OPEN_METEO),

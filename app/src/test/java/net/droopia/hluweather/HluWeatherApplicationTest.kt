@@ -13,8 +13,10 @@ import kotlinx.coroutines.test.runTest
 import net.droopia.hluweather.notifications.AppWorkerFactory
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.notifications.NotificationScheduler
+import net.droopia.hluweather.notifications.notificationWorkerDependencies
 import net.droopia.hluweather.widget.WeatherWidgetUpdaterOwner
 import net.droopia.hluweather.widget.WeatherWidgetUpdater
 import net.droopia.hluweather.widget.WeatherWidgetWorker
@@ -42,6 +44,15 @@ class HluWeatherApplicationTest {
         assertTrue(application.workManagerConfiguration.workerFactory is AppWorkerFactory)
         assertTrue(application is WeatherWidgetUpdaterOwner)
         assertSame(application.weatherWidgetUpdater, (application as WeatherWidgetUpdaterOwner).weatherWidgetUpdater)
+    }
+
+    @Test
+    fun selected_forecast_providers_share_the_repository_used_by_background_consumers() {
+        val application = ApplicationProvider.getApplicationContext<HluWeatherApplication>()
+        val repository = application.weatherRepository as CachingWeatherRepository
+
+        assertEquals(WeatherProvider.entries.toSet(), repository.registeredProviders)
+        assertSame(repository, application.notificationWorkerDependencies().weatherRepository)
     }
 
     @Test

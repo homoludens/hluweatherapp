@@ -79,6 +79,79 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun new_weather_provider_choices_survive_repository_reload_and_preserve_other_settings() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val providerKey = stringPreferencesKey("settings.provider")
+        val unrelatedKey = stringPreferencesKey("unrelated.preference")
+        dataStore.edit {
+            it[providerKey] = WeatherProvider.MET_NO.name
+            it[stringPreferencesKey("settings.theme_mode")] = ThemeMode.DARK.name
+            it[stringPreferencesKey("settings.temperature_unit")] = TemperatureUnit.FAHRENHEIT.name
+            it[stringPreferencesKey("settings.radar_provider")] = RadarProvider.RAINVIEWER.name
+            it[stringPreferencesKey("settings.selected_location_id")] = "trieste"
+            it[unrelatedKey] = "keep me"
+        }
+        val repository = DataStoreSettingsRepository(dataStore)
+        val existingSettings = repository.settings.first()
+
+        listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY).forEach { provider ->
+            repository.save(existingSettings.copy(provider = provider))
+
+            val reloaded = DataStoreSettingsRepository(dataStore).settings.first()
+            assertEquals(provider, reloaded.provider)
+            assertEquals(ThemeMode.DARK, reloaded.themeMode)
+            assertEquals(TemperatureUnit.FAHRENHEIT, reloaded.temperatureUnit)
+            assertEquals(RadarProvider.RAINVIEWER, reloaded.radarProvider)
+            assertEquals("trieste", reloaded.selectedLocationId)
+            assertEquals(provider.name, dataStore.data.first()[providerKey])
+            assertEquals("keep me", dataStore.data.first()[unrelatedKey])
+        }
+    }
+
+    @Test
+    fun existing_weather_provider_preferences_remain_supported() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val providerKey = stringPreferencesKey("settings.provider")
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        listOf(WeatherProvider.OPEN_METEO, WeatherProvider.MET_NO).forEach { provider ->
+            dataStore.edit { it[providerKey] = provider.name }
+
+            assertEquals(provider, repository.settings.first().provider)
+        }
+    }
+
+    @Test
+    fun missing_and_invalid_weather_provider_preferences_use_open_meteo_default() = runTest {
+        val file = temporaryFolder.newFile("settings.preferences_pb")
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { file }
+        )
+        val providerKey = stringPreferencesKey("settings.provider")
+        val repository = DataStoreSettingsRepository(dataStore)
+
+        assertEquals(WeatherProvider.OPEN_METEO, repository.settings.first().provider)
+
+        dataStore.edit { it[providerKey] = "NOT_A_PROVIDER" }
+        assertEquals(WeatherProvider.OPEN_METEO, repository.settings.first().provider)
+
+        dataStore.edit {
+            it.remove(providerKey)
+            it[booleanPreferencesKey("settings.provider")] = true
+        }
+        assertEquals(WeatherProvider.OPEN_METEO, repository.settings.first().provider)
+    }
+
+    @Test
     fun radar_visibility_defaults_to_enabled_when_key_is_absent_from_existing_settings() = runTest {
         val file = temporaryFolder.newFile("settings.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(

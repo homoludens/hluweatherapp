@@ -208,6 +208,30 @@ class ForecastCacheTest {
     }
 
     @Test
+    fun new_providers_keep_separate_cache_identity_after_cache_recreation() = runTest {
+        val store = dataStore(backgroundScope)
+        val providers = listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY)
+        val cache = ForecastCache(store)
+        val forecasts = providers.associateWith { provider ->
+            fixedForecast().copy(provider = provider)
+        }
+
+        forecasts.forEach { (provider, forecast) ->
+            cache.put(ForecastCacheKey(provider, "saved:shared"), forecast)
+        }
+
+        val reloadedCache = ForecastCache(store)
+        forecasts.forEach { (provider, forecast) ->
+            assertEquals(forecast, reloadedCache.get(ForecastCacheKey(provider, "saved:shared")))
+        }
+        assertNull(reloadedCache.get(ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:shared")))
+        assertEquals(
+            providers.map { ForecastCacheKey(it, "saved:shared") }.toSet(),
+            reloadedCache.entries().toSet()
+        )
+    }
+
+    @Test
     fun eviction_keeps_twenty_entries_and_recently_used_entry() = runTest {
         val cache = cache(backgroundScope)
         val keys = (0 until 20).map { index ->

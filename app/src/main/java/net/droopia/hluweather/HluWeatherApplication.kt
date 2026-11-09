@@ -24,6 +24,7 @@ import net.droopia.hluweather.data.cache.RadarMetadataCache
 import net.droopia.hluweather.data.repository.CachingWeatherRepository
 import net.droopia.hluweather.data.device.AndroidDeviceLocationSource
 import net.droopia.hluweather.data.device.DeviceLocationSource
+import net.droopia.hluweather.data.network.KtorBrightSkyApi
 import net.droopia.hluweather.data.network.KtorMetNoApi
 import net.droopia.hluweather.data.network.KtorLibreWxrRadarApi
 import net.droopia.hluweather.data.network.KtorRainViewerRadarApi
@@ -40,9 +41,11 @@ import net.droopia.hluweather.data.network.KtorOpenMeteoGeocodingApi
 import net.droopia.hluweather.data.network.KtorOpenMeteoRouteWeatherApi
 import net.droopia.hluweather.data.network.KtorOsrmApi
 import net.droopia.hluweather.data.network.KtorPhotonApi
+import net.droopia.hluweather.data.network.KtorVisualCrossingApi
 import net.droopia.hluweather.data.repository.NominatimReverseGeocoder
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.RadarMetadataRepository
+import net.droopia.hluweather.data.repository.BrightSkyWeatherRepository
 import net.droopia.hluweather.data.repository.MetNoWeatherRepository
 import net.droopia.hluweather.data.repository.OpenMeteoPlaceSearchSource
 import net.droopia.hluweather.data.repository.OpenMeteoRouteWeatherSource
@@ -54,10 +57,12 @@ import net.droopia.hluweather.data.repository.PlaceSearchSource
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.repository.RadarRepository
 import net.droopia.hluweather.data.model.RadarProvider
+import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.RouteWeatherSource
 import net.droopia.hluweather.data.repository.RoutingSource
 import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.data.repository.WeatherSource
+import net.droopia.hluweather.data.repository.VisualCrossingWeatherRepository
 import net.droopia.hluweather.data.repository.applicationDataStore
 import net.droopia.hluweather.data.repository.locationRepository
 import net.droopia.hluweather.notifications.AndroidWeatherNotificationPublisher
@@ -146,11 +151,24 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
 
     val weatherRepository: WeatherRepository by lazy {
         CachingWeatherRepository(
-            openMeteo = OpenMeteoWeatherRepository(
-                api = KtorOpenMeteoApi(httpClient),
-                airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
+            sources = mapOf(
+                WeatherProvider.OPEN_METEO to OpenMeteoWeatherRepository(
+                    api = KtorOpenMeteoApi(httpClient),
+                    airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
+                ),
+                WeatherProvider.MET_NO to MetNoWeatherRepository(
+                    KtorMetNoApi(httpClient),
+                    timeZoneResolver = locationTimeZoneResolver
+                ),
+                WeatherProvider.VISUAL_CROSSING to VisualCrossingWeatherRepository(
+                    api = KtorVisualCrossingApi(httpClient),
+                    timeZoneResolver = locationTimeZoneResolver
+                ),
+                WeatherProvider.BRIGHT_SKY to BrightSkyWeatherRepository(
+                    api = KtorBrightSkyApi(httpClient),
+                    timeZoneResolver = locationTimeZoneResolver
+                )
             ),
-            metNo = MetNoWeatherRepository(KtorMetNoApi(httpClient), timeZoneResolver = locationTimeZoneResolver),
             cache = ForecastCache(applicationDataStore)
         )
     }

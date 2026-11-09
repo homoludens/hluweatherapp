@@ -353,6 +353,34 @@ class CachingWeatherRepositoryTest {
         assertEquals(0, source.calls)
     }
 
+    @Test
+    fun new_provider_selection_routes_to_its_source_and_uses_separate_cache_identity() = runTest {
+        val providers = listOf(WeatherProvider.VISUAL_CROSSING, WeatherProvider.BRIGHT_SKY)
+        val sources = providers.associateWith { provider ->
+            FakeSource(provider, forecast(provider))
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(sources, cache)
+        val location = ActiveLocation.Saved(Svilajnac)
+
+        providers.forEach { provider ->
+            val load = repository.getForecast(provider, location)
+            assertEquals(provider, load.forecast.provider)
+            assertEquals(false, load.isStale)
+            assertEquals(
+                load.forecast,
+                cache.get(ForecastCacheKey(provider, "saved:${Svilajnac.id}"))
+            )
+        }
+
+        assertEquals(1, sources.getValue(WeatherProvider.VISUAL_CROSSING).calls)
+        assertEquals(1, sources.getValue(WeatherProvider.BRIGHT_SKY).calls)
+        assertEquals(
+            providers.map { ForecastCacheKey(it, "saved:${Svilajnac.id}") }.toSet(),
+            cache.entries().toSet()
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun mismatched_source_provider_is_rejected_at_construction() {
         CachingWeatherRepository(
