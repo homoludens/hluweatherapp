@@ -19,8 +19,6 @@ import net.droopia.hluweather.data.network.VisualCrossingCurrent
 import net.droopia.hluweather.data.network.VisualCrossingDay
 import net.droopia.hluweather.data.network.VisualCrossingHour
 import net.droopia.hluweather.data.network.VisualCrossingTimelineResponse
-import net.droopia.hluweather.data.timezone.LocationTimeZone
-import net.droopia.hluweather.data.timezone.TimeZoneResolver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -217,17 +215,11 @@ class VisualCrossingWeatherRepositoryTest {
     }
 
     @Test
-    fun invalid_timezone_uses_the_pinned_resolver_and_keeps_utc_fallback_explicit() = runTest {
-        var resolveCount = 0
-        val fallbackResolver = TimeZoneResolver { _, _ ->
-            resolveCount += 1
-            LocationTimeZone("UTC", isUtcFallback = true)
-        }
+    fun invalid_timezone_keeps_utc_fallback_explicit() = runTest {
         val response = readFixture().copy(timezone = "Unknown/Zone")
 
-        val forecast = repository(response, resolver = fallbackResolver).getForecast(location)
+        val forecast = repository(response).getForecast(location)
 
-        assertEquals(1, resolveCount)
         assertEquals("UTC", forecast.timezone)
         assertTrue(forecast.timezoneIsUtcFallback)
         assertTrue(forecast.daily.isEmpty())
@@ -283,15 +275,13 @@ class VisualCrossingWeatherRepositoryTest {
     private fun repository(
         response: VisualCrossingTimelineResponse,
         clock: Clock = fixedClock(Instant.parse("2026-11-09T09:30:00Z")),
-        resolver: TimeZoneResolver = TimeZoneResolver { _, _ -> error("Valid Visual Crossing zone should be used") },
         optionalAirQuality: VisualCrossingTimelineResponse? = null
     ) = VisualCrossingWeatherRepository(
         api = object : VisualCrossingApi {
             override suspend fun forecast(location: WeatherLocation): VisualCrossingTimelineResponse = response
             override suspend fun airQuality(location: WeatherLocation): VisualCrossingTimelineResponse? = optionalAirQuality
         },
-        clock = clock,
-        timeZoneResolver = resolver
+        clock = clock
     )
 
     private fun repository(

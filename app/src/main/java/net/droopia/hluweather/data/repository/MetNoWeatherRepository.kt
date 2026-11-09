@@ -11,7 +11,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.CurrentWeather
-import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -20,14 +19,10 @@ import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.MetNoApi
 import net.droopia.hluweather.data.network.MetNoResponse
 import net.droopia.hluweather.data.network.MetNoTimeSeries
-import net.droopia.hluweather.data.timezone.LocationTimeZone
-import net.droopia.hluweather.data.timezone.OfflineTimeZoneResolver
-import net.droopia.hluweather.data.timezone.TimeZoneResolver
 
 class MetNoWeatherRepository(
     private val api: MetNoApi,
-    private val clock: Clock = Clock.System,
-    private val timeZoneResolver: TimeZoneResolver = OfflineTimeZoneResolver()
+    private val clock: Clock = Clock.System
 ) : WeatherSource {
 
     override val provider: WeatherProvider = WeatherProvider.MET_NO
@@ -44,8 +39,7 @@ class MetNoWeatherRepository(
         }
 
         return try {
-            val resolvedZone = timeZoneResolver.resolve(location.latitude, location.longitude)
-            response.toWeatherForecast(location, clock.now(), resolvedZone)
+            response.toWeatherForecast(location, clock.now())
         } catch (error: CancellationException) {
             throw error
         } catch (error: WeatherRepositoryException) {
@@ -59,10 +53,9 @@ class MetNoWeatherRepository(
 
 private fun MetNoResponse.toWeatherForecast(
     location: WeatherLocation,
-    fetchedAt: Instant,
-    resolvedZone: LocationTimeZone
+    fetchedAt: Instant
 ): WeatherForecast {
-    val displayTimeZone = resolvedZone.zone
+    val displayTimeZone = TimeZone.of("UTC")
     val today = fetchedAt.toLocalDateTime(displayTimeZone).date
     val lastDate = today.plus(7, DateTimeUnit.DAY)
     val normalizedHours = properties.timeseries
@@ -98,10 +91,10 @@ private fun MetNoResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly.map { it.forecast },
-        daily = if (resolvedZone.isUtcFallback) emptyList() else hourly.toDailyForecasts(displayTimeZone),
+        daily = emptyList(),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = displayTimeZone.id,
-        timezoneIsUtcFallback = resolvedZone.isUtcFallback
+        timezoneIsUtcFallback = true
     )
 }
 
@@ -157,29 +150,8 @@ private fun NormalizedHour.toCurrentWeather(): CurrentWeather = CurrentWeather(
     isDay = forecast.isDay
 )
 
-private fun List<NormalizedHour>.toDailyForecasts(displayTimeZone: TimeZone): List<DayForecast> =
-    groupBy { it.forecast.time.toLocalDateTime(displayTimeZone).date }
-        .toSortedMap()
-        .map { (date, hours) ->
-            val precipitation = hours.mapNotNull { it.precipitation }
-                .takeIf { it.isNotEmpty() }
-                ?.sum()
-            DayForecast(
-                date = date,
-                condition = hours.first().forecast.condition,
-                temperatureMin = hours.minOf { it.forecast.temperature },
-                temperatureMax = hours.maxOf { it.forecast.temperature },
-                precipitation = precipitation,
-                sunrise = null,
-                sunset = null
-            )
-        }
-
-/*
- * The domain hourly model requires a numeric precipitation value. The
- * normalized wrapper above keeps the provider's distinction between zero and
- * unavailable for current and daily aggregation.
- */
+/* The normalized wrapper preserves the provider's distinction between zero
+ * precipitation and an unavailable amount for current conditions. */
 
 private data class WeatherSymbol(
     val condition: WeatherCondition,

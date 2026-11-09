@@ -6,9 +6,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.JsonObject
@@ -16,7 +14,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.CurrentWeatherProvenance
-import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -29,8 +26,6 @@ import net.droopia.hluweather.data.network.BrightSkyCurrentWeatherResponse
 import net.droopia.hluweather.data.network.BrightSkySource
 import net.droopia.hluweather.data.network.BrightSkyWeatherRecord
 import net.droopia.hluweather.data.network.BrightSkyWeatherResponse
-import net.droopia.hluweather.data.timezone.LocationTimeZone
-import net.droopia.hluweather.data.timezone.TimeZoneResolver
 
 private const val MAX_STATION_DISTANCE_METERS = 50_000
 // Bright Sky's /current_weather endpoint compiles observations from roughly
@@ -39,29 +34,15 @@ private val MAX_CURRENT_OBSERVATION_AGE = 90.minutes
 // Only use a forecast record close enough to represent the current hour.
 private val MAX_CURRENT_FORECAST_TIME_OFFSET = 1.hours
 
-/** Uses the shared application resolver; tests should inject a deterministic fake. */
 class BrightSkyWeatherRepository(
     private val api: BrightSkyApi,
-    private val timeZoneResolver: TimeZoneResolver,
     private val clock: Clock = Clock.System
 ) : WeatherSource {
 
     override val provider: WeatherProvider = WeatherProvider.BRIGHT_SKY
 
     override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
-        val resolvedZone = try {
-            timeZoneResolver.resolve(location.latitude, location.longitude)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Throwable) {
-            throw WeatherRepositoryException("Unable to resolve weather timezone")
-        }
-
-        val zone = try {
-            resolvedZone.zone
-        } catch (_: Throwable) {
-            throw WeatherRepositoryException("Unable to resolve weather timezone")
-        }
+        val zone = TimeZone.of("UTC")
 
         val weather = try {
             api.weather(location, zone)
@@ -88,7 +69,6 @@ class BrightSkyWeatherRepository(
             weather.toWeatherForecast(
                 location = location,
                 fetchedAt = fetchedAt,
-                resolvedZone = resolvedZone,
                 currentResponse = currentResponse
             )
         } catch (error: CancellationException) {
@@ -104,10 +84,9 @@ class BrightSkyWeatherRepository(
 private fun BrightSkyWeatherResponse.toWeatherForecast(
     location: WeatherLocation,
     fetchedAt: Instant,
-    resolvedZone: LocationTimeZone,
     currentResponse: BrightSkyCurrentWeatherResponse?
 ): WeatherForecast {
-    val zone = resolvedZone.zone
+    val zone = TimeZone.of("UTC")
     val today = fetchedAt.toLocalDateTime(zone).date
     val afterForecast = today.plus(7, DateTimeUnit.DAY)
     val recordCandidates = normalizedRecordCandidates()
@@ -132,27 +111,17 @@ private fun BrightSkyWeatherResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly,
-        daily = if (resolvedZone.isUtcFallback) {
-            emptyList()
-        } else {
-            recordCandidates.asSequence()
-                .filter { it.source.isForecast() }
-                .toList()
-                .nearestRecordsPerInstant()
-                .toCompleteLocalDays(zone, today, afterForecast)
-        },
+        daily = emptyList(),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = zone.id,
-        timezoneIsUtcFallback = resolvedZone.isUtcFallback
+        timezoneIsUtcFallback = true
     )
 }
 
 private data class TimedBrightSkyRecord(
     val time: Instant,
     val source: BrightSkySource,
-    val record: BrightSkyWeatherRecord,
     val hour: HourForecast?,
-    val precipitation: Double?,
     val forecastCurrent: CurrentWeather?
 )
 
@@ -165,11 +134,7 @@ private fun BrightSkyWeatherResponse.normalizedRecordCandidates(): List<TimedBri
         TimedBrightSkyRecord(
             time = time,
             source = source,
-            record = record,
             hour = record.toHourForecast(time, sourcesById),
-            precipitation = record.precipitation
-                .fromFieldIfInRange("precipitation", record.fallbackSourceIds, sourcesById)
-                .nonNegative(),
             forecastCurrent = if (source.isForecast()) {
                 record.toForecastCurrent(time, source, sourcesById)
             } else {
@@ -326,60 +291,6 @@ private fun BrightSkyWeatherRecord.toForecastCurrent(
     )
 }
 
-private fun List<TimedBrightSkyRecord>.toCompleteLocalDays(
-    zone: TimeZone,
-    firstDate: LocalDate,
-    afterDate: LocalDate
-): List<DayForecast> {
-    val recordsByTime = associateBy { it.time }
-    return recordsByTime.values
-        .asSequence()
-        .map { it.time.toLocalDateTime(zone).date }
-        .filter { it >= firstDate && it < afterDate }
-        .distinct()
-        .sorted()
-        .mapNotNull { date ->
-            val start = date.atStartOfDayIn(zone)
-            val end = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
-            val durationSeconds = (end - start).inWholeSeconds
-            if (durationSeconds % SECONDS_PER_HOUR != 0L) return@mapNotNull null
-            val hourCountLong = durationSeconds / SECONDS_PER_HOUR
-            if (hourCountLong !in MINIMUM_LOCAL_DAY_HOURS..MAXIMUM_LOCAL_DAY_HOURS) return@mapNotNull null
-            val hourCount = hourCountLong.toInt()
-
-            // Build the day by instants, not local hour labels. This includes
-            // both copies of a repeated fall-back hour and skips spring gaps.
-            val expectedTimes = List(hourCount) { index -> start + index.hours }
-            val dayHours = expectedTimes.map { recordsByTime[it]?.hour ?: return@mapNotNull null }
-            val precipitationEnds = expectedTimes.map { it + 1.hours }
-            val precipitationValues = precipitationEnds.map { recordsByTime[it]?.precipitation }
-            val dailyPrecipitation = if (precipitationValues.all { it != null && it.isFinite() && it >= 0.0 }) {
-                precipitationValues.sumOf { requireNotNull(it) }
-            } else {
-                null
-            }
-            val summarizedCondition = dayHours.asSequence()
-                .map { it.condition }
-                .filter { it != WeatherCondition.UNKNOWN }
-                .toList()
-                .groupingBy { it }
-                .eachCount()
-                .maxByOrNull { it.value }
-                ?.key ?: WeatherCondition.UNKNOWN
-
-            DayForecast(
-                date = date,
-                condition = summarizedCondition,
-                temperatureMin = dayHours.minOf { it.temperature },
-                temperatureMax = dayHours.maxOf { it.temperature },
-                precipitation = dailyPrecipitation,
-                sunrise = null,
-                sunset = null
-            )
-        }
-        .toList()
-}
-
 private fun List<BrightSkySource>.sourcesById(): Map<Int, BrightSkySource> =
     mapNotNull { source -> source.id?.let { it to source } }
         .groupBy({ it.first }, { it.second })
@@ -496,7 +407,3 @@ private fun Double?.valid(minimum: Double, maximum: Double): Double? =
 private fun Int?.percentage(): Int? = this?.takeIf { it in 0..100 }
 
 private fun Double?.percentage(): Int? = valid(0.0, 100.0)?.toInt()
-
-private const val SECONDS_PER_HOUR = 3_600L
-private const val MINIMUM_LOCAL_DAY_HOURS = 23L
-private const val MAXIMUM_LOCAL_DAY_HOURS = 25L

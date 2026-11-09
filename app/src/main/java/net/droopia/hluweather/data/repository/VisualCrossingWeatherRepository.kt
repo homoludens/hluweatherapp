@@ -24,14 +24,10 @@ import net.droopia.hluweather.data.network.VisualCrossingCurrent
 import net.droopia.hluweather.data.network.VisualCrossingDay
 import net.droopia.hluweather.data.network.VisualCrossingHour
 import net.droopia.hluweather.data.network.VisualCrossingTimelineResponse
-import net.droopia.hluweather.data.timezone.LocationTimeZone
-import net.droopia.hluweather.data.timezone.OfflineTimeZoneResolver
-import net.droopia.hluweather.data.timezone.TimeZoneResolver
 
 class VisualCrossingWeatherRepository(
     private val api: VisualCrossingApi,
-    private val clock: Clock = Clock.System,
-    private val timeZoneResolver: TimeZoneResolver = OfflineTimeZoneResolver()
+    private val clock: Clock = Clock.System
 ) : WeatherSource {
 
     override val provider: WeatherProvider = WeatherProvider.VISUAL_CROSSING
@@ -48,13 +44,7 @@ class VisualCrossingWeatherRepository(
             throw WeatherRepositoryException("Unable to load Visual Crossing weather data")
         }
 
-        val resolvedZone = try {
-            response.resolveTimeZone(location, timeZoneResolver)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Throwable) {
-            throw WeatherRepositoryException("Unable to resolve weather timezone")
-        }
+        val resolvedZone = response.resolveTimeZone()
 
         val forecast = try {
             response.toWeatherForecast(location, clock.now(), resolvedZone)
@@ -78,21 +68,20 @@ class VisualCrossingWeatherRepository(
     }
 }
 
-private suspend fun VisualCrossingTimelineResponse.resolveTimeZone(
-    location: WeatherLocation,
-    resolver: TimeZoneResolver
-): LocationTimeZone {
+private fun VisualCrossingTimelineResponse.resolveTimeZone(): ForecastTimeZone {
     val providerZone = timezone?.let { id ->
         runCatching { TimeZone.of(id) }.getOrNull()
     }
-    return providerZone?.let { LocationTimeZone(it.id, isUtcFallback = false) }
-        ?: resolver.resolve(location.latitude, location.longitude)
+    return providerZone?.let { ForecastTimeZone(it, isUtcFallback = false) }
+        ?: ForecastTimeZone(TimeZone.of("UTC"), isUtcFallback = true)
 }
+
+private data class ForecastTimeZone(val zone: TimeZone, val isUtcFallback: Boolean)
 
 private fun VisualCrossingTimelineResponse.toWeatherForecast(
     location: WeatherLocation,
     fetchedAt: Instant,
-    resolvedZone: LocationTimeZone
+    resolvedZone: ForecastTimeZone
 ): WeatherForecast {
     val zone = resolvedZone.zone
     val today = fetchedAt.toLocalDateTime(zone).date

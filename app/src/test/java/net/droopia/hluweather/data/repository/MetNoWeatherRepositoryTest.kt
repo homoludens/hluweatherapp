@@ -1,14 +1,12 @@
 package net.droopia.hluweather.data.repository
 
 import kotlin.time.Instant
-import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.hourText
-import net.droopia.hluweather.data.timezone.LocationTimeZone
 import net.droopia.hluweather.ui.weather.toHourlyTableData
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
@@ -36,7 +34,7 @@ import org.junit.function.ThrowingRunnable
 class MetNoWeatherRepositoryTest {
 
     @Test
-    fun getForecast_normalizes_utc_times_and_groups_daily_values_in_the_location_zone() = runTest {
+    fun getForecast_normalizes_utc_times_and_uses_an_explicit_utc_fallback() = runTest {
         val fetchedAt = Instant.parse("2026-09-10T12:00:00Z")
         val forecast = repository(response = aggregatedResponse, clock = fixedClock(fetchedAt))
             .getForecast(location)
@@ -44,7 +42,8 @@ class MetNoWeatherRepositoryTest {
         assertEquals(location, forecast.location)
         assertEquals(WeatherProvider.MET_NO, forecast.provider)
         assertEquals(fetchedAt, forecast.fetchedAt)
-        assertEquals("Europe/Belgrade", forecast.timezone)
+        assertEquals("UTC", forecast.timezone)
+        assertTrue(forecast.timezoneIsUtcFallback)
         assertEquals(MoonPhaseCalculator.phase(fetchedAt), forecast.moonPhase, 0.0)
 
         assertEquals(3, forecast.hourly.size)
@@ -55,19 +54,11 @@ class MetNoWeatherRepositoryTest {
         assertEquals(WeatherCondition.RAIN, forecast.hourly[2].condition)
         assertEquals(false, forecast.hourly[2].isDay)
 
-        assertEquals(2, forecast.daily.size)
-        assertEquals("2026-09-10", forecast.daily[0].date.toString())
-        assertEquals(5.0, forecast.daily[0].temperatureMin, 0.0)
-        assertEquals(20.0, forecast.daily[0].temperatureMax, 0.0)
-        assertEquals(1.25, forecast.daily[0].precipitation!!, 0.0)
-        assertEquals("2026-09-11", forecast.daily[1].date.toString())
-        assertEquals(8.0, forecast.daily[1].temperatureMin, 0.0)
-        assertEquals(8.0, forecast.daily[1].temperatureMax, 0.0)
-        assertEquals(2.5, forecast.daily[1].precipitation!!, 0.0)
+        assertTrue(forecast.daily.isEmpty())
     }
 
     @Test
-    fun locationZoneControlsMidnightAndDstTransitionsNotDeviceZone() = runTest {
+    fun uses_utc_instants_instead_of_the_device_zone_and_omits_local_days() = runTest {
         val original = java.util.TimeZone.getDefault()
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
         try {
@@ -79,9 +70,11 @@ class MetNoWeatherRepositoryTest {
                     timeSeries("clearsky_day", time = "2026-03-29T01:00:00Z")
                 ), fixedClock(Instant.parse("2026-03-28T12:00:00Z"))
             ).getForecast(location)
-            assertEquals(listOf("2026-03-28", "2026-03-29"), midnight.daily.map { it.date.toString() })
-            val zone = java.time.ZoneId.of(midnight.timezone)
-            assertEquals(listOf("23h", "00h", "01h", "03h"), midnight.hourly.map { it.time.hourText(zone) })
+            assertEquals("UTC", midnight.timezone)
+            assertTrue(midnight.timezoneIsUtcFallback)
+            assertTrue(midnight.daily.isEmpty())
+            val zone = java.time.ZoneId.of("UTC")
+            assertEquals(listOf("22h", "23h", "00h", "01h"), midnight.hourly.map { it.time.hourText(zone) })
 
             val repeated = repository(
                 responseWithTimeseries(
@@ -89,7 +82,7 @@ class MetNoWeatherRepositoryTest {
                     timeSeries("clearsky_day", time = "2026-10-25T01:00:00Z")
                 ), fixedClock(Instant.parse("2026-10-25T00:15:00Z"))
             ).getForecast(location)
-            assertEquals(listOf("02h +02:00", "02h +01:00"), repeated.hourly.map { it.time.hourText(zone) })
+            assertEquals(listOf("00h", "01h"), repeated.hourly.map { it.time.hourText(zone) })
             val table = repeated.toHourlyTableData(Instant.parse("2026-10-25T01:15:00Z"))
             assertEquals(listOf(Instant.parse("2026-10-25T01:00:00Z")), table.hourItems.map { it.hour.time })
         } finally {
@@ -99,7 +92,7 @@ class MetNoWeatherRepositoryTest {
 
     @Test
     fun fallbackUsesUtcWithoutInventingLocalDailyExtrema() = runTest {
-        val forecast = repository(aggregatedResponse, zone = LocationTimeZone("UTC", true)).getForecast(location)
+        val forecast = repository(aggregatedResponse).getForecast(location)
         assertEquals("UTC", forecast.timezone)
         assertTrue(forecast.timezoneIsUtcFallback)
         assertTrue(forecast.daily.isEmpty())
@@ -107,11 +100,12 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
-    fun getForecast_keeps_the_seventh_local_date_and_excludes_the_eighth() = runTest {
+    fun getForecast_keeps_the_seventh_utc_date_and_excludes_the_eighth() = runTest {
         val response = responseWithTimeseries(
             *(aggregatedResponse.properties.timeseries + listOf(
                 timeSeries("fair_day", time = "2026-09-15T22:00:00Z"),
-                timeSeries("fair_day", time = "2026-09-16T22:00:00Z")
+                timeSeries("fair_day", time = "2026-09-16T22:00:00Z"),
+                timeSeries("fair_day", time = "2026-09-17T22:00:00Z")
             )).toTypedArray()
         )
 
@@ -120,12 +114,9 @@ class MetNoWeatherRepositoryTest {
             clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
         ).getForecast(location)
 
-        assertEquals(
-            listOf("2026-09-10", "2026-09-11", "2026-09-16"),
-            forecast.daily.map { it.date.toString() }
-        )
-        assertEquals(4, forecast.hourly.size)
-        assertEquals(Instant.parse("2026-09-15T22:00:00Z"), forecast.hourly.last().time)
+        assertTrue(forecast.daily.isEmpty())
+        assertEquals(5, forecast.hourly.size)
+        assertEquals(Instant.parse("2026-09-16T22:00:00Z"), forecast.hourly.last().time)
     }
 
     @Test
@@ -315,11 +306,11 @@ class MetNoWeatherRepositoryTest {
         assertEquals(false, forecast.current.isDay)
         assertEquals(4.5, forecast.current.precipitation!!, 0.0)
         assertEquals(4.5, forecast.hourly.single().precipitation!!, 0.0)
-        assertEquals(4.5, forecast.daily.single().precipitation!!, 0.0)
+        assertTrue(forecast.daily.isEmpty())
     }
 
     @Test
-    fun getForecast_transitions_to_next_six_hours_and_aggregates_daily_values() = runTest {
+    fun getForecast_transitions_to_next_six_hours_and_omits_daily_values_without_location_zone() = runTest {
         val forecast = repository(
             response = responseWithTimeseries(
                 timeSeries(
@@ -347,23 +338,7 @@ class MetNoWeatherRepositoryTest {
 
         assertEquals(WeatherCondition.RAIN, forecast.hourly[1].condition)
         assertEquals(1.0, forecast.hourly[1].precipitation!!, 0.0)
-        assertEquals(2, forecast.daily.size)
-        assertEquals(5.0, forecast.daily[0].temperatureMin, 0.0)
-        assertEquals(20.0, forecast.daily[0].temperatureMax, 0.0)
-        assertEquals(1.25, forecast.daily[0].precipitation!!, 0.0)
-        assertEquals(8.0, forecast.daily[1].temperatureMin, 0.0)
-        assertEquals(8.0, forecast.daily[1].temperatureMax, 0.0)
-        assertEquals(2.5, forecast.daily[1].precipitation!!, 0.0)
-    }
-
-    @Test
-    fun getForecast_preserves_a_reported_zero_daily_precipitation() = runTest {
-        val forecast = repository(
-            response = responseWithTimeseries(timeSeries("clearsky_day", precipitation = 0.0)),
-            clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
-        ).getForecast(location)
-
-        assertEquals(0.0, forecast.daily.single().precipitation!!, 0.0)
+        assertTrue(forecast.daily.isEmpty())
     }
 
     @Test
@@ -403,14 +378,12 @@ class MetNoWeatherRepositoryTest {
 
     private fun repository(
         response: MetNoResponse,
-        clock: Clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z")),
-        zone: LocationTimeZone = LocationTimeZone("Europe/Belgrade", false)
+        clock: Clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
     ) = MetNoWeatherRepository(
         api = object : MetNoApi {
             override suspend fun forecast(location: WeatherLocation): MetNoResponse = response
         },
-        clock = clock,
-        timeZoneResolver = { _, _ -> zone }
+        clock = clock
     )
 
     private fun timeSeries(

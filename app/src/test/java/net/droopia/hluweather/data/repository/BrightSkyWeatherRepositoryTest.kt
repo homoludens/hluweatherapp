@@ -5,11 +5,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -24,10 +20,7 @@ import net.droopia.hluweather.data.network.BrightSkyCurrentWeatherResponse
 import net.droopia.hluweather.data.network.BrightSkySource
 import net.droopia.hluweather.data.network.BrightSkyWeatherRecord
 import net.droopia.hluweather.data.network.BrightSkyWeatherResponse
-import net.droopia.hluweather.data.timezone.LocationTimeZone
-import net.droopia.hluweather.data.timezone.TimeZoneResolver
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -37,34 +30,28 @@ import org.junit.function.ThrowingRunnable
 class BrightSkyWeatherRepositoryTest {
 
     @Test
-    fun resolves_location_zone_before_requests_and_maps_current_observation_and_hourly_fields() = runTest {
+    fun requests_in_utc_and_maps_current_observation_and_hourly_fields() = runTest {
         val events = mutableListOf<String>()
-        val resolver = TimeZoneResolver { latitude, longitude ->
-            assertEquals(52.52, latitude, 0.0)
-            assertEquals(13.419, longitude, 0.0)
-            events += "resolve"
-            LocationTimeZone("Europe/Berlin", isUtcFallback = false)
-        }
         val api = FakeBrightSkyApi(
             weatherResponse = fixtureWeather(),
             currentResponse = fixtureCurrent(),
             onWeather = { zone ->
-                assertEquals(TimeZone.of("Europe/Berlin"), zone)
+                assertEquals(TimeZone.of("UTC"), zone)
                 events += "weather"
             },
             onCurrent = { zone ->
-                assertEquals(TimeZone.of("Europe/Berlin"), zone)
+                assertEquals(TimeZone.of("UTC"), zone)
                 events += "current"
             }
         )
         val fetchedAt = Instant.parse("2026-11-09T08:30:00Z")
 
-        val forecast = repository(api, resolver, fetchedAt).getForecast(location)
+        val forecast = repository(api, fetchedAt).getForecast(location)
 
-        assertEquals(listOf("resolve", "weather", "current"), events)
+        assertEquals(listOf("weather", "current"), events)
         assertEquals(WeatherProvider.BRIGHT_SKY, forecast.provider)
-        assertEquals("Europe/Berlin", forecast.timezone)
-        assertFalse(forecast.timezoneIsUtcFallback)
+        assertEquals("UTC", forecast.timezone)
+        assertTrue(forecast.timezoneIsUtcFallback)
         assertEquals(CurrentWeatherProvenance.OBSERVATION, forecast.current.provenance)
         assertEquals(Instant.parse("2026-11-09T08:30:00Z"), forecast.current.validTime)
         assertEquals(8.4, forecast.current.temperature, 0.0)
@@ -327,136 +314,28 @@ class BrightSkyWeatherRepositoryTest {
     }
 
     @Test
-    fun complete_local_days_use_23_24_or_25_instants_and_preceding_hour_rain_boundaries() = runTest {
-        val cases = listOf(
-            Triple("2026-03-29", "Europe/Berlin", 23),
-            Triple("2026-10-25", "Europe/Berlin", 25),
-            Triple("2026-11-09", "Europe/Berlin", 24)
-        )
-
-        cases.forEach { (dateText, zoneId, expectedCount) ->
-            val zone = TimeZone.of(zoneId)
-            val date = LocalDate.parse(dateText)
-            val start = date.atStartOfDayIn(zone)
-            val records = localDayRecords(start, expectedCount)
-            val now = start + (expectedCount / 2).toLong().hours
-            val forecast = repository(
-                FakeBrightSkyApi(
-                    BrightSkyWeatherResponse(weather = records, sources = listOf(forecastStation())),
-                    BrightSkyCurrentWeatherResponse()
-                ),
-                zone = zoneId,
-                now = now
-            ).getForecast(location)
-
-            val day = forecast.daily.single()
-            assertEquals(dateText, day.date.toString())
-            assertEquals(expectedCount, forecast.hourly.count {
-                it.time.toLocalDateTime(zone).date == date
-            })
-            assertEquals(1.0, day.temperatureMin, 0.0)
-            assertEquals(expectedCount.toDouble(), day.temperatureMax, 0.0)
-            assertNull(day.sunrise)
-            assertNull(day.sunset)
-            // The record at local midnight is from the preceding day. The
-            // following N interval-ending records cover exactly this day.
-            assertEquals(expectedCount.toDouble(), day.precipitation!!, 0.0)
-        }
-
-        val fallZone = TimeZone.of("Europe/Berlin")
-        val fallDate = LocalDate.parse("2026-10-25")
-        val fallForecast = repository(
-            FakeBrightSkyApi(
-                BrightSkyWeatherResponse(
-                    weather = localDayRecords(fallDate.atStartOfDayIn(fallZone), 25),
-                    sources = listOf(forecastStation())
-                ),
-                BrightSkyCurrentWeatherResponse()
-            ),
-            zone = "Europe/Berlin",
-            now = Instant.parse("2026-10-25T12:00:00Z")
-        ).getForecast(location)
-        val repeatedTwoOClock = fallForecast.hourly.filter {
-            it.time.toLocalDateTime(fallZone).date == fallDate && it.time.toLocalDateTime(fallZone).hour == 2
-        }
-        assertEquals(2, repeatedTwoOClock.size)
-        assertTrue(repeatedTwoOClock[0].time < repeatedTwoOClock[1].time)
-        assertEquals(
-            listOf("+02:00", "+01:00"),
-            repeatedTwoOClock.map {
-                java.time.Instant.ofEpochMilli(it.time.toEpochMilliseconds())
-                    .atZone(java.time.ZoneId.of("Europe/Berlin")).offset.toString()
-            }
-        )
-    }
-
-    @Test
-    fun partial_days_and_missing_daily_precipitation_intervals_are_not_filled_in() = runTest {
-        val zone = TimeZone.of("Europe/Berlin")
-        val start = LocalDate.parse("2026-11-09").atStartOfDayIn(zone)
-        val complete = localDayRecords(start, 24)
-        val missingHour = complete.filterNot { it.timestamp == (start + 7.hours).toString() }
-        val partial = repository(
-            FakeBrightSkyApi(
-                BrightSkyWeatherResponse(weather = missingHour, sources = listOf(forecastStation())),
-                BrightSkyCurrentWeatherResponse()
-            ),
-            now = start + 12.hours
-        ).getForecast(location)
-        assertTrue(partial.daily.isEmpty())
-
-        val observationsThenForecast = complete.mapIndexed { index, record ->
-            if (index < 12) record.copy(sourceId = 6007) else record
-        }
-        val mixedSourceDay = repository(
-            FakeBrightSkyApi(
-                BrightSkyWeatherResponse(
-                    weather = observationsThenForecast,
-                    sources = listOf(observationStation(distance = 1_000), forecastStation())
-                ),
-                BrightSkyCurrentWeatherResponse()
-            ),
-            now = start + 12.hours
-        ).getForecast(location)
-        assertEquals(24, mixedSourceDay.hourly.count {
-            it.time.toLocalDateTime(zone).date.toString() == "2026-11-09"
-        })
-        assertTrue("Observed hours must not complete a forecast daily summary", mixedSourceDay.daily.isEmpty())
-
-        val missingRainInterval = complete.map { record ->
-            if (record.timestamp == (start + 9.hours).toString()) record.copy(precipitation = null) else record
-        }
-        val daily = repository(
-            FakeBrightSkyApi(
-                BrightSkyWeatherResponse(weather = missingRainInterval, sources = listOf(forecastStation())),
-                BrightSkyCurrentWeatherResponse()
-            ),
-            now = start + 12.hours
-        ).getForecast(location).daily.single()
-        assertNull(daily.precipitation)
-    }
-
-    @Test
-    fun utc_fallback_keeps_instants_but_never_claims_location_local_days() = runTest {
+    fun utc_fallback_keeps_hourly_instants_but_omits_local_daily_summaries() = runTest {
         val start = Instant.parse("2026-11-09T00:00:00Z")
+        val queriedZones = mutableListOf<TimeZone>()
+        val records = localDayRecords(start, 24)
         val forecast = repository(
             FakeBrightSkyApi(
                 BrightSkyWeatherResponse(
-                    weather = localDayRecords(start, 24),
+                    weather = records,
                     sources = listOf(forecastStation())
                 ),
-                BrightSkyCurrentWeatherResponse()
+                BrightSkyCurrentWeatherResponse(),
+                onWeather = queriedZones::add
             ),
-            resolver = TimeZoneResolver { _, _ -> LocationTimeZone("UTC", isUtcFallback = true) },
             now = start + 12.hours
         ).getForecast(location)
 
+        assertEquals(listOf(TimeZone.of("UTC")), queriedZones)
         assertTrue(forecast.timezoneIsUtcFallback)
         assertEquals("UTC", forecast.timezone)
         assertTrue(forecast.daily.isEmpty())
-        assertEquals(24, forecast.hourly.count {
-            it.time.toLocalDateTime(TimeZone.UTC).date.toString() == "2026-11-09"
-        })
+        assertEquals(records.size, forecast.hourly.size)
+        assertEquals(records.mapNotNull { it.timestamp?.let(Instant::parse) }, forecast.hourly.map { it.time })
     }
 
     @Test
@@ -502,15 +381,8 @@ class BrightSkyWeatherRepositoryTest {
 
     private fun repository(
         api: BrightSkyApi,
-        resolver: TimeZoneResolver = TimeZoneResolver { _, _ -> LocationTimeZone("Europe/Berlin", false) },
         now: Instant = Instant.parse("2026-11-09T09:30:00Z")
-    ) = BrightSkyWeatherRepository(api, resolver, fixedClock(now))
-
-    private fun repository(
-        api: BrightSkyApi,
-        zone: String,
-        now: Instant
-    ) = repository(api, TimeZoneResolver { _, _ -> LocationTimeZone(zone, false) }, now)
+    ) = BrightSkyWeatherRepository(api, fixedClock(now))
 
     private fun fixtureWeather(): BrightSkyWeatherResponse = decodeFixture("bright-sky-weather.json")
 

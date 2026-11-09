@@ -147,8 +147,6 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
         }
     }
 
-    val locationTimeZoneResolver by lazy { net.droopia.hluweather.data.timezone.OfflineTimeZoneResolver() }
-
     val weatherRepository: WeatherRepository by lazy {
         CachingWeatherRepository(
             sources = mapOf(
@@ -157,16 +155,13 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
                     airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
                 ),
                 WeatherProvider.MET_NO to MetNoWeatherRepository(
-                    KtorMetNoApi(httpClient),
-                    timeZoneResolver = locationTimeZoneResolver
+                    KtorMetNoApi(httpClient)
                 ),
                 WeatherProvider.VISUAL_CROSSING to VisualCrossingWeatherRepository(
-                    api = KtorVisualCrossingApi(httpClient),
-                    timeZoneResolver = locationTimeZoneResolver
+                    api = KtorVisualCrossingApi(httpClient)
                 ),
                 WeatherProvider.BRIGHT_SKY to BrightSkyWeatherRepository(
-                    api = KtorBrightSkyApi(httpClient),
-                    timeZoneResolver = locationTimeZoneResolver
+                    api = KtorBrightSkyApi(httpClient)
                 )
             ),
             cache = ForecastCache(applicationDataStore)
@@ -174,7 +169,7 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
     }
 
     val metNoWeatherRepository: WeatherSource by lazy {
-        MetNoWeatherRepository(KtorMetNoApi(httpClient), timeZoneResolver = locationTimeZoneResolver)
+        MetNoWeatherRepository(KtorMetNoApi(httpClient))
     }
 
     private val radarHttpClient: HttpClient by lazy { createRadarHttpClient() }
