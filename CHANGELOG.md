@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.8.1
+
+- Added Visual Crossing and Bright Sky weather providers with provider-specific forecast, air-quality, and attribution support.
+- Cached saved-location time zones using Open-Meteo and added approximate UTC daily summaries when a location time zone is unavailable.
+- Removed the bundled time-zone boundary database and Zstandard runtime to reduce the app package size.
+
 ## 3.7.5
 
 - Aligned map layer, compass, location, and attribution controls in a vertical stack on the right.
