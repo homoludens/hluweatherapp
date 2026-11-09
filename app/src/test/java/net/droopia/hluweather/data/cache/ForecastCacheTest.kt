@@ -56,7 +56,7 @@ class ForecastCacheTest {
     fun successful_write_can_be_read_after_cache_recreation() = runTest {
         val dataStore = dataStore(backgroundScope)
         val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")
-        val forecast = fixedForecast()
+        val forecast = fixedForecast().let { it.copy(location = it.location.copy(timeZoneId = "Europe/Belgrade")) }
 
         ForecastCache(dataStore).put(key, forecast)
 
@@ -71,7 +71,7 @@ class ForecastCacheTest {
         val resolved = fixedForecast().copy(timezone = "Europe/Belgrade")
         cache.put(key, resolved)
         assertEquals(resolved, ForecastCache(store).get(key))
-        val fallback = resolved.copy(timezone = "UTC", timezoneIsUtcFallback = true, daily = emptyList())
+        val fallback = resolved.copy(timezone = "UTC", timezoneIsUtcFallback = true)
         cache.put(key, fallback)
         assertEquals(fallback, ForecastCache(store).get(key))
     }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.TimeZone
 import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.model.GeoPoint
@@ -58,6 +59,7 @@ data class LocationPickerUiState(
     val latitude: Double = DEFAULT_LATITUDE,
     val longitude: Double = DEFAULT_LONGITUDE,
     val altitude: Int? = null,
+    val timeZoneId: String? = null,
     val name: String = NEW_LOCATION_NAME,
     val isNameEditing: Boolean = false,
     val isNameLoading: Boolean = false,
@@ -88,7 +90,8 @@ class LocationPickerViewModel(
     private val placeSearchSources: List<PlaceSearchSource> = emptyList(),
     private val placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
     private val placeSearchDebounceMillis: Long = 300L,
-    private val locateFirstLocation: Boolean = false
+    private val locateFirstLocation: Boolean = false,
+    private val timeZoneLookup: suspend (WeatherLocation) -> String? = { null }
 ) : ViewModel() {
     private val _state = MutableStateFlow(initialLocation.toPickerState())
     val state: StateFlow<LocationPickerUiState> = _state
@@ -220,6 +223,7 @@ class LocationPickerViewModel(
                 latitude = result.point.latitude,
                 longitude = result.point.longitude,
                 altitude = null,
+                timeZoneId = null,
                 name = result.label,
                 isNameEditing = false,
                 isNameLoading = false,
@@ -326,14 +330,31 @@ class LocationPickerViewModel(
             name = current.name.trim().ifEmpty { NEW_LOCATION_NAME },
             latitude = current.latitude,
             longitude = current.longitude,
-            altitude = current.altitude
+            altitude = current.altitude,
+            timeZoneId = current.timeZoneId
         )
         return viewModelScope.launch {
             try {
-                if (editingLocationId == null) {
-                    locationRepository.add(location)
+                val locationToSave = if (location.timeZoneId == null) {
+                    location.copy(timeZoneId = resolveTimeZone(location))
                 } else {
-                    locationRepository.update(location)
+                    location
+                }
+                if (locationToSave.timeZoneId != null) {
+                    _state.update { state ->
+                        if (state.latitude == locationToSave.latitude &&
+                            state.longitude == locationToSave.longitude
+                        ) {
+                            state.copy(timeZoneId = locationToSave.timeZoneId)
+                        } else {
+                            state
+                        }
+                    }
+                }
+                if (editingLocationId == null) {
+                    locationRepository.add(locationToSave)
+                } else {
+                    locationRepository.update(locationToSave)
                 }
                 val event = LocationPickerEvent.Saved
                 _events.tryEmit(event)
@@ -367,9 +388,18 @@ class LocationPickerViewModel(
                 latitude = point.latitude,
                 longitude = point.longitude,
                 altitude = altitude,
+                timeZoneId = null,
                 name = if (it.isNameEditing) it.name else NEW_LOCATION_NAME
             )
         }
+    }
+
+    private suspend fun resolveTimeZone(location: WeatherLocation): String? = try {
+        timeZoneLookup(location)?.let { id -> runCatching { TimeZone.of(id).id }.getOrNull() }
+    } catch (exception: CancellationException) {
+        throw exception
+    } catch (_: Exception) {
+        null
     }
 
     private fun cancelAutomaticLocation() {
@@ -420,7 +450,8 @@ class LocationPickerViewModel(
                     locationId = locationId,
                     locateFirstLocation = true,
                     placeSearchProvider = placeSearchProvider,
-                    placeSearchSources = placeSearchSources
+                    placeSearchSources = placeSearchSources,
+                    timeZoneLookup = application.openMeteoApi::resolveTimeZone
                 )
             }
         }
@@ -432,6 +463,7 @@ private fun WeatherLocation?.toPickerState(): LocationPickerUiState = this?.let 
         latitude = location.latitude,
         longitude = location.longitude,
         altitude = location.altitude,
+        timeZoneId = location.timeZoneId,
         name = location.name,
         isNameEditing = true
     )

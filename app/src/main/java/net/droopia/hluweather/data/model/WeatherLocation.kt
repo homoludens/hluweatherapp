@@ -5,5 +5,6 @@ data class WeatherLocation(
     val name: String,
     val latitude: Double,
     val longitude: Double,
-    val altitude: Int? = null
+    val altitude: Int? = null,
+    val timeZoneId: String? = null
 )

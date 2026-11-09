@@ -72,6 +72,35 @@ class OpenMeteoApiTest {
     }
 
     @Test
+    fun timezone_lookup_requests_only_a_minimal_auto_timezone_response() = runTest {
+        var capturedRequest: HttpRequestData? = null
+        val client = mockClient { request ->
+            capturedRequest = request
+            respond(
+                content = """{"timezone":"Europe/Belgrade"}""",
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+
+        val timezone = KtorOpenMeteoApi(client, "https://api.open-meteo.test")
+            .resolveTimeZone(WeatherLocation("svilajnac", "Svilajnac", 44.22, 21.20))
+
+        val request = requireNotNull(capturedRequest)
+        assertEquals("Europe/Belgrade", timezone)
+        assertEquals("api.open-meteo.test", request.url.host)
+        assertEquals("/v1/forecast", request.url.encodedPath)
+        assertEquals("44.22", request.url.parameters["latitude"])
+        assertEquals("21.2", request.url.parameters["longitude"])
+        assertEquals("auto", request.url.parameters["timezone"])
+        assertEquals("1", request.url.parameters["forecast_days"])
+        assertEquals("temperature_2m", request.url.parameters["current"])
+        assertEquals(null, request.url.parameters["hourly"])
+        assertEquals(null, request.url.parameters["daily"])
+
+        client.close()
+    }
+
+    @Test
     fun forecast_rejects_a_non_success_response() = runTest {
         val client = mockClient {
             respond("service unavailable", HttpStatusCode.ServiceUnavailable)

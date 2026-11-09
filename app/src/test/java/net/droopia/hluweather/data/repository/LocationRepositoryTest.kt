@@ -290,7 +290,8 @@ class LocationRepositoryTest {
             id = "belgrade",
             name = "Belgrade",
             latitude = 44.8176,
-            longitude = 20.4633
+            longitude = 20.4633,
+            timeZoneId = "Europe/Belgrade"
         )
         val trieste = WeatherLocation(
             id = "trieste",

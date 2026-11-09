@@ -55,7 +55,10 @@ private fun MetNoResponse.toWeatherForecast(
     location: WeatherLocation,
     fetchedAt: Instant
 ): WeatherForecast {
-    val displayTimeZone = TimeZone.of("UTC")
+    val resolvedTimeZone = location.timeZoneId
+        ?.let { id -> runCatching { TimeZone.of(id) }.getOrNull() }
+    val isUtcFallback = resolvedTimeZone == null
+    val displayTimeZone = resolvedTimeZone ?: TimeZone.of("UTC")
     val today = fetchedAt.toLocalDateTime(displayTimeZone).date
     val lastDate = today.plus(7, DateTimeUnit.DAY)
     val normalizedHours = properties.timeseries
@@ -94,7 +97,7 @@ private fun MetNoResponse.toWeatherForecast(
         daily = hourly.map { it.forecast }.toApproximateDailySummaries(displayTimeZone),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = displayTimeZone.id,
-        timezoneIsUtcFallback = true
+        timezoneIsUtcFallback = isUtcFallback
     )
 }
 

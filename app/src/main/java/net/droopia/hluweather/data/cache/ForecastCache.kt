@@ -143,7 +143,7 @@ private data class ForecastDto(
             fetchedAt = Instant.parse(fetchedAt),
             current = current.toCurrentWeather(),
             hourly = hourly.map(HourDto::toHourForecast),
-            daily = if (fallback) emptyList() else daily.map(DayDto::toDayForecast),
+            daily = if (!validZone && !timezoneIsUtcFallback) emptyList() else daily.map(DayDto::toDayForecast),
             moonPhase = moonPhase,
             timezone = if (fallback) "UTC" else timezone,
             timezoneIsUtcFallback = fallback
@@ -157,9 +157,10 @@ private data class LocationDto(
     val name: String,
     val latitude: Double,
     val longitude: Double,
-    val altitude: Int?
+    val altitude: Int?,
+    val timeZoneId: String? = null
 ) {
-    fun toWeatherLocation() = WeatherLocation(id, name, latitude, longitude, altitude)
+    fun toWeatherLocation() = WeatherLocation(id, name, latitude, longitude, altitude, timeZoneId)
 }
 
 @Serializable
@@ -267,7 +268,8 @@ private fun WeatherForecast.toDto() = ForecastDto(
         location.name,
         location.latitude,
         location.longitude,
-        location.altitude
+        location.altitude,
+        location.timeZoneId
     ),
     provider = provider.name,
     fetchedAt = fetchedAt.toString(),

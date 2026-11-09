@@ -62,6 +62,17 @@ class MetNoWeatherRepositoryTest {
     }
 
     @Test
+    fun saved_location_timezone_controls_local_daily_grouping() = runTest {
+        val forecast = repository(aggregatedResponse).getForecast(
+            location.copy(timeZoneId = "Europe/Belgrade")
+        )
+
+        assertEquals("Europe/Belgrade", forecast.timezone)
+        assertTrue(!forecast.timezoneIsUtcFallback)
+        assertEquals(listOf("2026-09-10", "2026-09-11"), forecast.daily.map { it.date.toString() })
+    }
+
+    @Test
     fun groups_approximate_daily_values_by_utc_instead_of_the_device_zone() = runTest {
         val original = java.util.TimeZone.getDefault()
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))

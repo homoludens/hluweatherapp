@@ -147,11 +147,13 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
         }
     }
 
+    internal val openMeteoApi by lazy { KtorOpenMeteoApi(httpClient) }
+
     val weatherRepository: WeatherRepository by lazy {
         CachingWeatherRepository(
             sources = mapOf(
                 WeatherProvider.OPEN_METEO to OpenMeteoWeatherRepository(
-                    api = KtorOpenMeteoApi(httpClient),
+                    api = openMeteoApi,
                     airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
                 ),
                 WeatherProvider.MET_NO to MetNoWeatherRepository(

@@ -108,6 +108,49 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun add_save_resolves_and_persists_timezone_once() = runTest {
+        val repository = FakeLocationRepository()
+        var lookupCount = 0
+        val viewModel = picker(
+            repository = repository,
+            timeZoneLookup = { location ->
+                lookupCount++
+                assertEquals(44.8176, location.latitude, 0.0)
+                assertEquals(20.4633, location.longitude, 0.0)
+                "Europe/Belgrade"
+            }
+        )
+        viewModel.onCameraIdle(GeoPoint(44.8176, 20.4633))
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(1, lookupCount)
+        assertEquals("Europe/Belgrade", repository.added.single().timeZoneId)
+        assertEquals("Europe/Belgrade", viewModel.state.value.timeZoneId)
+    }
+
+    @Test
+    fun editing_a_saved_location_reuses_its_cached_timezone() = runTest {
+        val existing = WeatherLocation(
+            "belgrade", "Belgrade", 44.8176, 20.4633, timeZoneId = "Europe/Belgrade"
+        )
+        val repository = FakeLocationRepository(listOf(existing))
+        var lookupCount = 0
+        val viewModel = picker(
+            repository = repository,
+            initialLocation = existing,
+            timeZoneLookup = { lookupCount++; "Europe/Paris" }
+        )
+
+        viewModel.onNameChanged("Stari Grad")
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(0, lookupCount)
+        assertEquals("Europe/Belgrade", repository.updated.single().timeZoneId)
+    }
+
+    @Test
     fun edit_save_updates_the_existing_location() = runTest {
         val existing = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
         val repository = FakeLocationRepository(listOf(existing))
@@ -449,7 +492,8 @@ class LocationPickerViewModelTest {
         placeSearchSources: List<PlaceSearchSource> = emptyList(),
         placeSearchProvider: PlaceSearchProvider = PlaceSearchProvider.PHOTON,
         placeSearchDebounceMillis: Long = 300L,
-        locateFirstLocation: Boolean = false
+        locateFirstLocation: Boolean = false,
+        timeZoneLookup: suspend (WeatherLocation) -> String? = { null }
     ) = LocationPickerViewModel(
         locationRepository = repository,
         deviceLocationSource = gps,
@@ -460,7 +504,8 @@ class LocationPickerViewModelTest {
         placeSearchSources = placeSearchSources,
         placeSearchProvider = placeSearchProvider,
         placeSearchDebounceMillis = placeSearchDebounceMillis,
-        locateFirstLocation = locateFirstLocation
+        locateFirstLocation = locateFirstLocation,
+        timeZoneLookup = timeZoneLookup
     )
 
     private class RecordingPlaceSearchSource(

@@ -44,7 +44,7 @@ class VisualCrossingWeatherRepository(
             throw WeatherRepositoryException("Unable to load Visual Crossing weather data")
         }
 
-        val resolvedZone = response.resolveTimeZone()
+        val resolvedZone = response.resolveTimeZone(location)
 
         val forecast = try {
             response.toWeatherForecast(location, clock.now(), resolvedZone)
@@ -68,11 +68,14 @@ class VisualCrossingWeatherRepository(
     }
 }
 
-private fun VisualCrossingTimelineResponse.resolveTimeZone(): ForecastTimeZone {
+private fun VisualCrossingTimelineResponse.resolveTimeZone(location: WeatherLocation): ForecastTimeZone {
     val providerZone = timezone?.let { id ->
         runCatching { TimeZone.of(id) }.getOrNull()
     }
-    return providerZone?.let { ForecastTimeZone(it, isUtcFallback = false) }
+    val cachedZone = location.timeZoneId?.let { id ->
+        runCatching { TimeZone.of(id) }.getOrNull()
+    }
+    return (providerZone ?: cachedZone)?.let { ForecastTimeZone(it, isUtcFallback = false) }
         ?: ForecastTimeZone(TimeZone.of("UTC"), isUtcFallback = true)
 }
 

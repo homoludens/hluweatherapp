@@ -232,6 +232,18 @@ class VisualCrossingWeatherRepositoryTest {
     }
 
     @Test
+    fun cached_location_timezone_is_used_when_provider_timezone_is_invalid() = runTest {
+        val response = readFixture().copy(timezone = "Unknown/Zone")
+
+        val forecast = repository(response).getForecast(location.copy(timeZoneId = "Europe/Belgrade"))
+
+        assertEquals("Europe/Belgrade", forecast.timezone)
+        assertFalse(forecast.timezoneIsUtcFallback)
+        assertEquals(1, forecast.daily.size)
+        assertEquals("2026-11-09", forecast.daily.single().date.toString())
+    }
+
+    @Test
     fun missing_required_data_and_api_failures_are_safe_and_cancellation_is_preserved() = runTest {
         val noTemperature = readFixture().copy(
             currentConditions = VisualCrossingCurrent(),

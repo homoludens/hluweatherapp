@@ -215,9 +215,10 @@ private data class PersistedLocation(
     val name: String,
     val latitude: Double,
     val longitude: Double,
-    val altitude: Int?
+    val altitude: Int?,
+    val timeZoneId: String? = null
 ) {
-    fun toWeatherLocation() = WeatherLocation(id, name, latitude, longitude, altitude)
+    fun toWeatherLocation() = WeatherLocation(id, name, latitude, longitude, altitude, timeZoneId)
 }
 
 private fun WeatherLocation.toPersistedLocation() = PersistedLocation(
@@ -225,7 +226,8 @@ private fun WeatherLocation.toPersistedLocation() = PersistedLocation(
     name = name,
     latitude = latitude,
     longitude = longitude,
-    altitude = altitude
+    altitude = altitude,
+    timeZoneId = timeZoneId
 )
 
 private val json = Json { ignoreUnknownKeys = true }

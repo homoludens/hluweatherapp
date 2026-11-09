@@ -45,10 +45,13 @@ class BrightSkyWeatherRepository(
     override val provider: WeatherProvider = WeatherProvider.BRIGHT_SKY
 
     override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
-        val zone = TimeZone.of("UTC")
+        val zone = location.timeZoneId
+            ?.let { id -> runCatching { TimeZone.of(id) }.getOrNull() }
+        val displayZone = zone ?: TimeZone.of("UTC")
+        val isUtcFallback = zone == null
 
         val weather = try {
-            api.weather(location, zone)
+            api.weather(location, displayZone)
         } catch (error: CancellationException) {
             throw error
         } catch (error: BrightSkyApiException) {
@@ -60,7 +63,7 @@ class BrightSkyWeatherRepository(
         // The current-observation endpoint is optional. Keep usable forecast
         // data when it is unavailable, and never relabel it as an observation.
         val currentResponse = try {
-            api.currentWeather(location, zone)
+            api.currentWeather(location, displayZone)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
@@ -72,6 +75,8 @@ class BrightSkyWeatherRepository(
             weather.toWeatherForecast(
                 location = location,
                 fetchedAt = fetchedAt,
+                zone = displayZone,
+                isUtcFallback = isUtcFallback,
                 currentResponse = currentResponse
             )
         } catch (error: CancellationException) {
@@ -87,9 +92,10 @@ class BrightSkyWeatherRepository(
 private fun BrightSkyWeatherResponse.toWeatherForecast(
     location: WeatherLocation,
     fetchedAt: Instant,
+    zone: TimeZone,
+    isUtcFallback: Boolean,
     currentResponse: BrightSkyCurrentWeatherResponse?
 ): WeatherForecast {
-    val zone = TimeZone.of("UTC")
     val today = fetchedAt.toLocalDateTime(zone).date
     val afterForecast = today.plus(7, DateTimeUnit.DAY)
     val recordCandidates = normalizedRecordCandidates()
@@ -118,10 +124,10 @@ private fun BrightSkyWeatherResponse.toWeatherForecast(
             .filter { it.source.isForecast() }
             .toList()
             .nearestRecordsPerInstant()
-            .toCompleteUtcDays(today, afterForecast),
+            .toCompleteDays(zone, today, afterForecast),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
         timezone = zone.id,
-        timezoneIsUtcFallback = true
+        timezoneIsUtcFallback = isUtcFallback
     )
 }
 
@@ -166,11 +172,11 @@ private fun List<TimedBrightSkyRecord>.nearestRecordsPerInstant(): List<TimedBri
         }
         .sortedBy { it.time }
 
-private fun List<TimedBrightSkyRecord>.toCompleteUtcDays(
+private fun List<TimedBrightSkyRecord>.toCompleteDays(
+    zone: TimeZone,
     firstDate: LocalDate,
     afterDate: LocalDate
 ): List<DayForecast> {
-    val zone = TimeZone.of("UTC")
     val recordsByTime = associateBy { it.time }
     return recordsByTime.values
         .asSequence()

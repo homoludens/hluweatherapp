@@ -9,6 +9,7 @@ import net.droopia.hluweather.data.model.WeatherLocation
 
 interface OpenMeteoApi {
     suspend fun forecast(location: WeatherLocation): OpenMeteoResponse
+    suspend fun resolveTimeZone(location: WeatherLocation): String? = forecast(location).timezone
 }
 
 class OpenMeteoApiException(message: String) : IOException(message)
@@ -37,6 +38,22 @@ class KtorOpenMeteoApi(
         }
 
         return response.body<OpenMeteoResponse>()
+    }
+
+    override suspend fun resolveTimeZone(location: WeatherLocation): String? {
+        val response = client.get("$baseUrl/v1/forecast") {
+            parameter("latitude", location.latitude)
+            parameter("longitude", location.longitude)
+            parameter("timezone", "auto")
+            parameter("forecast_days", 1)
+            parameter("current", "temperature_2m")
+        }
+
+        if (response.status.value !in 200..299) {
+            throw OpenMeteoApiException("Weather service returned HTTP ${response.status.value}")
+        }
+
+        return response.body<OpenMeteoResponse>().timezone
     }
 
     private companion object {

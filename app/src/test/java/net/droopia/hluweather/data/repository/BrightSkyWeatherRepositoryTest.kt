@@ -82,6 +82,23 @@ class BrightSkyWeatherRepositoryTest {
     }
 
     @Test
+    fun saved_location_timezone_is_used_for_api_requests() = runTest {
+        val queriedZones = mutableListOf<TimeZone>()
+        val api = FakeBrightSkyApi(
+            weatherResponse = fixtureWeather(),
+            currentResponse = fixtureCurrent(),
+            onWeather = queriedZones::add,
+            onCurrent = queriedZones::add
+        )
+
+        val forecast = repository(api).getForecast(location.copy(timeZoneId = "Europe/Belgrade"))
+
+        assertEquals(listOf(TimeZone.of("Europe/Belgrade"), TimeZone.of("Europe/Belgrade")), queriedZones)
+        assertEquals("Europe/Belgrade", forecast.timezone)
+        assertTrue(!forecast.timezoneIsUtcFallback)
+    }
+
+    @Test
     fun uses_nearest_appropriately_timed_forecast_when_observation_is_missing() = runTest {
         val now = Instant.parse("2026-11-09T09:40:00Z")
         val forecast = repository(
