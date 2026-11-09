@@ -105,7 +105,8 @@ fun CurrentWeatherCard(
         Column(modifier = Modifier.padding(16.dp)) {
             WeatherHeader(
                 location = location,
-                timestamp = forecast.fetchedAt.dateTimeText(ZoneId.of(forecast.timezone)),
+                timestamp = forecast.fetchedAt.dateTimeText(ZoneId.of(forecast.timezone)) +
+                    if (forecast.timezoneIsUtcFallback) " (UTC; location time unavailable)" else "",
                 onLocationClick = onLocationClick
             )
 

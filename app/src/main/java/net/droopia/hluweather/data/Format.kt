@@ -84,8 +84,11 @@ fun Double?.distanceText(unit: DistanceUnit): String =
         "${distance.decimalText()} ${unit.symbol}"
     } ?: "—"
 
-fun Instant.hourText(zone: ZoneId = ZoneId.systemDefault()): String =
-    toJavaInstant().atZone(zone).format(hourFormatter)
+fun Instant.hourText(zone: ZoneId = ZoneId.systemDefault()): String {
+    val local = toJavaInstant().atZone(zone)
+    val text = local.format(hourFormatter)
+    return if (zone.rules.getValidOffsets(local.toLocalDateTime()).size > 1) "$text ${local.offset.id}" else text
+}
 
 fun Instant.dateTimeText(zone: ZoneId = ZoneId.systemDefault()): String =
     toJavaInstant().atZone(zone).format(dateTimeFormatter)

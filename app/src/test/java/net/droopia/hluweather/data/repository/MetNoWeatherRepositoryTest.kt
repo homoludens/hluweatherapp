@@ -7,6 +7,9 @@ import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import net.droopia.hluweather.data.MoonPhaseCalculator
+import net.droopia.hluweather.data.hourText
+import net.droopia.hluweather.data.timezone.LocationTimeZone
+import net.droopia.hluweather.ui.weather.toHourlyTableData
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -30,7 +33,7 @@ import org.junit.function.ThrowingRunnable
 class MetNoWeatherRepositoryTest {
 
     @Test
-    fun getForecast_normalizes_utc_times_and_groups_daily_values_in_the_device_zone() = runTest {
+    fun getForecast_normalizes_utc_times_and_groups_daily_values_in_the_location_zone() = runTest {
         val fetchedAt = Instant.parse("2026-09-10T12:00:00Z")
         val forecast = repository(response = aggregatedResponse, clock = fixedClock(fetchedAt))
             .getForecast(location)
@@ -58,6 +61,46 @@ class MetNoWeatherRepositoryTest {
         assertEquals(8.0, forecast.daily[1].temperatureMin, 0.0)
         assertEquals(8.0, forecast.daily[1].temperatureMax, 0.0)
         assertEquals(2.5, forecast.daily[1].precipitation!!, 0.0)
+    }
+
+    @Test
+    fun locationZoneControlsMidnightAndDstTransitionsNotDeviceZone() = runTest {
+        val original = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            val midnight = repository(
+                responseWithTimeseries(
+                    timeSeries("clearsky_day", time = "2026-03-28T22:00:00Z"),
+                    timeSeries("clearsky_day", time = "2026-03-28T23:00:00Z"),
+                    timeSeries("clearsky_day", time = "2026-03-29T00:00:00Z"),
+                    timeSeries("clearsky_day", time = "2026-03-29T01:00:00Z")
+                ), fixedClock(Instant.parse("2026-03-28T12:00:00Z"))
+            ).getForecast(location)
+            assertEquals(listOf("2026-03-28", "2026-03-29"), midnight.daily.map { it.date.toString() })
+            val zone = java.time.ZoneId.of(midnight.timezone)
+            assertEquals(listOf("23h", "00h", "01h", "03h"), midnight.hourly.map { it.time.hourText(zone) })
+
+            val repeated = repository(
+                responseWithTimeseries(
+                    timeSeries("clearsky_day", time = "2026-10-25T00:00:00Z"),
+                    timeSeries("clearsky_day", time = "2026-10-25T01:00:00Z")
+                ), fixedClock(Instant.parse("2026-10-25T00:15:00Z"))
+            ).getForecast(location)
+            assertEquals(listOf("02h +02:00", "02h +01:00"), repeated.hourly.map { it.time.hourText(zone) })
+            val table = repeated.toHourlyTableData(Instant.parse("2026-10-25T01:15:00Z"))
+            assertEquals(listOf(Instant.parse("2026-10-25T01:00:00Z")), table.hourItems.map { it.hour.time })
+        } finally {
+            java.util.TimeZone.setDefault(original)
+        }
+    }
+
+    @Test
+    fun fallbackUsesUtcWithoutInventingLocalDailyExtrema() = runTest {
+        val forecast = repository(aggregatedResponse, zone = LocationTimeZone("UTC", true)).getForecast(location)
+        assertEquals("UTC", forecast.timezone)
+        assertTrue(forecast.timezoneIsUtcFallback)
+        assertTrue(forecast.daily.isEmpty())
+        assertEquals(3, forecast.hourly.size)
     }
 
     @Test
@@ -280,13 +323,14 @@ class MetNoWeatherRepositoryTest {
 
     private fun repository(
         response: MetNoResponse,
-        clock: Clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z"))
+        clock: Clock = fixedClock(Instant.parse("2026-09-10T12:00:00Z")),
+        zone: LocationTimeZone = LocationTimeZone("Europe/Belgrade", false)
     ) = MetNoWeatherRepository(
         api = object : MetNoApi {
             override suspend fun forecast(location: WeatherLocation): MetNoResponse = response
         },
         clock = clock,
-        displayTimeZone = TimeZone.of("Europe/Belgrade")
+        timeZoneResolver = { _, _ -> zone }
     )
 
     private fun timeSeries(

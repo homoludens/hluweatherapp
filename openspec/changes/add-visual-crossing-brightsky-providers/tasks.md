@@ -1,7 +1,7 @@
 ## 1. Field Semantics and Existing Provider
 
 - [x] 1.1 [low] Verify the design's four-provider matrix against current documentation for every `HourlyTableColumn` and existing current/daily field; record supported, unavailable, restricted, interval, unit, and AQI-scale cases, and add representative offline fixtures for the planned mappings.
-- [ ] 1.2 [high] Implement an off-main-thread, cached coordinate-to-IANA-zone resolver for Bright Sky and MET Norway using a pinned Android-compatible offline dataset with required notices and an explicitly labeled UTC fallback; verify different device/location zones, DST gap and repeated hours, midnight, unknown zones, and saved forecast round-trips with focused tests.
+- [x] 1.2 [high] Implement an off-main-thread, cached coordinate-to-IANA-zone resolver for Bright Sky and MET Norway using a pinned Android-compatible offline dataset with required notices and an explicitly labeled UTC fallback; verify different device/location zones, DST gap and repeated hours, midnight, unknown zones, and saved forecast round-trips with focused tests.
 - [ ] 1.3 [low] Request MET Norway's complete product and map its available one-hour precipitation probabilities to the matching preceding-hour row without inventing six-hour probabilities; verify request path, zero/null, region coverage, sparse timestamps, interval boundary, unit conversion, and widget-facing normalized values in focused tests.
 
 ## 2. New Forecast Sources

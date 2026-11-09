@@ -20,6 +20,7 @@ import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 data class ForecastCacheKey(
     val provider: WeatherProvider,
@@ -128,18 +129,22 @@ private data class ForecastDto(
     val hourly: List<HourDto>,
     val daily: List<DayDto>,
     val moonPhase: Double,
-    val timezone: String
+    val timezone: String,
+    val timezoneIsUtcFallback: Boolean = false
 ) {
     fun toWeatherForecastOrNull(): WeatherForecast? = runCatching {
+        val validZone = runCatching { TimeZone.of(timezone) }.isSuccess
+        val fallback = timezoneIsUtcFallback || !validZone
         WeatherForecast(
             location = location.toWeatherLocation(),
             provider = provider.toWeatherProvider() ?: error("Unknown provider"),
             fetchedAt = Instant.parse(fetchedAt),
             current = current.toCurrentWeather(),
             hourly = hourly.map(HourDto::toHourForecast),
-            daily = daily.map(DayDto::toDayForecast),
+            daily = if (fallback) emptyList() else daily.map(DayDto::toDayForecast),
             moonPhase = moonPhase,
-            timezone = timezone
+            timezone = if (fallback) "UTC" else timezone,
+            timezoneIsUtcFallback = fallback
         )
     }.getOrNull()
 }
@@ -293,7 +298,8 @@ private fun WeatherForecast.toDto() = ForecastDto(
         )
     },
     moonPhase = moonPhase,
-    timezone = timezone
+    timezone = timezone,
+    timezoneIsUtcFallback = timezoneIsUtcFallback
 )
 
 private fun String.toWeatherProvider(): WeatherProvider? =

@@ -53,5 +53,6 @@ data class WeatherForecast(
     val hourly: List<HourForecast>,
     val daily: List<DayForecast>,
     val moonPhase: Double,
-    val timezone: String = TimeZone.currentSystemDefault().id
+    val timezone: String = TimeZone.currentSystemDefault().id,
+    val timezoneIsUtcFallback: Boolean = false
 )

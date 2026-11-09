@@ -19,11 +19,14 @@ import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.network.MetNoApi
 import net.droopia.hluweather.data.network.MetNoResponse
 import net.droopia.hluweather.data.network.MetNoTimeSeries
+import net.droopia.hluweather.data.timezone.LocationTimeZone
+import net.droopia.hluweather.data.timezone.OfflineTimeZoneResolver
+import net.droopia.hluweather.data.timezone.TimeZoneResolver
 
 class MetNoWeatherRepository(
     private val api: MetNoApi,
     private val clock: Clock = Clock.System,
-    private val displayTimeZone: TimeZone = TimeZone.currentSystemDefault()
+    private val timeZoneResolver: TimeZoneResolver = OfflineTimeZoneResolver()
 ) : WeatherSource {
 
     override val provider: WeatherProvider = WeatherProvider.MET_NO
@@ -40,7 +43,8 @@ class MetNoWeatherRepository(
         }
 
         return try {
-            response.toWeatherForecast(location, clock.now(), displayTimeZone)
+            val resolvedZone = timeZoneResolver.resolve(location.latitude, location.longitude)
+            response.toWeatherForecast(location, clock.now(), resolvedZone)
         } catch (error: CancellationException) {
             throw error
         } catch (error: WeatherRepositoryException) {
@@ -55,8 +59,9 @@ class MetNoWeatherRepository(
 private fun MetNoResponse.toWeatherForecast(
     location: WeatherLocation,
     fetchedAt: Instant,
-    displayTimeZone: TimeZone
+    resolvedZone: LocationTimeZone
 ): WeatherForecast {
+    val displayTimeZone = resolvedZone.zone
     val today = fetchedAt.toLocalDateTime(displayTimeZone).date
     val lastDate = today.plus(7, DateTimeUnit.DAY)
     val hourly = properties.timeseries
@@ -77,9 +82,10 @@ private fun MetNoResponse.toWeatherForecast(
         fetchedAt = fetchedAt,
         current = current,
         hourly = hourly.map { it.forecast },
-        daily = hourly.toDailyForecasts(displayTimeZone),
+        daily = if (resolvedZone.isUtcFallback) emptyList() else hourly.toDailyForecasts(displayTimeZone),
         moonPhase = MoonPhaseCalculator.phase(fetchedAt),
-        timezone = displayTimeZone.id
+        timezone = displayTimeZone.id,
+        timezoneIsUtcFallback = resolvedZone.isUtcFallback
     )
 }
 

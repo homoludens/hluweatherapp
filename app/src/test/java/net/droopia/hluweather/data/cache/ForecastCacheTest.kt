@@ -46,6 +46,31 @@ class ForecastCacheTest {
     }
 
     @Test
+    fun resolvedAndFallbackZonesSurviveSavedForecastRoundTrips() = runTest {
+        val store = dataStore(backgroundScope)
+        val cache = ForecastCache(store)
+        val key = ForecastCacheKey(WeatherProvider.MET_NO, "saved:zone")
+        val resolved = fixedForecast().copy(timezone = "Europe/Belgrade")
+        cache.put(key, resolved)
+        assertEquals(resolved, ForecastCache(store).get(key))
+        val fallback = resolved.copy(timezone = "UTC", timezoneIsUtcFallback = true, daily = emptyList())
+        cache.put(key, fallback)
+        assertEquals(fallback, ForecastCache(store).get(key))
+    }
+
+    @Test
+    fun cachedZoneUnknownToDeviceBecomesLabeledUtcWithoutLocalDailySummaries() = runTest {
+        val store = dataStore(backgroundScope)
+        val cache = ForecastCache(store)
+        val key = ForecastCacheKey(WeatherProvider.MET_NO, "saved:unknown-zone")
+        cache.put(key, fixedForecast().copy(timezone = "Unknown/Future"))
+        val restored = requireNotNull(cache.get(key))
+        assertEquals("UTC", restored.timezone)
+        assertTrue(restored.timezoneIsUtcFallback)
+        assertTrue(restored.daily.isEmpty())
+    }
+
+    @Test
     fun air_quality_values_round_trip_through_cache() = runTest {
         val dataStore = dataStore(backgroundScope)
         val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:svilajnac")

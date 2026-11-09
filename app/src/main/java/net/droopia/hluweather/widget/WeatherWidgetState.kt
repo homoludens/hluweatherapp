@@ -59,6 +59,8 @@ fun ForecastLoad.toWeatherWidgetState(
     val weather = forecast.current
     val unit = settings.temperatureUnit
     val zone = forecast.timezone.toSafeZoneId()
+    val fallback = forecast.timezoneIsUtcFallback || runCatching { ZoneId.of(forecast.timezone) }.isFailure
+    val suffix = if (fallback) " UTC" else ""
     val now = clock.now()
 
     return WeatherWidgetState(
@@ -77,7 +79,7 @@ fun ForecastLoad.toWeatherWidgetState(
             .map { hour ->
                 WidgetHour(
                     time = hour.time,
-                    timeText = hour.time.toWidgetTimeText(zone),
+                    timeText = hour.time.toWidgetTimeText(zone) + suffix,
                     temperatureText = hour.temperature.temperatureValueText(unit),
                     temperatureContentDescription = hour.temperature.temperatureText(unit),
                     condition = hour.condition,
@@ -92,11 +94,11 @@ fun ForecastLoad.toWeatherWidgetState(
             }
             .toList(),
         lastWeatherUpdate = forecast.fetchedAt,
-        lastWeatherUpdateText = forecast.fetchedAt.dateTimeText(zone),
-        lastWeatherUpdateLocalTimeText = forecast.fetchedAt.toWidgetTimeText(zone),
+        lastWeatherUpdateText = forecast.fetchedAt.dateTimeText(zone) + suffix,
+        lastWeatherUpdateLocalTimeText = forecast.fetchedAt.toWidgetTimeText(zone) + suffix,
         lastWeatherUpdateCompactText = forecast.fetchedAt.toJavaInstant()
             .atZone(zone)
-            .format(widgetCompactDateTimeFormatter),
+            .format(widgetCompactDateTimeFormatter) + suffix,
         isStale = isStale
     )
 }
@@ -107,12 +109,13 @@ private val widgetHourFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US
 private val widgetCompactDateTimeFormatter = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.US)
 
 private fun String.toSafeZoneId(): ZoneId =
-    runCatching { ZoneId.of(this) }.getOrElse { ZoneId.systemDefault() }
+    runCatching { ZoneId.of(this) }.getOrElse { ZoneId.of("UTC") }
 
-private fun Instant.toWidgetTimeText(zone: ZoneId): String =
-    toJavaInstant()
-        .atZone(zone)
-        .format(widgetHourFormatter)
+private fun Instant.toWidgetTimeText(zone: ZoneId): String {
+    val local = toJavaInstant().atZone(zone)
+    val text = local.format(widgetHourFormatter)
+    return if (zone.rules.getValidOffsets(local.toLocalDateTime()).size > 1) "$text ${local.offset.id}" else text
+}
 
 private fun Instant.toJavaInstant(): java.time.Instant =
     java.time.Instant.ofEpochMilli(toEpochMilliseconds())

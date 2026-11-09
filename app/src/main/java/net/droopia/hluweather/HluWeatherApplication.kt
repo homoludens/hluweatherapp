@@ -142,19 +142,21 @@ class HluWeatherApplication : Application(), Configuration.Provider, WeatherWidg
         }
     }
 
+    val locationTimeZoneResolver by lazy { net.droopia.hluweather.data.timezone.OfflineTimeZoneResolver() }
+
     val weatherRepository: WeatherRepository by lazy {
         CachingWeatherRepository(
             openMeteo = OpenMeteoWeatherRepository(
                 api = KtorOpenMeteoApi(httpClient),
                 airQualityApi = KtorOpenMeteoAirQualityApi(httpClient)
             ),
-            metNo = MetNoWeatherRepository(KtorMetNoApi(httpClient)),
+            metNo = MetNoWeatherRepository(KtorMetNoApi(httpClient), timeZoneResolver = locationTimeZoneResolver),
             cache = ForecastCache(applicationDataStore)
         )
     }
 
     val metNoWeatherRepository: WeatherSource by lazy {
-        MetNoWeatherRepository(KtorMetNoApi(httpClient))
+        MetNoWeatherRepository(KtorMetNoApi(httpClient), timeZoneResolver = locationTimeZoneResolver)
     }
 
     private val radarHttpClient: HttpClient by lazy { createRadarHttpClient() }

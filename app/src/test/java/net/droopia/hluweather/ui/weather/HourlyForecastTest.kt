@@ -67,6 +67,38 @@ class HourlyForecastTest {
     }
 
     @Test
+    fun fallbackHeaderAndRepeatedHoursAreExplicitlyLabeled() {
+        val base = Instant.parse("2026-10-25T00:00:00Z")
+        val mock = buildMockForecast(Svilajnac, base)
+        val repeated = mock.copy(
+            timezone = "Europe/Belgrade",
+            hourly = listOf(
+                mock.hourly.first().copy(time = base),
+                mock.hourly.first().copy(time = Instant.parse("2026-10-25T01:00:00Z"))
+            )
+        )
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(repeated, 0, {}, now = base)
+            }
+        }
+        composeRule.onNodeWithText("02h +02:00").assertIsDisplayed()
+        composeRule.onNodeWithText("02h +01:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun utcFallbackIsLabeledInHourlyHeader() {
+        val mock = buildMockForecast(Svilajnac, Instant.parse("2026-10-25T00:00:00Z"))
+            .copy(timezone = "UTC", timezoneIsUtcFallback = true, daily = emptyList())
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(mock, 0, {}, now = mock.hourly.first().time)
+            }
+        }
+        composeRule.onNodeWithText("UTC").assertIsDisplayed()
+    }
+
+    @Test
     fun renders_hourly_table_header_and_rows() {
         val forecast = buildMockForecast(
             location = Svilajnac,

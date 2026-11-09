@@ -201,8 +201,8 @@ class WeatherWidgetStateTest {
             listOf(Instant.parse("2026-10-25T00:30:00Z"), Instant.parse("2026-10-25T01:00:00Z"), Instant.parse("2026-10-25T01:30:00Z")),
             repeated.hours.map { it.time }
         )
-        assertEquals(listOf("02:30", "02:00", "02:30"), repeated.hours.map { it.timeText })
-        assertEquals("02:30", repeated.lastWeatherUpdateLocalTimeText)
+        assertEquals(listOf("02:30 +02:00", "02:00 +01:00", "02:30 +01:00"), repeated.hours.map { it.timeText })
+        assertEquals("02:30 +02:00", repeated.lastWeatherUpdateLocalTimeText)
         assertEquals(
             listOf(Instant.parse("2026-03-29T00:30:00Z"), Instant.parse("2026-03-29T01:00:00Z"), Instant.parse("2026-03-29T01:30:00Z")),
             skipped.hours.map { it.time }
@@ -212,7 +212,7 @@ class WeatherWidgetStateTest {
     }
 
     @Test
-    fun invalid_forecast_zone_falls_back_to_system_zone_for_both_timestamps() = withDeviceTimeZone("Asia/Tokyo") {
+    fun invalid_forecast_zone_falls_back_to_labeled_utc_for_both_timestamps() = withDeviceTimeZone("Asia/Tokyo") {
         val state = ForecastLoad(
             forecast(
                 fetchedAt = Instant.parse("2026-10-28T20:15:00Z"),
@@ -224,8 +224,19 @@ class WeatherWidgetStateTest {
             clock = fixedClock(Instant.parse("2026-10-28T20:00:00Z"))
         )
 
-        assertEquals("06:00", state.hours.single().timeText)
-        assertEquals("Thu, Oct 29, 2026 • 05:15", state.lastWeatherUpdateText)
+        assertEquals("21:00 UTC", state.hours.single().timeText)
+        assertEquals("Wed, Oct 28, 2026 • 20:15 UTC", state.lastWeatherUpdateText)
+    }
+
+    @Test
+    fun explicitUtcFallbackIsLabeledEvenWithValidUtcZone() {
+        val data = forecast(timezone = "UTC").copy(timezoneIsUtcFallback = true)
+        val state = ForecastLoad(data).toWeatherWidgetState(
+            PersistedSettings(), clock = fixedClock(Instant.parse("2026-10-28T09:00:00Z"))
+        )
+        assertTrue(state.hours.single().timeText.endsWith(" UTC"))
+        assertTrue(state.lastWeatherUpdateText.endsWith(" UTC"))
+        assertTrue(state.lastWeatherUpdateCompactText.endsWith(" UTC"))
     }
 
     @Test

@@ -1,12 +1,9 @@
 package net.droopia.hluweather.ui.weather
 
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
 import kotlin.time.Instant
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.time.Clock
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -47,16 +44,10 @@ data class HourlyTableHour(
 
 fun WeatherForecast.toHourlyTableData(now: Instant = Clock.System.now()): HourlyTableData {
     val displayZone = ZoneId.of(timezone)
-    val currentDateTime = now.toLocalDateTime(TimeZone.of(timezone))
-    val currentHour = LocalDateTime(
-        year = currentDateTime.year,
-        month = currentDateTime.month,
-        day = currentDateTime.day,
-        hour = currentDateTime.hour,
-        minute = 0,
-        second = 0,
-        nanosecond = 0
-    ).toInstant(TimeZone.of(timezone))
+    val currentHour = Instant.fromEpochMilliseconds(
+        java.time.Instant.ofEpochMilli(now.toEpochMilliseconds())
+            .atZone(displayZone).truncatedTo(ChronoUnit.HOURS).toInstant().toEpochMilli()
+    )
     val items = buildList {
         hourly
             .filter { it.time >= currentHour }

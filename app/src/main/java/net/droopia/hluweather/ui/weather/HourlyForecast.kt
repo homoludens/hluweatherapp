@@ -103,6 +103,7 @@ fun HourlyForecast(
                 displayZone = displayZone,
                 onDaySelected = onDaySelected,
                 columns = hourlyTableColumns,
+                utcFallback = forecast.timezoneIsUtcFallback,
                 precipitationUnit = precipitationUnit,
             )
         }
@@ -156,6 +157,7 @@ internal fun HourlyTableStickyHeader(
     displayZone: ZoneId,
     onDaySelected: (Int) -> Unit,
     columns: Set<HourlyTableColumn>,
+    utcFallback: Boolean = false,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     dayStripModifier: Modifier = Modifier,
     columnHeaderModifier: Modifier = Modifier.padding(horizontal = 16.dp)
@@ -174,6 +176,7 @@ internal fun HourlyTableStickyHeader(
         )
         ForecastColumnHeader(
             columns = columns,
+            utcFallback = utcFallback,
             precipitationUnit = precipitationUnit,
             modifier = columnHeaderModifier
         )
@@ -294,6 +297,7 @@ internal fun HourlyDateBoundary(
 internal fun ForecastColumnHeader(
     columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
+    utcFallback: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -310,7 +314,7 @@ internal fun ForecastColumnHeader(
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ForecastCell("Time", HourlyTableColumn.TIME.weight)
+        ForecastCell(if (utcFallback) "UTC" else "Time", HourlyTableColumn.TIME.weight)
         HourlyTableColumn.entries
             .filter { it != HourlyTableColumn.TIME && it in columns }
             .forEach { column ->

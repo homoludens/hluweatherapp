@@ -125,6 +125,12 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    // The raw boundary archive and protobuf schema are used directly; TimeZoneEngine
+    // discards IDs unknown to the device and cannot safely detect all overlaps.
+    implementation("net.iakovlev:timeshape:2026b.29") {
+        exclude(group = "com.github.luben", module = "zstd-jni")
+    }
+    implementation("com.github.luben:zstd-jni:1.5.7-11@aar")
     implementation(libs.maplibre.compose)
     implementation(libs.glance.appwidget)
     runtimeOnly(libs.maplibre.compose.runtime.opengl)
@@ -135,6 +141,7 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.work.testing)
     testImplementation(libs.ktor.client.mock)
+    testImplementation("com.github.luben:zstd-jni:1.5.7-11")
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
 

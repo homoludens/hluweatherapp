@@ -54,12 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitCancellation
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 import net.droopia.hluweather.data.model.ForecastMode
 import net.droopia.hluweather.data.model.GeoPoint
 import net.droopia.hluweather.data.model.RadarProvider
@@ -473,16 +468,12 @@ private fun rememberWeatherNow(timezone: String, fixedNow: Instant?): Instant {
         while (true) {
             val current = Clock.System.now()
             liveNow = current
-            val local = current.toLocalDateTime(TimeZone.of(timezone))
-            val nextHour = LocalDateTime(
-                year = local.year,
-                month = local.month,
-                day = local.day,
-                hour = local.hour,
-                minute = 0,
-                second = 0,
-                nanosecond = 0
-            ).toInstant(TimeZone.of(timezone)) + 1.hours
+            val nextHour = Instant.fromEpochMilliseconds(
+                java.time.Instant.ofEpochMilli(current.toEpochMilliseconds())
+                    .atZone(ZoneId.of(timezone))
+                    .truncatedTo(java.time.temporal.ChronoUnit.HOURS)
+                    .plusHours(1).toInstant().toEpochMilli()
+            )
             delay((nextHour - current).inWholeMilliseconds.coerceAtLeast(1L))
         }
     }
@@ -610,6 +601,7 @@ private fun HourlyWeatherContent(
                     displayZone = displayZone,
                     onDaySelected = ::onDayChipSelected,
                     columns = hourlyTableColumns,
+                    utcFallback = forecast.timezoneIsUtcFallback,
                     precipitationUnit = precipitationUnit,
                     dayStripModifier = Modifier.padding(
                         start = 16.dp,
