@@ -8,7 +8,7 @@
 
 - [x] 2.1 [low] Implement Visual Crossing's keyless metric Timeline request and current, hourly, daily, time, condition, and compatible weather-field mapping; verify gzip negotiation/decoding, query scope, units, daylight-saving records, missing fields, HTTP errors, and no leaked request details with mocked API and mapper tests.
 - [x] 2.2 [low] Add Visual Crossing's accessible PM and European AQI fields with explicit categorical-versus-numeric AQI presentation, and isolate denied optional products without mapping reference ET₀ as actual evapotranspiration; verify scale labels, matching time, cache persistence, omitted values, and 401/403/429 responses do not destroy core weather.
-- [ ] 2.3 [low] Implement Bright Sky weather/current API clients with coordinate queries, DWD units, its 50 km station limit, bounded forecast window, error handling, and cancellation; verify request shape, observation and forecast source handling, sparse/out-of-range stations, and mocked failures.
+- [x] 2.3 [low] Implement Bright Sky weather/current API clients with coordinate queries, DWD units, its 50 km station limit, bounded forecast window, error handling, and cancellation; verify request shape, observation and forecast source handling, sparse/out-of-range stations, and mocked failures.
 - [ ] 2.4 [low] Normalize Bright Sky's current and hourly records and derive honest local-day summaries and moon phase without fabricating partial days or missing fields; verify wind, dew point, humidity, precipitation probability, conditions, observation fallback, interval alignment, DST, and absent data using deterministic fixtures.
 
 ## 3. Selection, Cache, and Lifecycle
