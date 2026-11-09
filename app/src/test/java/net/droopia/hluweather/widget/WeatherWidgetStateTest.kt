@@ -106,6 +106,19 @@ class WeatherWidgetStateTest {
     }
 
     @Test
+    fun stale_widget_state_keeps_the_forecast_provider_for_attribution() {
+        val forecast = forecast().copy(provider = WeatherProvider.VISUAL_CROSSING)
+
+        val state = ForecastLoad(forecast, isStale = true).toWeatherWidgetState(
+            settings = PersistedSettings(provider = WeatherProvider.BRIGHT_SKY),
+            clock = fixedClock(Instant.parse("2026-10-28T09:00:00Z"))
+        )
+
+        assertEquals(WeatherProvider.VISUAL_CROSSING, state.provider)
+        assertTrue(state.isStale)
+    }
+
+    @Test
     fun selects_future_hours_by_instant_sorts_them_and_caps_at_six_across_midnight() {
         val seventhFutureHour = Instant.parse("2026-10-29T03:00:00Z")
         val forecast = forecast(

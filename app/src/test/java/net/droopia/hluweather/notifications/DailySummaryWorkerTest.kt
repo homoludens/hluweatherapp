@@ -29,6 +29,7 @@ import net.droopia.hluweather.data.repository.WeatherRepository
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -175,6 +176,34 @@ class DailySummaryWorkerTest {
         assertTrue(publisher.summaries.single().contains("25.0"))
         assertTrue(publisher.summaries.single().contains("12.0"))
         assertTrue(publisher.summaries.single().contains("4.5"))
+    }
+
+    @Test
+    fun stale_summary_credits_the_provider_that_produced_the_forecast() = runBlocking {
+        listOf(
+            WeatherProvider.VISUAL_CROSSING to "Weather data provided by Visual Crossing Weather",
+            WeatherProvider.BRIGHT_SKY to "Bright Sky · Source: Deutscher Wetterdienst (DWD)"
+        ).forEach { (provider, attribution) ->
+            val publisher = SummaryPublisher()
+            val forecast = summaryForecast().copy(provider = provider)
+            val result = build(
+                settings = PersistedSettings(
+                    provider = provider,
+                    selectedLocationId = location.id,
+                    dailySummary = true
+                ),
+                weather = SummaryWeatherRepository(ForecastLoad(forecast, isStale = true)),
+                publisher = publisher
+            ).doWork()
+
+            assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+            val body = publisher.summaries.single()
+            assertTrue("existing summary format remains at the start", body.startsWith("Belgrade: Rain, current 21.5°C. High"))
+            assertTrue("summary body formatting stays unchanged", body.endsWith("4.5 mm."))
+            assertFalse(body.contains(attribution))
+            assertEquals("cached forecast source is included as notification subtext", attribution,
+                publisher.attributions.single())
+        }
     }
 
     @Test
@@ -327,9 +356,9 @@ class DailySummaryWorkerTest {
         )
         .build()
 
-    private fun summaryForecast() = WeatherForecast(
+    private fun summaryForecast(provider: WeatherProvider = WeatherProvider.OPEN_METEO) = WeatherForecast(
         location = location,
-        provider = WeatherProvider.OPEN_METEO,
+        provider = provider,
         fetchedAt = Instant.parse("2026-09-10T07:00:00Z"),
         current = CurrentWeather(21.5, null, 60, null, 0.2, WeatherCondition.RAIN, true),
         hourly = emptyList(),
@@ -411,9 +440,11 @@ private class SummaryWeatherRepository(
 
 private class SummaryPublisher : WeatherNotificationPublisher {
     val summaries = mutableListOf<String>()
-    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String) = Unit
-    override fun publishDailySummary(title: String, body: String) {
+    val attributions = mutableListOf<String?>()
+    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String, attribution: String?) = Unit
+    override fun publishDailySummary(title: String, body: String, attribution: String?) {
         summaries += body
+        attributions += attribution
     }
 }
 

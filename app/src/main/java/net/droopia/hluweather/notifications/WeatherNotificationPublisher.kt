@@ -13,7 +13,7 @@ data class WeatherAlertEvent(
 }
 
 interface WeatherNotificationPublisher {
-    fun publishAlert(event: WeatherAlertEvent, title: String, body: String)
+    fun publishAlert(event: WeatherAlertEvent, title: String, body: String, attribution: String? = null)
 
-    fun publishDailySummary(title: String, body: String)
+    fun publishDailySummary(title: String, body: String, attribution: String? = null)
 }

@@ -7,6 +7,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.model.WeatherCondition
+import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.repository.ForecastLoad
@@ -33,7 +34,9 @@ data class WeatherWidgetState(
     val lastWeatherUpdateLocalTimeText: String,
     /** A compact date and time for the medium header, also in the forecast's location time zone. */
     val lastWeatherUpdateCompactText: String,
-    val isStale: Boolean
+    val isStale: Boolean,
+    /** Identity of the source that produced the displayed (possibly stale) forecast. */
+    val provider: WeatherProvider = WeatherProvider.OPEN_METEO
 )
 
 /** Display-ready hourly values while retaining shared weather semantics and the source instant. */
@@ -99,7 +102,8 @@ fun ForecastLoad.toWeatherWidgetState(
         lastWeatherUpdateCompactText = forecast.fetchedAt.toJavaInstant()
             .atZone(zone)
             .format(widgetCompactDateTimeFormatter) + suffix,
-        isStale = isStale
+        isStale = isStale,
+        provider = forecast.provider
     )
 }
 

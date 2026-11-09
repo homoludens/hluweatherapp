@@ -155,18 +155,37 @@ class WeatherAlertWorkerTest {
 
     @Test
     fun matching_cached_forecast_can_deliver_an_alert() = runBlocking {
-        val publisher = RecordingPublisher()
-        val forecast = forecast(hours = listOf(hour(now + 1.hours, WeatherCondition.THUNDERSTORM)))
-        val result = build(
-            dependencies(
-                settings = PersistedSettings(selectedLocationId = location.id, weatherAlerts = true),
-                weatherRepository = RecordingWeatherRepository(ForecastLoad(forecast, isStale = true)),
-                publisher = publisher
+        listOf(
+            WeatherProvider.VISUAL_CROSSING to "Weather data provided by Visual Crossing Weather",
+            WeatherProvider.BRIGHT_SKY to "Bright Sky · Source: Deutscher Wetterdienst (DWD)"
+        ).forEach { (provider, attribution) ->
+            val publisher = RecordingPublisher()
+            val forecast = forecast(
+                hours = listOf(hour(now + 1.hours, WeatherCondition.THUNDERSTORM)),
+                provider = provider
             )
-        ).doWork()
+            val result = build(
+                dependencies(
+                    settings = PersistedSettings(
+                        provider = provider,
+                        selectedLocationId = location.id,
+                        weatherAlerts = true
+                    ),
+                    weatherRepository = RecordingWeatherRepository(ForecastLoad(forecast, isStale = true)),
+                    publisher = publisher
+                )
+            ).doWork()
 
-        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
-        assertEquals(1, publisher.alerts.size)
+            assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+            assertEquals(1, publisher.alerts.size)
+            assertEquals(provider, publisher.alerts.single().provider)
+            val body = publisher.alertBodies.single()
+            assertTrue("existing alert formatting remains at the start",
+                body.startsWith("Belgrade: thunderstorm possible at ${now + 1.hours}."))
+            assertTrue("alert body formatting stays unchanged", !body.contains(attribution))
+            assertEquals("cached alert source is included as notification subtext", attribution,
+                publisher.attributions.single())
+        }
     }
 
     @Test
@@ -298,9 +317,12 @@ class WeatherAlertWorkerTest {
         clock = FixedClock(now)
     )
 
-    private fun forecast(hours: List<HourForecast>) = WeatherForecast(
+    private fun forecast(
+        hours: List<HourForecast>,
+        provider: WeatherProvider = WeatherProvider.OPEN_METEO
+    ) = WeatherForecast(
         location = location,
-        provider = WeatherProvider.OPEN_METEO,
+        provider = provider,
         fetchedAt = now,
         current = CurrentWeather(20.0, null, 50, null, 0.0, WeatherCondition.CLEAR, true),
         hourly = hours,
@@ -369,14 +391,18 @@ private class RecordingPublisher(
     private var failures: Int = 0
 ) : WeatherNotificationPublisher {
     val alerts = mutableListOf<WeatherAlertEvent>()
-    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String) {
+    val alertBodies = mutableListOf<String>()
+    val attributions = mutableListOf<String?>()
+    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String, attribution: String?) {
         if (failures > 0) {
             failures--
             throw IOException("notification post failed")
         }
         alerts += event
+        alertBodies += body
+        attributions += attribution
     }
-    override fun publishDailySummary(title: String, body: String) = Unit
+    override fun publishDailySummary(title: String, body: String, attribution: String?) = Unit
 }
 
 private class RecordingStateRepository : NotificationStateRepository {

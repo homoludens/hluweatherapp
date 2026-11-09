@@ -137,7 +137,8 @@ internal fun SmallWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         fontScale = fontScale,
         formattedTemperatureLength = weather?.temperatureText?.length ?: DEFAULT_TEMPERATURE_LENGTH,
         apparentTemperatureLength = weather?.apparentTemperatureText?.length,
-        hasStatus = snapshot.hasSmallStatus()
+        hasStatus = snapshot.hasSmallStatus(),
+        hasAttribution = weather?.provider?.attribution != null
     )
     WeatherWidgetCard(
         snapshot = snapshot,
@@ -158,6 +159,10 @@ internal fun SmallWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                     if (policy.showStatus) {
                         Spacer(GlanceModifier.height(2.dp))
                         WeatherWidgetStatus(snapshot, palette, compact = true)
+                    }
+                    if (snapshot.weather.provider.attribution != null) {
+                        Spacer(GlanceModifier.height(WEATHER_WIDGET_ATTRIBUTION_GAP_DP.dp))
+                        WeatherWidgetProviderAttribution(snapshot.weather.provider, palette)
                     }
                 }
 

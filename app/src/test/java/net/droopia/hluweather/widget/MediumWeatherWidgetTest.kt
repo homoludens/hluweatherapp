@@ -168,6 +168,36 @@ class MediumWeatherWidgetTest {
         assertLayoutFits(available, 320f, 144f)
     }
 
+    @Test
+    fun provider_attribution_uses_cached_forecast_identity_below_the_location_first_header() {
+        listOf(
+            WeatherProvider.VISUAL_CROSSING to "Visual Crossing Weather",
+            WeatherProvider.BRIGHT_SKY to "Bright Sky · DWD"
+        ).forEach { (provider, label) ->
+            val snapshot = availableSnapshot(
+                settings = PersistedSettings(provider = WeatherProvider.OPEN_METEO),
+                provider = provider,
+                stale = true
+            )
+            val view = render(
+                snapshot,
+                widthDp = WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+                heightDp = WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP,
+                fontScale = 1.3f
+            )
+
+            assertEquals("location remains in the header", "Zaječar", headerLocation(view, "Zaječar").text.toString())
+            val attribution = findText(view, label)
+            assertEquals(provider.attribution?.accessibilityDescription, attribution.contentDescription)
+            assertEquals("attribution fits without clipping", 0, attribution.layout.getEllipsisCount(0))
+            assertTrue("attribution keeps the widget's readable minimum size",
+                attribution.textSize >= 7f * view.resources.displayMetrics.density - 1f)
+            assertStatusGlyphs(view, warning = true, updating = false)
+            assertLayoutFits(view, WeatherWidgetSizePolicy.MEDIUM_MIN_WIDTH_DP,
+                WeatherWidgetSizePolicy.MEDIUM_MIN_HEIGHT_DP)
+        }
+    }
+
     @Config(sdk = [34])
     @Test
     fun transparent_widget_text_has_theme_opposite_outline() {
@@ -1826,6 +1856,7 @@ class MediumWeatherWidgetTest {
         apparentTemperature: String? = "24°C",
         hours: List<WidgetHour> = referenceHours(),
         settings: PersistedSettings = PersistedSettings(),
+        provider: WeatherProvider = WeatherProvider.OPEN_METEO,
         stale: Boolean = false,
         refresh: WidgetRefreshStatus = WidgetRefreshStatus()
     ) = WeatherWidgetSnapshot.Available(
@@ -1845,7 +1876,8 @@ class MediumWeatherWidgetTest {
             lastWeatherUpdateText = "Wed, Oct 28, 2026 • 11:17",
             lastWeatherUpdateLocalTimeText = "11:17",
             lastWeatherUpdateCompactText = "Oct 28 11:17",
-            isStale = stale
+            isStale = stale,
+            provider = provider
         ),
         refresh = refresh
     )

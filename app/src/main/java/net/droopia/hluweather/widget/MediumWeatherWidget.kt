@@ -27,6 +27,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.RowScope
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -135,7 +136,8 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
         headerTimestampTextLength = headerText?.length ?: 0,
         fullLocationTextWidthDp = fullLocationTextWidthDp,
         headerTimeTextWidthDp = headerTimeTextWidthDp,
-        textLineHeightMultiplier = textLineHeightMultiplier
+        textLineHeightMultiplier = textLineHeightMultiplier,
+        hasAttribution = weather?.provider?.attribution != null
     )
     val displayLocationName = locationName?.let { name ->
         ellipsizeMediumLocationName(name, policy.headerLocationTextWidthDp, context)
@@ -268,6 +270,12 @@ internal fun MediumWeatherWidgetContent(snapshot: WeatherWidgetSnapshot) {
                             }
                         }
                     }
+                }
+            }
+            weather?.provider?.let { provider ->
+                if (provider.attribution != null) {
+                    Spacer(GlanceModifier.height(WEATHER_WIDGET_ATTRIBUTION_GAP_DP.dp))
+                    WeatherWidgetProviderAttribution(provider, palette)
                 }
             }
         }

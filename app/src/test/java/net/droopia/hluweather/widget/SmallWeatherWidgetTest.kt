@@ -111,6 +111,31 @@ class SmallWeatherWidgetTest {
         }
     }
 
+    @Test
+    fun provider_attribution_uses_cached_forecast_identity_and_fits_the_smallest_widget_at_large_font_scale() {
+        listOf(
+            WeatherProvider.VISUAL_CROSSING to "Visual Crossing Weather",
+            WeatherProvider.BRIGHT_SKY to "Bright Sky · DWD"
+        ).forEach { (provider, label) ->
+            val view = render(
+                availableSnapshot(provider = provider, stale = true),
+                widthDp = WeatherWidgetSizePolicy.SMALL_MIN_WIDTH_DP,
+                heightDp = WeatherWidgetSizePolicy.SMALL_MIN_HEIGHT_DP,
+                fontScale = 2f
+            )
+
+            assertText(view, label)
+            assertText(view, "Stale weather")
+            val attribution = findViews(view).filterIsInstance<TextView>().single { it.text.toString() == label }
+            assertEquals(provider.attribution?.accessibilityDescription, attribution.contentDescription)
+            assertEquals("attribution fits without clipping", 0, attribution.layout.getEllipsisCount(0))
+            assertTrue("attribution keeps the widget's readable minimum size",
+                attribution.textSize >= 7f * view.resources.displayMetrics.density - 1f)
+            assertPrimaryContentFits(view, WeatherWidgetSizePolicy.SMALL_MIN_WIDTH_DP,
+                WeatherWidgetSizePolicy.SMALL_MIN_HEIGHT_DP)
+        }
+    }
+
     @Config(sdk = [28, 34])
     @Test
     fun system_configuration_change_rethemes_small_widget_but_explicit_preferences_win() {
@@ -382,7 +407,9 @@ class SmallWeatherWidgetTest {
         locationName: String = "Zaječar",
         temperature: String = "23°C",
         apparentTemperature: String? = "24°C",
-        settings: PersistedSettings = PersistedSettings()
+        settings: PersistedSettings = PersistedSettings(),
+        provider: WeatherProvider = WeatherProvider.OPEN_METEO,
+        stale: Boolean = false
     ) = WeatherWidgetSnapshot.Available(
         settings = settings,
         request = request(locationName),
@@ -413,7 +440,8 @@ class SmallWeatherWidgetTest {
             lastWeatherUpdateText = "Wed, Oct 28, 2026 • 11:17",
             lastWeatherUpdateLocalTimeText = "11:17",
             lastWeatherUpdateCompactText = "Oct 28 11:17",
-            isStale = false
+            isStale = stale,
+            provider = provider
         )
     )
 

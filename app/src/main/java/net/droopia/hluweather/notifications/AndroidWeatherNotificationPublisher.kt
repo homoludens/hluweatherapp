@@ -15,23 +15,25 @@ class AndroidWeatherNotificationPublisher(
     private val notificationTag: String? = null
 ) : WeatherNotificationPublisher {
 
-    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String) {
+    override fun publishAlert(event: WeatherAlertEvent, title: String, body: String, attribution: String?) {
         publish(
             channelId = weatherAlertsChannelId,
             notificationId = WEATHER_ALERT_NOTIFICATION_ID,
             notificationTag = event.key,
             title = title,
-            body = body
+            body = body,
+            attribution = attribution
         )
     }
 
-    override fun publishDailySummary(title: String, body: String) {
+    override fun publishDailySummary(title: String, body: String, attribution: String?) {
         publish(
             channelId = dailySummaryChannelId,
             notificationId = dailySummaryNotificationId,
             notificationTag = notificationTag,
             title = title,
-            body = body
+            body = body,
+            attribution = attribution
         )
     }
 
@@ -40,7 +42,8 @@ class AndroidWeatherNotificationPublisher(
         notificationId: Int,
         notificationTag: String?,
         title: String,
-        body: String
+        body: String,
+        attribution: String?
     ) {
         NotificationChannels.create(context, weatherAlertsChannelId, dailySummaryChannelId)
         val notification = Notification.Builder(context, channelId)
@@ -48,6 +51,7 @@ class AndroidWeatherNotificationPublisher(
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
+            .apply { attribution?.let(::setSubText) }
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,

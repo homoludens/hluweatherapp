@@ -54,6 +54,7 @@ import net.droopia.hluweather.MainActivity
 import net.droopia.hluweather.R
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.ThemeMode
+import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.ui.components.weatherIconSpec
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.theme.DarkHluColors
@@ -62,6 +63,8 @@ import net.droopia.hluweather.ui.theme.LightHluColors
 import net.droopia.hluweather.ui.theme.hluMaterialColorScheme
 
 internal const val WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER = 1.3f
+internal const val WEATHER_WIDGET_ATTRIBUTION_FONT_SIZE_SP = 9f
+internal const val WEATHER_WIDGET_ATTRIBUTION_GAP_DP = 2f
 
 private val LocalWidgetTextOutlineEnabled = staticCompositionLocalOf { false }
 
@@ -568,6 +571,23 @@ fun WeatherWidgetStatus(
         fontSizeSp = STATUS_FONT_SIZE_SP,
         modifier = modifier.fillMaxWidth(),
         contentDescription = status
+    )
+}
+
+@Composable
+internal fun WeatherWidgetProviderAttribution(
+    provider: WeatherProvider,
+    palette: WeatherWidgetPalette,
+    modifier: GlanceModifier = GlanceModifier
+) {
+    val attribution = provider.attribution ?: return
+    WeatherWidgetAdaptiveText(
+        text = attribution.widgetLabel,
+        role = WeatherWidgetAdaptiveTextRole.TINY_REGULAR,
+        color = palette.secondaryText,
+        fontSizeSp = WEATHER_WIDGET_ATTRIBUTION_FONT_SIZE_SP,
+        modifier = modifier.fillMaxWidth(),
+        contentDescription = attribution.accessibilityDescription
     )
 }
 

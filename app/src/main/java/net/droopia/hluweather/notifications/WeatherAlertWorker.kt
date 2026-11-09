@@ -63,7 +63,8 @@ class WeatherAlertWorker(
                     dependencies.publisher.publishAlert(
                         event = event,
                         title = "Thunderstorm alert",
-                        body = "${location.location.name}: thunderstorm possible at ${event.periodStart}."
+                        body = "${location.location.name}: thunderstorm possible at ${event.periodStart}.",
+                        attribution = event.provider.attribution?.notificationText
                     )
                     dependencies.stateRepository.markDelivered(event.key)
                 } catch (error: Exception) {

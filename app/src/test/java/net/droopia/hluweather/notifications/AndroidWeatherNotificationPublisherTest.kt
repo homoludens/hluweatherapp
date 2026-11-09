@@ -1,6 +1,7 @@
 package net.droopia.hluweather.notifications
 
 import android.app.NotificationManager
+import android.app.Notification
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import kotlin.time.Instant
@@ -20,7 +21,7 @@ class AndroidWeatherNotificationPublisherTest {
     fun posted_notification_opens_the_main_activity_when_tapped() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val event = WeatherAlertEvent(
-            WeatherProvider.OPEN_METEO,
+            WeatherProvider.VISUAL_CROSSING,
             "belgrade",
             Instant.parse("2026-09-10T10:00:00Z")
         )
@@ -29,7 +30,8 @@ class AndroidWeatherNotificationPublisherTest {
         publisher.publishAlert(
             event,
             "Alert",
-            "Storm"
+            "Storm",
+            attribution = event.provider.attribution?.notificationText
         )
 
         val notification = context
@@ -39,6 +41,11 @@ class AndroidWeatherNotificationPublisherTest {
         assertEquals(1000, notification.id)
         assertEquals(event.key, notification.tag)
         val postedNotification = notification.notification
+        assertEquals("Storm", postedNotification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
+        assertEquals(
+            "Weather data provided by Visual Crossing Weather",
+            postedNotification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        )
         assertNotNull(postedNotification.contentIntent)
         assertNotNull(postedNotification.contentIntent!!.creatorPackage)
     }

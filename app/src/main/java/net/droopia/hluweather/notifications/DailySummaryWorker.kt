@@ -80,7 +80,8 @@ class DailySummaryWorker(
                 if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) return Result.success()
                 dependencies.publisher.publishDailySummary(
                     title = "Daily weather summary",
-                    body = body
+                    body = body,
+                    attribution = forecast.provider.attribution?.notificationText
                 )
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error

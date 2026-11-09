@@ -118,14 +118,22 @@ object WeatherWidgetSizePolicy {
         fontScale: Float,
         formattedTemperatureLength: Int,
         apparentTemperatureLength: Int? = null,
-        hasStatus: Boolean = false
+        hasStatus: Boolean = false,
+        hasAttribution: Boolean = false
     ): SmallWeatherWidgetSize {
         val width = widthDp.nonNegative()
         val height = heightDp.nonNegative()
         val scale = fontScale.positiveOrOne()
         val sizeClass = smallSizeClass(width, height)
         val innerWidth = (width - SMALL_HORIZONTAL_PADDING_DP * 2f).coerceAtLeast(0f)
-        val bodyHeight = (height - VERTICAL_PADDING_DP * 2f - SMALL_LAYOUT_SAFETY_DP).coerceAtLeast(0f)
+        val attributionSpace = if (hasAttribution) SECONDARY_ROW_GAP_DP + adaptiveLineHeight(
+            WEATHER_WIDGET_ATTRIBUTION_FONT_SIZE_SP,
+            scale,
+            WEATHER_WIDGET_MIN_AUTO_TEXT_LINE_HEIGHT_MULTIPLIER
+        ) else 0f
+        val bodyHeight = (
+            height - VERTICAL_PADDING_DP * 2f - SMALL_LAYOUT_SAFETY_DP - attributionSpace
+            ).coerceAtLeast(0f)
 
         val iconTarget = when (sizeClass) {
             WeatherWidgetSizeClass.MINIMUM -> 32f
@@ -209,7 +217,8 @@ object WeatherWidgetSizePolicy {
         headerTimestampTextLength: Int = 0,
         fullLocationTextWidthDp: Float? = null,
         headerTimeTextWidthDp: Float? = null,
-        textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER
+        textLineHeightMultiplier: Float = DEFAULT_TEXT_LINE_HEIGHT_MULTIPLIER,
+        hasAttribution: Boolean = false
     ): MediumWeatherWidgetSize {
         val width = widthDp.nonNegative()
         val height = heightDp.nonNegative()
@@ -271,8 +280,17 @@ object WeatherWidgetSizePolicy {
             MEDIUM_LOCATION_FONT_SP * scale * lineMultiplier
         )
         val headerHeight = max(MEDIUM_LOCATION_ICON_SIZE_DP, headerTextHeight)
+        val attributionHeight = if (hasAttribution) {
+            WEATHER_WIDGET_ATTRIBUTION_GAP_DP + adaptiveLineHeight(
+                WEATHER_WIDGET_ATTRIBUTION_FONT_SIZE_SP,
+                scale,
+                lineMultiplier
+            )
+        } else {
+            0f
+        }
         val bodyHeight = (
-            height - cardVerticalPadding * 2f - headerHeight - headerToBodyGap
+            height - cardVerticalPadding * 2f - headerHeight - headerToBodyGap - attributionHeight
             ).coerceAtLeast(0f)
         val temperatureLength = formattedTemperatureLength.coerceAtLeast(1)
 
