@@ -386,6 +386,7 @@ fun WeatherScreen(
                             ForecastMode.HOURLY -> Unit
                         }
                     }
+                    WeatherProviderAttribution(forecast)
                 }
             }
         }

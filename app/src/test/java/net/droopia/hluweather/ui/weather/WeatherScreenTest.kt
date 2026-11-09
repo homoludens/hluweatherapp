@@ -1,6 +1,7 @@
 package net.droopia.hluweather.ui.weather
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -127,6 +130,92 @@ class WeatherScreenTest {
 
         composeRule.onNodeWithTag("weather_scroll").assertIsDisplayed()
         composeRule.onNodeWithText("Svilajnac").assertIsDisplayed()
+    }
+
+    @Test
+    fun provider_attribution_stays_with_stale_forecast_across_foreground_modes_and_switches() {
+        val (viewModel, settings) = providerAttributionViewModel(
+            provider = WeatherProvider.VISUAL_CROSSING,
+            stale = true
+        )
+        val openedUris = mutableListOf<String>()
+        val uriHandler = object : UriHandler {
+            override fun openUri(uri: String) {
+                openedUris += uri
+            }
+        }
+
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalUriHandler provides uriHandler,
+                LocalDensity provides Density(1f, 1.5f)
+            ) {
+                HluWeatherTheme(darkTheme = false) {
+                    WeatherScreen(
+                        viewModel = viewModel,
+                        hourlyTableColumns = setOf(HourlyTableColumn.PM10),
+                        mapContent = { _, _, _, _, _ ->
+                            Text("Forecast map", Modifier.testTag("weather_map"))
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertTrue("Test forecast should exercise stale content", viewModel.state.value.isStale)
+        assertCurrentCardMetric("PM10")
+        composeRule.onNodeWithTag("weather_provider_attribution_visual_crossing")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        assertEquals(listOf("https://www.visualcrossing.com/"), openedUris)
+
+        viewModel.onForecastModeSelected(ForecastMode.DAILY)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("daily_list").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_provider_attribution_visual_crossing").assertIsDisplayed()
+
+        viewModel.onForecastModeSelected(ForecastMode.MAP)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_map").assertIsDisplayed()
+        composeRule.onNodeWithTag("weather_provider_attribution_visual_crossing").assertIsDisplayed()
+
+        settings.value = settings.value.copy(provider = WeatherProvider.BRIGHT_SKY)
+        composeRule.waitForIdle()
+
+        assertTrue("Bright Sky fallback is also stale", viewModel.state.value.isStale)
+        composeRule.onNodeWithTag("weather_provider_attribution_visual_crossing").assertDoesNotExist()
+        composeRule.onNodeWithTag("weather_provider_attribution_bright_sky")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.onNodeWithTag("weather_provider_attribution_dwd")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        assertEquals(
+            listOf(
+                "https://www.visualcrossing.com/",
+                "https://brightsky.dev/",
+                "https://www.dwd.de/EN/ourservices/opendata/opendata.html"
+            ),
+            openedUris
+        )
+        viewModel.onForecastModeSelected(ForecastMode.HOURLY)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("weather_provider_attribution_bright_sky").assertIsDisplayed()
+        assertCurrentCardMetric("PM10")
+        val attributionBounds = composeRule.onNodeWithTag("weather_provider_attribution_dwd")
+            .fetchSemanticsNode().boundsInRoot
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "Attribution remains inside the foreground view",
+            attributionBounds.left >= rootBounds.left &&
+                attributionBounds.right <= rootBounds.right &&
+                attributionBounds.bottom <= rootBounds.bottom
+        )
     }
 
     @Test
@@ -1126,7 +1215,8 @@ class WeatherScreenTest {
     private fun assertCurrentCardMetric(title: String) {
         composeRule.onNode(
             hasTestTag("current_metric_feels_like") and
-                hasAnyDescendant(hasText(title, substring = false))
+                hasAnyDescendant(hasText(title, substring = false)),
+            useUnmergedTree = true
         ).assertIsDisplayed()
     }
 
@@ -1193,6 +1283,51 @@ class WeatherScreenTest {
         }
 
         return viewModel
+    }
+
+    private fun providerAttributionViewModel(
+        provider: WeatherProvider,
+        stale: Boolean
+    ): Pair<WeatherViewModel, MutableStateFlow<net.droopia.hluweather.ui.settings.PersistedSettings>> {
+        val settingsState = MutableStateFlow(
+            net.droopia.hluweather.ui.settings.PersistedSettings(provider = provider)
+        )
+        val weatherRepository = object : WeatherRepository {
+            override suspend fun getForecast(
+                provider: WeatherProvider,
+                location: ActiveLocation
+            ): ForecastLoad = ForecastLoad(
+                forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+                    .copy(provider = provider),
+                isStale = stale
+            )
+
+            override suspend fun clearCache() = Unit
+        }
+        val settingsRepository = object : net.droopia.hluweather.ui.settings.SettingsRepository {
+            override val settings = settingsState
+            override suspend fun save(settings: net.droopia.hluweather.ui.settings.PersistedSettings) {
+                settingsState.value = settings
+            }
+        }
+        val locationRepository = object : LocationRepository {
+            override val locations = MutableStateFlow(listOf(Svilajnac))
+            override val activeLocation = MutableStateFlow<ActiveLocation?>(
+                ActiveLocation.Saved(Svilajnac)
+            )
+            override val locationMode = MutableStateFlow(LocationMode.SAVED_LOCATION)
+
+            override suspend fun add(location: WeatherLocation) = Unit
+            override suspend fun update(location: WeatherLocation) = Unit
+            override suspend fun delete(id: String) = Unit
+            override suspend fun selectSaved(id: String) = Unit
+            override suspend fun setTrackMe(enabled: Boolean) = Unit
+            override suspend fun setCurrentLocation(
+                point: net.droopia.hluweather.data.model.GeoPoint,
+                altitude: Int?
+            ) = Unit
+        }
+        return WeatherViewModel(weatherRepository, settingsRepository, locationRepository) to settingsState
     }
 
     private class EmptyLocationRepository : LocationRepository {

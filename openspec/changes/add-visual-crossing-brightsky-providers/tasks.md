@@ -19,7 +19,7 @@
 
 ## 4. Attribution and Presentation
 
-- [ ] 4.1 [low] Display required Visual Crossing and Bright Sky/DWD weather credits near forecast data, with a practical source link and correct cached-provider attribution; update credits documentation and verify relevant foreground views, provider switches, accessibility, and attribution links.
+- [x] 4.1 [low] Display required Visual Crossing and Bright Sky/DWD weather credits near forecast data, with a practical source link and correct cached-provider attribution; update credits documentation and verify relevant foreground views, provider switches, accessibility, and attribution links.
 - [ ] 4.2 [low] Add visible, legible provider attribution to applicable widgets and forecast notifications without breaking existing widget sizing, header priorities, or actions; verify both widget sizes, minimum dimensions, font scaling, cached/stale state, notifications, and provider-specific accessibility.
 
 ## 5. End-to-End Verification
