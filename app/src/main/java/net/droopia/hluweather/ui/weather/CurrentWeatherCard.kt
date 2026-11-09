@@ -45,7 +45,9 @@ import java.time.ZoneId
 import net.droopia.hluweather.data.dateTimeText
 import net.droopia.hluweather.data.europeanAqiAccessibilityText
 import net.droopia.hluweather.data.europeanAqiText
+import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.label
+import net.droopia.hluweather.data.model.CurrentWeatherProvenance
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.label
@@ -78,6 +80,12 @@ fun CurrentWeatherCard(
     modifier: Modifier = Modifier
 ) {
     val current = forecast.current
+    val forecastDerivedLabel = if (current.provenance == CurrentWeatherProvenance.FORECAST) {
+        current.validTime?.let { "Forecast-derived · ${it.hourText(ZoneId.of(forecast.timezone))}" }
+            ?: "Forecast-derived"
+    } else {
+        null
+    }
     val selectedMetric = when {
         HourlyTableColumn.EUROPEAN_AQI in hourlyTableColumns -> AirQualityMetric(
             current.europeanAqiScale.label(),
@@ -151,6 +159,18 @@ fun CurrentWeatherCard(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Medium
                     )
+                    forecastDerivedLabel?.let { label ->
+                        Text(
+                            text = label,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("current_weather_provenance"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Box(

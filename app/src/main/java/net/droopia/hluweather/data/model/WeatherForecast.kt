@@ -11,6 +11,13 @@ enum class EuropeanAqiScale {
     CATEGORICAL_1_TO_6
 }
 
+@Serializable
+enum class CurrentWeatherProvenance {
+    UNSPECIFIED,
+    OBSERVATION,
+    FORECAST
+}
+
 data class CurrentWeather(
     val temperature: Double,
     val apparentTemperature: Double?,
@@ -22,7 +29,9 @@ data class CurrentWeather(
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
     val pm2_5: Double? = null,
-    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX,
+    val provenance: CurrentWeatherProvenance = CurrentWeatherProvenance.UNSPECIFIED,
+    val validTime: Instant? = null
 )
 
 data class HourForecast(

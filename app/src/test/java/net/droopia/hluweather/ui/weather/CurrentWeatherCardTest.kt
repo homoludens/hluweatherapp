@@ -31,6 +31,7 @@ import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.EuropeanAqiScale
+import net.droopia.hluweather.data.model.CurrentWeatherProvenance
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
@@ -237,6 +238,31 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("Tue, Sep 1, 2026 • 20:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun labels_forecast_derived_current_weather_with_its_valid_time() {
+        val forecast = buildMockForecast(
+            location = Svilajnac,
+            baseTime = Instant.parse("2026-11-09T08:30:00Z")
+        ).let { original ->
+            original.copy(
+                timezone = "Europe/Berlin",
+                current = original.current.copy(
+                    provenance = CurrentWeatherProvenance.FORECAST,
+                    validTime = Instant.parse("2026-11-09T09:00:00Z")
+                )
+            )
+        }
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(location = forecast.location, forecast = forecast)
+            }
+        }
+
+        composeRule.onNodeWithTag("current_weather_provenance").assertIsDisplayed()
+        composeRule.onNodeWithText("Forecast-derived · 10h").assertIsDisplayed()
     }
 
     @Test

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.CurrentWeather
+import net.droopia.hluweather.data.model.CurrentWeatherProvenance
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.HourForecast
@@ -173,7 +174,9 @@ private data class CurrentDto(
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
     val pm2_5: Double? = null,
-    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX,
+    val provenance: CurrentWeatherProvenance = CurrentWeatherProvenance.UNSPECIFIED,
+    val validTime: String? = null
 ) {
     fun toCurrentWeather() = CurrentWeather(
         temperature,
@@ -186,7 +189,9 @@ private data class CurrentDto(
         europeanAqi,
         pm10,
         pm2_5,
-        europeanAqiScale
+        europeanAqiScale,
+        provenance,
+        validTime?.let(Instant::parse)
     )
 }
 
@@ -271,7 +276,9 @@ private fun WeatherForecast.toDto() = ForecastDto(
         current.europeanAqi,
         current.pm10,
         current.pm2_5,
-        current.europeanAqiScale
+        current.europeanAqiScale,
+        current.provenance,
+        current.validTime?.toString()
     ),
     hourly = hourly.map {
         HourDto(

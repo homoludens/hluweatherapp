@@ -5,5 +5,6 @@ enum class WeatherProvider(
 ) {
     OPEN_METEO("Open-Meteo"),
     MET_NO("MET Norway"),
-    VISUAL_CROSSING("Visual Crossing")
+    VISUAL_CROSSING("Visual Crossing"),
+    BRIGHT_SKY("Bright Sky")
 }

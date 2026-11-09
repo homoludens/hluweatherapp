@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import net.droopia.hluweather.data.model.EuropeanAqiScale
+import net.droopia.hluweather.data.model.CurrentWeatherProvenance
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
@@ -122,6 +123,34 @@ class ForecastCacheTest {
     }
 
     @Test
+    fun current_weather_provenance_and_valid_time_round_trip_through_cache() = runTest {
+        val dataStore = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.BRIGHT_SKY, "saved:bright-sky")
+        val base = fixedForecast()
+        val forecast = base.copy(
+            provider = WeatherProvider.BRIGHT_SKY,
+            current = base.current.copy(
+                provenance = CurrentWeatherProvenance.FORECAST,
+                validTime = Instant.parse("2026-09-10T12:00:00Z")
+            )
+        )
+        val observationKey = key.copy(locationKey = "saved:bright-sky-observation")
+        val observation = forecast.copy(
+            current = forecast.current.copy(
+                provenance = CurrentWeatherProvenance.OBSERVATION,
+                validTime = Instant.parse("2026-09-10T11:45:00Z")
+            )
+        )
+
+        val cache = ForecastCache(dataStore)
+        cache.put(key, forecast)
+        cache.put(observationKey, observation)
+
+        assertEquals(forecast, cache.get(key))
+        assertEquals(observation, cache.get(observationKey))
+    }
+
+    @Test
     fun cached_numeric_aqi_without_a_scale_remains_a_numeric_index() = runTest {
         val store = dataStore(backgroundScope)
         val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:numeric-aqi")
@@ -152,6 +181,8 @@ class ForecastCacheTest {
         assertTrue("\"europeanAqi\"" !in oldSerializedEntry)
         assertTrue("\"pm10\"" !in oldSerializedEntry)
         assertTrue("\"pm2_5\"" !in oldSerializedEntry)
+        assertTrue("\"provenance\"" !in oldSerializedEntry)
+        assertTrue("\"validTime\"" !in oldSerializedEntry)
 
         dataStore.edit { preferences -> preferences[entriesKey] = oldSerializedEntry }
 
@@ -159,6 +190,8 @@ class ForecastCacheTest {
         assertNull(restored.current.europeanAqi)
         assertNull(restored.current.pm10)
         assertNull(restored.current.pm2_5)
+        assertEquals(CurrentWeatherProvenance.UNSPECIFIED, restored.current.provenance)
+        assertNull(restored.current.validTime)
         assertTrue(restored.hourly.all { hour ->
             hour.europeanAqi == null && hour.pm10 == null && hour.pm2_5 == null
         })
