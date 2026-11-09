@@ -3,6 +3,13 @@ package net.droopia.hluweather.data.model
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.serialization.Serializable
+
+@Serializable
+enum class EuropeanAqiScale {
+    NUMERIC_INDEX,
+    CATEGORICAL_1_TO_6
+}
 
 data class CurrentWeather(
     val temperature: Double,
@@ -14,7 +21,8 @@ data class CurrentWeather(
     val isDay: Boolean?,
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
-    val pm2_5: Double? = null
+    val pm2_5: Double? = null,
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
 )
 
 data class HourForecast(
@@ -32,7 +40,8 @@ data class HourForecast(
     val evapotranspiration: Double? = null,
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
-    val pm2_5: Double? = null
+    val pm2_5: Double? = null,
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
 )
 
 data class DayForecast(

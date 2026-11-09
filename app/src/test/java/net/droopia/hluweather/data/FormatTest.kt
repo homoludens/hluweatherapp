@@ -7,6 +7,7 @@ import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import net.droopia.hluweather.ui.settings.WindUnit
 import net.droopia.hluweather.ui.settings.WindDirectionDisplay
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.ZoneId
@@ -41,6 +42,32 @@ class FormatTest {
         assertEquals("42", 42.4.airQualityIndexText())
         assertEquals("12.5", 12.5.particulateMatterText())
         assertEquals("—", null.particulateMatterText())
+    }
+
+    @Test
+    fun categorical_european_aqi_is_labeled_as_a_category_not_an_index() {
+        assertEquals("Category 3 of 6", 3.0.europeanAqiText(EuropeanAqiScale.CATEGORICAL_1_TO_6))
+        assertEquals(
+            "European AQI category 3 of 6",
+            3.0.europeanAqiAccessibilityText(EuropeanAqiScale.CATEGORICAL_1_TO_6)
+        )
+        assertEquals("42", 42.4.europeanAqiText(EuropeanAqiScale.NUMERIC_INDEX))
+        assertEquals(
+            "European AQI index 42",
+            42.4.europeanAqiAccessibilityText(EuropeanAqiScale.NUMERIC_INDEX)
+        )
+        assertEquals("—", 7.0.europeanAqiText(EuropeanAqiScale.CATEGORICAL_1_TO_6))
+        assertEquals("—", null.europeanAqiText(EuropeanAqiScale.CATEGORICAL_1_TO_6))
+    }
+
+    @Test
+    fun particulate_matter_includes_units_and_accessible_measurement_name() {
+        assertEquals("12.5 µg/m³", 12.5.particulateMatterValueText())
+        assertEquals(
+            "PM2.5 12.5 micrograms per cubic meter",
+            12.5.particulateMatterAccessibilityText("PM2.5")
+        )
+        assertEquals("PM10 unavailable", null.particulateMatterAccessibilityText("PM10"))
     }
 
     @Test

@@ -9,6 +9,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.ui.settings.DistanceUnit
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
@@ -44,8 +45,33 @@ fun Double?.precipitationText(): String =
 fun Double?.airQualityIndexText(): String =
     this?.roundToInt()?.toString() ?: "—"
 
+fun Double?.europeanAqiText(scale: EuropeanAqiScale): String = when {
+    this == null -> "—"
+    scale == EuropeanAqiScale.NUMERIC_INDEX -> airQualityIndexText()
+    else -> categoricalAqiValue()?.let { "Category $it of 6" } ?: "—"
+}
+
+fun Double?.europeanAqiAccessibilityText(scale: EuropeanAqiScale): String = when {
+    this == null -> "European AQI unavailable"
+    scale == EuropeanAqiScale.NUMERIC_INDEX -> "European AQI index ${airQualityIndexText()}"
+    else -> categoricalAqiValue()?.let { "European AQI category $it of 6" }
+        ?: "European AQI category unavailable"
+}
+
+fun EuropeanAqiScale.label(): String = when (this) {
+    EuropeanAqiScale.NUMERIC_INDEX -> "AQI index"
+    EuropeanAqiScale.CATEGORICAL_1_TO_6 -> "AQI category"
+}
+
 fun Double?.particulateMatterText(): String =
     this?.decimalText() ?: "—"
+
+fun Double?.particulateMatterValueText(): String =
+    this?.let { "${it.decimalText()} µg/m³" } ?: "—"
+
+fun Double?.particulateMatterAccessibilityText(pollutant: String): String =
+    this?.let { "$pollutant ${it.decimalText()} micrograms per cubic meter" }
+        ?: "$pollutant unavailable"
 
 fun Double?.precipitationText(unit: PrecipitationUnit): String =
     this?.let {
@@ -109,6 +135,9 @@ private fun Double.decimalText(): String =
     String.format(Locale.US, "%.2f", this)
         .trimEnd('0')
         .trimEnd('.')
+
+private fun Double.categoricalAqiValue(): Int? =
+    takeIf { it in 1.0..6.0 && it % 1.0 == 0.0 }?.toInt()
 
 private fun Double.convertedTemperature(unit: TemperatureUnit): Double =
     if (unit == TemperatureUnit.FAHRENHEIT) this * 9 / 5 + 32 else this

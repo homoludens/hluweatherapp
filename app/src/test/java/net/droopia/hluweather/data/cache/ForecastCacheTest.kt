@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.WeatherProvider
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
@@ -94,6 +95,50 @@ class ForecastCacheTest {
         ForecastCache(dataStore).put(key, forecast)
 
         assertEquals(forecast, ForecastCache(dataStore).get(key))
+    }
+
+    @Test
+    fun visual_crossing_particulates_and_categorical_aqi_scale_round_trip_through_cache() = runTest {
+        val dataStore = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.VISUAL_CROSSING, "saved:svilajnac")
+        val base = fixedForecast().copy(provider = WeatherProvider.VISUAL_CROSSING)
+        val forecast = base.copy(
+            current = base.current.copy(
+                europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
+            ),
+            hourly = base.hourly.mapIndexed { index, hour ->
+                hour.copy(
+                    europeanAqi = if (index == 0) 3.0 else null,
+                    europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6,
+                    pm2_5 = if (index == 0) 8.2 else null,
+                    pm10 = if (index == 0) 12.5 else null
+                )
+            }
+        )
+
+        ForecastCache(dataStore).put(key, forecast)
+
+        assertEquals(forecast, ForecastCache(dataStore).get(key))
+    }
+
+    @Test
+    fun cached_numeric_aqi_without_a_scale_remains_a_numeric_index() = runTest {
+        val store = dataStore(backgroundScope)
+        val key = ForecastCacheKey(WeatherProvider.OPEN_METEO, "saved:numeric-aqi")
+        val base = fixedForecast()
+        val forecast = base.copy(
+            current = base.current.copy(europeanAqi = 42.0),
+            hourly = base.hourly.map { it.copy(europeanAqi = 42.0) }
+        )
+        val entriesKey = stringPreferencesKey("weather.forecast_cache")
+
+        ForecastCache(store).put(key, forecast)
+
+        assertTrue("europeanAqiScale" !in requireNotNull(store.data.first()[entriesKey]))
+        val restored = requireNotNull(ForecastCache(store).get(key))
+        assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.current.europeanAqiScale)
+        assertEquals(EuropeanAqiScale.NUMERIC_INDEX, restored.hourly.first().europeanAqiScale)
+        assertEquals(42.0, restored.current.europeanAqi!!, 0.0)
     }
 
     @Test

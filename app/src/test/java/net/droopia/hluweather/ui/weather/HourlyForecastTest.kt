@@ -33,6 +33,7 @@ import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
 import net.droopia.hluweather.data.model.WeatherCondition
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationValueText
@@ -431,12 +432,57 @@ class HourlyForecastTest {
             }
         }
 
-        composeRule.onNodeWithText("AQI").assertIsDisplayed()
-        composeRule.onNodeWithText("PM2.5").assertIsDisplayed()
-        composeRule.onNodeWithText("PM10").assertIsDisplayed()
+        composeRule.onNodeWithText("AQI index").assertIsDisplayed()
+        composeRule.onNodeWithText("PM2.5 (µg/m³)").assertIsDisplayed()
+        composeRule.onNodeWithText("PM10 (µg/m³)").assertIsDisplayed()
         composeRule.onNodeWithText("42").assertIsDisplayed()
         composeRule.onNodeWithText("12.5").assertIsDisplayed()
         composeRule.onNodeWithText("18.75").assertIsDisplayed()
+    }
+
+    @Test
+    fun categorical_european_aqi_and_particulates_have_explicit_accessible_labels() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L))
+        val firstHour = forecast.hourly.first().copy(
+            europeanAqi = 3.0,
+            europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6,
+            pm2_5 = 12.5,
+            pm10 = 18.75
+        )
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                HourlyForecast(
+                    forecast = forecast.copy(hourly = listOf(firstHour)),
+                    selectedDayIndex = 0,
+                    onDaySelected = {},
+                    hourlyTableColumns = setOf(
+                        HourlyTableColumn.EUROPEAN_AQI,
+                        HourlyTableColumn.PM2_5,
+                        HourlyTableColumn.PM10
+                    ),
+                    now = firstHour.time
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("AQI category").assertIsDisplayed()
+        composeRule.onNodeWithText("Category 3 of 6").assertIsDisplayed()
+        composeRule.onNodeWithText("PM2.5 (µg/m³)").assertIsDisplayed()
+        composeRule.onNodeWithText("PM10 (µg/m³)").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithContentDescription("European AQI category 3 of 6")
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            composeRule.onAllNodesWithContentDescription("PM2.5 12.5 micrograms per cubic meter")
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            composeRule.onAllNodesWithContentDescription("PM10 18.75 micrograms per cubic meter")
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(composeRule.onAllNodesWithText("AQI index").fetchSemanticsNodes().isEmpty())
     }
 
     @Test

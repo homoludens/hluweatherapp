@@ -602,6 +602,8 @@ private fun HourlyWeatherContent(
                     onDaySelected = ::onDayChipSelected,
                     columns = hourlyTableColumns,
                     utcFallback = forecast.timezoneIsUtcFallback,
+                    europeanAqiScale = forecast.hourly.firstOrNull()?.europeanAqiScale
+                        ?: forecast.current.europeanAqiScale,
                     precipitationUnit = precipitationUnit,
                     dayStripModifier = Modifier.padding(
                         start = 16.dp,

@@ -39,6 +39,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,12 +50,16 @@ import kotlin.time.Instant
 import net.droopia.hluweather.data.dayText
 import net.droopia.hluweather.data.hourText
 import net.droopia.hluweather.data.model.HourForecast
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.label
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
-import net.droopia.hluweather.data.airQualityIndexText
+import net.droopia.hluweather.data.europeanAqiAccessibilityText
+import net.droopia.hluweather.data.europeanAqiText
+import net.droopia.hluweather.data.label
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.particulateMatterText
+import net.droopia.hluweather.data.particulateMatterAccessibilityText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.precipitationValueText
 import net.droopia.hluweather.data.temperatureValueText
@@ -104,6 +110,8 @@ fun HourlyForecast(
                 onDaySelected = onDaySelected,
                 columns = hourlyTableColumns,
                 utcFallback = forecast.timezoneIsUtcFallback,
+                europeanAqiScale = forecast.hourly.firstOrNull()?.europeanAqiScale
+                    ?: forecast.current.europeanAqiScale,
                 precipitationUnit = precipitationUnit,
             )
         }
@@ -158,6 +166,7 @@ internal fun HourlyTableStickyHeader(
     onDaySelected: (Int) -> Unit,
     columns: Set<HourlyTableColumn>,
     utcFallback: Boolean = false,
+    europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     dayStripModifier: Modifier = Modifier,
     columnHeaderModifier: Modifier = Modifier.padding(horizontal = 16.dp)
@@ -177,6 +186,7 @@ internal fun HourlyTableStickyHeader(
         ForecastColumnHeader(
             columns = columns,
             utcFallback = utcFallback,
+            europeanAqiScale = europeanAqiScale,
             precipitationUnit = precipitationUnit,
             modifier = columnHeaderModifier
         )
@@ -298,6 +308,7 @@ internal fun ForecastColumnHeader(
     columns: Set<HourlyTableColumn> = defaultHourlyTableColumns,
     precipitationUnit: PrecipitationUnit = PrecipitationUnit.MM,
     utcFallback: Boolean = false,
+    europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalHluColors.current
@@ -318,7 +329,10 @@ internal fun ForecastColumnHeader(
         HourlyTableColumn.entries
             .filter { it != HourlyTableColumn.TIME && it in columns }
             .forEach { column ->
-            ForecastCell(column.header(precipitationUnit), column.weight)
+                ForecastCell(
+                    column.header(precipitationUnit, europeanAqiScale),
+                    column.weight
+                )
             }
     }
 }
@@ -455,16 +469,21 @@ internal fun ForecastRow(
                         column = column
                     )
                     HourlyTableColumn.EUROPEAN_AQI -> ForecastValue(
-                        text = weather.europeanAqi.airQualityIndexText().tableValueText(),
-                        column = column
+                        text = weather.europeanAqi.europeanAqiText(weather.europeanAqiScale).tableValueText(),
+                        column = column,
+                        accessibilityDescription = weather.europeanAqi.europeanAqiAccessibilityText(
+                            weather.europeanAqiScale
+                        )
                     )
                     HourlyTableColumn.PM2_5 -> ForecastValue(
                         text = weather.pm2_5.particulateMatterText().tableValueText(),
-                        column = column
+                        column = column,
+                        accessibilityDescription = weather.pm2_5.particulateMatterAccessibilityText("PM2.5")
                     )
                     HourlyTableColumn.PM10 -> ForecastValue(
                         text = weather.pm10.particulateMatterText().tableValueText(),
-                        column = column
+                        column = column,
+                        accessibilityDescription = weather.pm10.particulateMatterAccessibilityText("PM10")
                     )
                     HourlyTableColumn.TIME -> Unit
                 }
@@ -479,11 +498,18 @@ private fun RowScope.ForecastValue(
     text: String,
     column: HourlyTableColumn,
     emphasized: Boolean = false,
-    secondary: Boolean = false
+    secondary: Boolean = false,
+    accessibilityDescription: String? = null
 ) {
     Text(
         text = text,
-        modifier = Modifier.weight(column.weight),
+        modifier = Modifier
+            .weight(column.weight)
+            .then(
+                accessibilityDescription?.let { description ->
+                    Modifier.semantics { contentDescription = description }
+                } ?: Modifier
+            ),
         color = if (secondary) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
@@ -493,7 +519,10 @@ private fun RowScope.ForecastValue(
     )
 }
 
-private fun HourlyTableColumn.header(precipitationUnit: PrecipitationUnit): String = when (this) {
+private fun HourlyTableColumn.header(
+    precipitationUnit: PrecipitationUnit,
+    europeanAqiScale: EuropeanAqiScale
+): String = when (this) {
         HourlyTableColumn.TIME -> "Time"
         HourlyTableColumn.WEATHER_ICON -> "Icon"
         HourlyTableColumn.WEATHER_TEXT -> "Weather"
@@ -505,9 +534,9 @@ private fun HourlyTableColumn.header(precipitationUnit: PrecipitationUnit): Stri
         HourlyTableColumn.WIND_SPEED -> "Wind"
         HourlyTableColumn.WIND_DIRECTION -> "Dir."
         HourlyTableColumn.EVAPOTRANSPIRATION -> "ET"
-        HourlyTableColumn.EUROPEAN_AQI -> "AQI"
-        HourlyTableColumn.PM2_5 -> "PM2.5"
-        HourlyTableColumn.PM10 -> "PM10"
+        HourlyTableColumn.EUROPEAN_AQI -> europeanAqiScale.label()
+        HourlyTableColumn.PM2_5 -> "PM2.5 (µg/m³)"
+        HourlyTableColumn.PM10 -> "PM10 (µg/m³)"
     }
 
 private val PrecipitationUnit.symbol: String

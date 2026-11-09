@@ -52,5 +52,8 @@ data class VisualCrossingHour(
     val windspeed: Double? = null,
     val winddir: Double? = null,
     val conditions: String? = null,
-    val icon: String? = null
+    val icon: String? = null,
+    val aqieur: Double? = null,
+    val pm2p5: Double? = null,
+    val pm10: Double? = null
 )

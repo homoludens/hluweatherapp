@@ -9,6 +9,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.MoonPhaseCalculator
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.WeatherProvider
@@ -62,6 +63,8 @@ class VisualCrossingWeatherRepositoryTest {
         assertEquals(WeatherCondition.CLOUDY, first.condition)
         assertEquals(35, forecast.hourly[1].precipitationProbability)
         assertEquals(WeatherCondition.RAIN, forecast.hourly[1].condition)
+        assertEquals(EuropeanAqiScale.CATEGORICAL_1_TO_6, forecast.current.europeanAqiScale)
+        assertTrue(forecast.hourly.all { it.europeanAqiScale == EuropeanAqiScale.CATEGORICAL_1_TO_6 })
 
         val day = forecast.daily.single()
         assertEquals("2026-11-09", day.date.toString())
@@ -147,10 +150,70 @@ class VisualCrossingWeatherRepositoryTest {
         assertEquals(0, forecast.hourly.single().precipitationProbability)
         assertNull(forecast.hourly.single().windSpeedKmh)
         assertNull(forecast.hourly.single().windDirectionDegrees)
+        assertNull(forecast.hourly.single().europeanAqi)
+        assertNull(forecast.hourly.single().pm2_5)
+        assertNull(forecast.hourly.single().pm10)
         assertNull(forecast.daily.single().precipitation)
         assertNull(forecast.daily.single().sunrise)
         assertNull(forecast.daily.single().sunset)
         assertEquals(MoonPhaseCalculator.phase(forecast.fetchedAt), forecast.moonPhase, 0.0)
+    }
+
+    @Test
+    fun separate_air_quality_values_merge_only_at_matching_instants() = runTest {
+        val airQuality = readAirQualityFixture().let { response ->
+            response.copy(
+                days = response.days.orEmpty().map { day ->
+                    day.copy(
+                        hours = day.hours.orEmpty() + VisualCrossingHour(
+                            datetimeEpoch = Instant.parse("2026-11-09T09:30:00Z").epochSeconds,
+                            aqieur = 6.0,
+                            pm2p5 = 99.0,
+                            pm10 = 99.0
+                        )
+                    )
+                }
+            )
+        }
+        val forecast = repository(
+            response = readFixture(),
+            optionalAirQuality = airQuality
+        ).getForecast(location)
+
+        val first = forecast.hourly[0]
+        assertEquals(3.0, first.europeanAqi!!, 0.0)
+        assertEquals(EuropeanAqiScale.CATEGORICAL_1_TO_6, first.europeanAqiScale)
+        assertEquals(8.2, first.pm2_5!!, 0.0)
+        assertEquals(12.5, first.pm10!!, 0.0)
+        assertEquals(4.0, forecast.hourly[1].europeanAqi!!, 0.0)
+        assertEquals(8.7, forecast.hourly[1].pm2_5!!, 0.0)
+        assertEquals(13.1, forecast.hourly[1].pm10!!, 0.0)
+        assertNull(forecast.current.europeanAqi)
+        assertNull(forecast.current.pm2_5)
+        assertNull(forecast.current.pm10)
+        assertTrue(forecast.hourly.all { it.evapotranspiration == null })
+    }
+
+    @Test
+    fun denied_optional_air_quality_products_leave_core_weather_usable() = runTest {
+        listOf(401, 403, 429).forEach { status ->
+            val api = object : VisualCrossingApi {
+                override suspend fun forecast(location: WeatherLocation): VisualCrossingTimelineResponse =
+                    readFixture()
+
+                override suspend fun airQuality(location: WeatherLocation): VisualCrossingTimelineResponse? =
+                    throw VisualCrossingApiException("Weather service returned HTTP $status")
+            }
+
+            val forecast = repository(api).getForecast(location)
+
+            assertEquals("HTTP $status", 8.4, forecast.current.temperature, 0.0)
+            assertEquals("HTTP $status", 2, forecast.hourly.size)
+            assertEquals("HTTP $status", 8.4, forecast.hourly.first().temperature, 0.0)
+            assertNull("HTTP $status", forecast.hourly.first().europeanAqi)
+            assertNull("HTTP $status", forecast.hourly.first().pm2_5)
+            assertNull("HTTP $status", forecast.hourly.first().pm10)
+        }
     }
 
     @Test
@@ -220,10 +283,12 @@ class VisualCrossingWeatherRepositoryTest {
     private fun repository(
         response: VisualCrossingTimelineResponse,
         clock: Clock = fixedClock(Instant.parse("2026-11-09T09:30:00Z")),
-        resolver: TimeZoneResolver = TimeZoneResolver { _, _ -> error("Valid Visual Crossing zone should be used") }
+        resolver: TimeZoneResolver = TimeZoneResolver { _, _ -> error("Valid Visual Crossing zone should be used") },
+        optionalAirQuality: VisualCrossingTimelineResponse? = null
     ) = VisualCrossingWeatherRepository(
         api = object : VisualCrossingApi {
             override suspend fun forecast(location: WeatherLocation): VisualCrossingTimelineResponse = response
+            override suspend fun airQuality(location: WeatherLocation): VisualCrossingTimelineResponse? = optionalAirQuality
         },
         clock = clock,
         timeZoneResolver = resolver
@@ -247,6 +312,11 @@ class VisualCrossingWeatherRepositoryTest {
 
     private fun readFixture(): VisualCrossingTimelineResponse = Json { ignoreUnknownKeys = true }.decodeFromString(
         requireNotNull(javaClass.getResourceAsStream("/provider-fixtures/visual-crossing-timeline.json"))
+            .bufferedReader().use { it.readText() }
+    )
+
+    private fun readAirQualityFixture(): VisualCrossingTimelineResponse = Json { ignoreUnknownKeys = true }.decodeFromString(
+        requireNotNull(javaClass.getResourceAsStream("/provider-fixtures/visual-crossing-air-quality.json"))
             .bufferedReader().use { it.readText() }
     )
 

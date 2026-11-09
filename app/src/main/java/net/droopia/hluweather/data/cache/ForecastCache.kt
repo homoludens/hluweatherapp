@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -171,7 +172,8 @@ private data class CurrentDto(
     val isDay: Boolean?,
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
-    val pm2_5: Double? = null
+    val pm2_5: Double? = null,
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
 ) {
     fun toCurrentWeather() = CurrentWeather(
         temperature,
@@ -183,7 +185,8 @@ private data class CurrentDto(
         isDay,
         europeanAqi,
         pm10,
-        pm2_5
+        pm2_5,
+        europeanAqiScale
     )
 }
 
@@ -203,7 +206,8 @@ private data class HourDto(
     val evapotranspiration: Double? = null,
     val europeanAqi: Double? = null,
     val pm10: Double? = null,
-    val pm2_5: Double? = null
+    val pm2_5: Double? = null,
+    val europeanAqiScale: EuropeanAqiScale = EuropeanAqiScale.NUMERIC_INDEX
 ) {
     fun toHourForecast() = HourForecast(
         time = Instant.parse(time),
@@ -220,7 +224,8 @@ private data class HourDto(
         evapotranspiration = evapotranspiration,
         europeanAqi = europeanAqi,
         pm10 = pm10,
-        pm2_5 = pm2_5
+        pm2_5 = pm2_5,
+        europeanAqiScale = europeanAqiScale
     )
 }
 
@@ -265,7 +270,8 @@ private fun WeatherForecast.toDto() = ForecastDto(
         current.isDay,
         current.europeanAqi,
         current.pm10,
-        current.pm2_5
+        current.pm2_5,
+        current.europeanAqiScale
     ),
     hourly = hourly.map {
         HourDto(
@@ -283,7 +289,8 @@ private fun WeatherForecast.toDto() = ForecastDto(
             it.evapotranspiration,
             it.europeanAqi,
             it.pm10,
-            it.pm2_5
+            it.pm2_5,
+            it.europeanAqiScale
         )
     },
     daily = daily.map {

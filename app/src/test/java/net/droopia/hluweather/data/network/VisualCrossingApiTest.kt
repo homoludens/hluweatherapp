@@ -17,8 +17,10 @@ import kotlinx.coroutines.test.runTest
 import kotlin.time.Clock
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.WeatherLocation
+import net.droopia.hluweather.data.repository.VisualCrossingWeatherRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -73,6 +75,95 @@ class VisualCrossingApiTest {
         assertEquals(2, response.days?.single()?.hours?.size)
 
         client.close()
+    }
+
+    @Test
+    fun air_quality_requests_only_optional_hourly_products_separately() = runTest {
+        var capturedRequest: HttpRequestData? = null
+        val client = mockClient { request ->
+            capturedRequest = request
+            respond(fixture("visual-crossing-air-quality.json"))
+        }
+
+        val response = KtorVisualCrossingApi(
+            client = client,
+            baseUrl = "https://weather.visualcrossing.test/VisualCrossingWebServices/rest/services",
+            clock = fixedClock(Instant.parse("2026-11-09T12:00:00Z"))
+        ).airQuality(location)
+
+        val request = requireNotNull(capturedRequest)
+        assertEquals(
+            "/VisualCrossingWebServices/rest/services/timeline/52.52,13.419/2026-11-08/2026-11-16",
+            request.url.encodedPath
+        )
+        assertEquals("gzip", request.headers[HttpHeaders.AcceptEncoding])
+        assertEquals("metric", request.url.parameters["unitGroup"])
+        assertEquals("days,hours", request.url.parameters["include"])
+        assertEquals("json", request.url.parameters["contentType"])
+        assertEquals(
+            setOf("datetime", "datetimeEpoch", "aqieur", "pm2p5", "pm10"),
+            requireNotNull(request.url.parameters["elements"]).split(',').toSet()
+        )
+        assertFalse("et0" in requireNotNull(request.url.parameters["elements"]).split(','))
+        assertFalse("key" in request.url.parameters.names())
+        assertNotNull(response?.days?.single()?.hours?.first()?.aqieur)
+
+        client.close()
+    }
+
+    @Test
+    fun denied_optional_air_quality_statuses_are_unavailable_not_errors() = runTest {
+        listOf(
+            HttpStatusCode.Unauthorized,
+            HttpStatusCode.Forbidden,
+            HttpStatusCode.TooManyRequests,
+            HttpStatusCode.InternalServerError
+        )
+            .forEach { status ->
+                val client = mockClient { respond("optional product denied", status) }
+                val result = KtorVisualCrossingApi(
+                    client = client,
+                    clock = fixedClock(Instant.parse("2026-11-09T12:00:00Z"))
+                ).airQuality(location)
+
+                assertNull("HTTP ${status.value}", result)
+                client.close()
+            }
+    }
+
+    @Test
+    fun denied_optional_products_leave_the_core_forecast_usable() = runTest {
+        listOf(
+            HttpStatusCode.Unauthorized,
+            HttpStatusCode.Forbidden,
+            HttpStatusCode.TooManyRequests,
+            HttpStatusCode.InternalServerError
+        ).forEach { status ->
+            var requestCount = 0
+            val client = mockClient {
+                if (requestCount++ == 0) {
+                    respond(fixture())
+                } else {
+                    respond("optional product denied", status)
+                }
+            }
+            val forecast = VisualCrossingWeatherRepository(
+                api = KtorVisualCrossingApi(
+                    client = client,
+                    baseUrl = "https://weather.visualcrossing.test/VisualCrossingWebServices/rest/services",
+                    clock = fixedClock(Instant.parse("2026-11-09T12:00:00Z"))
+                ),
+                clock = fixedClock(Instant.parse("2026-11-09T12:00:00Z"))
+            ).getForecast(location)
+
+            assertEquals("HTTP ${status.value}", 2, requestCount)
+            assertEquals("HTTP ${status.value}", 8.4, forecast.current.temperature, 0.0)
+            assertEquals("HTTP ${status.value}", 2, forecast.hourly.size)
+            assertNull("HTTP ${status.value}", forecast.hourly.first().europeanAqi)
+            assertNull("HTTP ${status.value}", forecast.hourly.first().pm2_5)
+            assertNull("HTTP ${status.value}", forecast.hourly.first().pm10)
+            client.close()
+        }
     }
 
     @Test
@@ -155,8 +246,8 @@ class VisualCrossingApiTest {
         override fun now(): Instant = instant
     }
 
-    private fun fixture(): String = requireNotNull(
-        javaClass.getResourceAsStream("/provider-fixtures/visual-crossing-timeline.json")
+    private fun fixture(name: String = "visual-crossing-timeline.json"): String = requireNotNull(
+        javaClass.getResourceAsStream("/provider-fixtures/$name")
     ).bufferedReader().use { it.readText() }
 
     private companion object {

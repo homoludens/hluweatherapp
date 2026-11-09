@@ -42,12 +42,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneId
-import net.droopia.hluweather.data.airQualityIndexText
 import net.droopia.hluweather.data.dateTimeText
+import net.droopia.hluweather.data.europeanAqiAccessibilityText
+import net.droopia.hluweather.data.europeanAqiText
+import net.droopia.hluweather.data.label
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.WeatherLocation
 import net.droopia.hluweather.data.model.label
-import net.droopia.hluweather.data.particulateMatterText
+import net.droopia.hluweather.data.particulateMatterAccessibilityText
+import net.droopia.hluweather.data.particulateMatterValueText
 import net.droopia.hluweather.data.percentText
 import net.droopia.hluweather.data.precipitationText
 import net.droopia.hluweather.data.temperatureValueText
@@ -60,7 +63,8 @@ import net.droopia.hluweather.ui.theme.LocalHluColors
 
 private data class AirQualityMetric(
     val title: String,
-    val value: String
+    val value: String,
+    val accessibilityDescription: String? = null
 )
 
 @Composable
@@ -76,16 +80,19 @@ fun CurrentWeatherCard(
     val current = forecast.current
     val selectedMetric = when {
         HourlyTableColumn.EUROPEAN_AQI in hourlyTableColumns -> AirQualityMetric(
-            "AQI",
-            current.europeanAqi.airQualityIndexText()
+            current.europeanAqiScale.label(),
+            current.europeanAqi.europeanAqiText(current.europeanAqiScale),
+            current.europeanAqi.europeanAqiAccessibilityText(current.europeanAqiScale)
         )
         HourlyTableColumn.PM2_5 in hourlyTableColumns -> AirQualityMetric(
             "PM2.5",
-            current.pm2_5.particulateMatterText()
+            current.pm2_5.particulateMatterValueText(),
+            current.pm2_5.particulateMatterAccessibilityText("PM2.5")
         )
         HourlyTableColumn.PM10 in hourlyTableColumns -> AirQualityMetric(
             "PM10",
-            current.pm10.particulateMatterText()
+            current.pm10.particulateMatterValueText(),
+            current.pm10.particulateMatterAccessibilityText("PM10")
         )
         else -> AirQualityMetric(
             "Feels like",
@@ -168,6 +175,7 @@ fun CurrentWeatherCard(
                 dewPoint = current.dewPoint.temperatureValueText(temperatureUnit),
                 thirdMetricTitle = selectedMetric.title,
                 thirdMetricValue = selectedMetric.value,
+                thirdMetricAccessibilityDescription = selectedMetric.accessibilityDescription,
                 precipitation = current.precipitation.precipitationText(precipitationUnit)
             )
         }
@@ -230,6 +238,7 @@ private fun WeatherMetrics(
     dewPoint: String,
     thirdMetricTitle: String,
     thirdMetricValue: String,
+    thirdMetricAccessibilityDescription: String?,
     precipitation: String
 ) {
     val colors = MaterialTheme.colorScheme
@@ -272,6 +281,7 @@ private fun WeatherMetrics(
                 icon = Icons.Default.DeviceThermostat,
                 title = thirdMetricTitle,
                 value = thirdMetricValue,
+                accessibilityDescription = thirdMetricAccessibilityDescription,
                 iconTint = colors.error
             )
             MetricDivider()
@@ -304,11 +314,19 @@ private fun WeatherMetric(
     icon: ImageVector,
     title: String,
     value: String,
-    iconTint: Color
+    iconTint: Color,
+    accessibilityDescription: String? = null
 ) {
     Column(
         modifier = modifier
             .height(68.dp)
+            .then(
+                accessibilityDescription?.let { description ->
+                    Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = description
+                    }
+                } ?: Modifier
+            )
             .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

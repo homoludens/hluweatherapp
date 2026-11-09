@@ -30,6 +30,7 @@ import kotlin.time.Instant
 import net.droopia.hluweather.data.repository.Svilajnac
 import net.droopia.hluweather.data.repository.buildMockForecast
 import net.droopia.hluweather.ComposeTestActivity
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.ui.settings.HourlyTableColumn
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
@@ -113,7 +114,7 @@ class CurrentWeatherCardTest {
         }
 
         composeRule.onNodeWithText("PM10").assertIsDisplayed()
-        composeRule.onNodeWithText("12.3").assertIsDisplayed()
+        composeRule.onNodeWithText("12.3 µg/m³").assertIsDisplayed()
     }
 
     @Test
@@ -145,7 +146,7 @@ class CurrentWeatherCardTest {
             }
         }
 
-        composeRule.onNodeWithText("AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("AQI index").assertIsDisplayed()
         composeRule.onNodeWithText("88").assertIsDisplayed()
     }
 
@@ -166,8 +167,57 @@ class CurrentWeatherCardTest {
             }
         }
 
-        composeRule.onNodeWithText("AQI").assertIsDisplayed()
+        composeRule.onNodeWithText("AQI index").assertIsDisplayed()
         composeRule.onNodeWithText("—").assertIsDisplayed()
+    }
+
+    @Test
+    fun categorical_european_aqi_is_labeled_as_a_category_for_sight_and_accessibility() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).let {
+            it.copy(
+                current = it.current.copy(
+                    europeanAqi = 3.0,
+                    europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
+                )
+            )
+        }
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = setOf(HourlyTableColumn.EUROPEAN_AQI)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("AQI category").assertIsDisplayed()
+        composeRule.onNodeWithText("Category 3 of 6").assertIsDisplayed()
+        composeRule.onNodeWithTag("current_metric_feels_like")
+            .assertContentDescriptionEquals("European AQI category 3 of 6")
+        assertTrue(composeRule.onAllNodesWithText("AQI index").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun current_particulate_metric_exposes_its_measurement_unit() {
+        val forecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(0L)).let {
+            it.copy(current = it.current.copy(pm2_5 = 5.67))
+        }
+
+        composeRule.setContent {
+            HluWeatherTheme(darkTheme = false) {
+                CurrentWeatherCard(
+                    location = forecast.location,
+                    forecast = forecast,
+                    hourlyTableColumns = setOf(HourlyTableColumn.PM2_5)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("5.67 µg/m³").assertIsDisplayed()
+        composeRule.onNodeWithTag("current_metric_feels_like")
+            .assertContentDescriptionEquals("PM2.5 5.67 micrograms per cubic meter")
     }
 
     @Test

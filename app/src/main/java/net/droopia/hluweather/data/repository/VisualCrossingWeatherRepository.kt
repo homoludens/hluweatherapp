@@ -12,6 +12,7 @@ import kotlinx.datetime.toLocalDateTime
 import net.droopia.hluweather.data.MoonPhaseCalculator
 import net.droopia.hluweather.data.model.CurrentWeather
 import net.droopia.hluweather.data.model.DayForecast
+import net.droopia.hluweather.data.model.EuropeanAqiScale
 import net.droopia.hluweather.data.model.HourForecast
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
@@ -55,7 +56,7 @@ class VisualCrossingWeatherRepository(
             throw WeatherRepositoryException("Unable to resolve weather timezone")
         }
 
-        return try {
+        val forecast = try {
             response.toWeatherForecast(location, clock.now(), resolvedZone)
         } catch (error: CancellationException) {
             throw error
@@ -64,6 +65,16 @@ class VisualCrossingWeatherRepository(
         } catch (_: Throwable) {
             throw WeatherRepositoryException("Unable to map Visual Crossing weather data")
         }
+
+        val airQuality = try {
+            api.airQuality(location)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            null
+        }
+
+        return forecast.mergeAirQuality(airQuality)
     }
 }
 
@@ -131,6 +142,45 @@ private fun VisualCrossingTimelineResponse.toWeatherForecast(
     )
 }
 
+private fun WeatherForecast.mergeAirQuality(
+    response: VisualCrossingTimelineResponse?
+): WeatherForecast {
+    if (response == null) return this
+
+    val valuesByInstant = response.days.orEmpty()
+        .asSequence()
+        .flatMap { it.hours.orEmpty().asSequence() }
+        .mapNotNull { hour ->
+            val instant = hour.datetimeEpoch?.toInstantOrNull() ?: return@mapNotNull null
+            instant to VisualCrossingAirQuality(
+                europeanAqi = hour.aqieur.categoricalAqi(),
+                pm2_5 = hour.pm2p5.nonNegative(),
+                pm10 = hour.pm10.nonNegative()
+            )
+        }
+        .toMap()
+
+    if (valuesByInstant.isEmpty()) return this
+
+    return copy(
+        hourly = hourly.map { hour ->
+            val airQuality = valuesByInstant[hour.time] ?: return@map hour
+            hour.copy(
+                europeanAqi = airQuality.europeanAqi,
+                europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6,
+                pm2_5 = airQuality.pm2_5,
+                pm10 = airQuality.pm10
+            )
+        }
+    )
+}
+
+private data class VisualCrossingAirQuality(
+    val europeanAqi: Double?,
+    val pm2_5: Double?,
+    val pm10: Double?
+)
+
 private fun VisualCrossingCurrent.toCurrentWeather(): CurrentWeather {
     val normalizedTemperature = temp.finite()
         ?: throw WeatherRepositoryException("Missing current temperature")
@@ -141,7 +191,8 @@ private fun VisualCrossingCurrent.toCurrentWeather(): CurrentWeather {
         dewPoint = dew.finite(),
         precipitation = precip.nonNegative(),
         condition = condition(conditions, icon),
-        isDay = icon.isDayIcon()
+        isDay = icon.isDayIcon(),
+        europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
     )
 }
 
@@ -167,7 +218,8 @@ private fun VisualCrossingHour.toHourForecast(
         isDay = icon.isDayIcon(),
         // Timeline unitGroup=metric reports windspeed in km/h; precipitation is mm.
         windSpeedKmh = windspeed.nonNegative(),
-        windDirectionDegrees = winddir.valid(0.0, 360.0)
+        windDirectionDegrees = winddir.valid(0.0, 360.0),
+        europeanAqiScale = EuropeanAqiScale.CATEGORICAL_1_TO_6
     )
 }
 
@@ -234,6 +286,9 @@ private fun Double?.valid(minimum: Double, maximum: Double): Double? =
     finite()?.takeIf { it in minimum..maximum }
 
 private fun Double?.percentage(): Int? = valid(0.0, 100.0)?.roundToInt()
+
+private fun Double?.categoricalAqi(): Double? = finite()
+    ?.takeIf { it in 1.0..6.0 && it % 1.0 == 0.0 }
 
 private fun <T> T?.required(field: String): T = this
     ?: throw WeatherRepositoryException("Missing $field")
