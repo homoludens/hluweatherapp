@@ -558,7 +558,7 @@ class WeatherViewModelTest {
     }
 
     @Test
-    fun location_change_keeps_current_forecast_visible_until_new_request_finishes() = runTest {
+    fun location_change_clears_old_forecast_until_new_request_finishes() = runTest {
         val firstLocation = Svilajnac
         val secondLocation = WeatherLocation("belgrade", "Belgrade", 44.81, 20.46)
         val firstResult = CompletableDeferred<WeatherForecast>()
@@ -574,10 +574,10 @@ class WeatherViewModelTest {
         advanceUntilIdle()
         locations.emitActive(ActiveLocation.Saved(secondLocation))
 
-        assertEquals(firstLocation, viewModel.state.value.forecast?.location)
+        assertNull(viewModel.state.value.forecast)
         assertEquals(secondLocation, viewModel.state.value.activeLocation)
         assertTrue(viewModel.state.value.isRefreshing)
-        assertFalse(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.isLoading)
 
         secondResult.complete(buildMockForecast(secondLocation, Instant.fromEpochSeconds(2L)))
         advanceUntilIdle()
@@ -586,9 +586,27 @@ class WeatherViewModelTest {
     }
 
     @Test
+    fun provider_change_failure_does_not_relabel_previous_forecast_as_stale() = runTest {
+        val initial = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
+        val pending = CompletableDeferred<ForecastLoad>()
+        val repository = CacheFirstRecordingRepository(null, listOf(CompletableDeferred(ForecastLoad(initial)), pending))
+        val settings = TestSettingsRepository()
+        val viewModel = WeatherViewModel(repository, settings, TestLocationRepository(ActiveLocation.Saved(Svilajnac)))
+        advanceUntilIdle()
+        settings.emit(provider = WeatherProvider.MET_NO)
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.forecast)
+        pending.completeExceptionally(IllegalStateException("offline"))
+        advanceUntilIdle()
+        assertNull(viewModel.state.value.forecast)
+        assertFalse(viewModel.state.value.isStale)
+        assertEquals("offline", viewModel.state.value.error)
+    }
+
+    @Test
     fun obsolete_same_location_provider_result_cannot_update_state() = runTest {
         val oldForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(1L))
-        val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L))
+        val newForecast = buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L)).copy(provider = WeatherProvider.MET_NO)
         val firstRequest = PendingRequest(
             onCancellation = Result.success(oldForecast)
         )
@@ -672,7 +690,7 @@ class WeatherViewModelTest {
         advanceUntilIdle()
 
         assertFalse(observed.any { it.error == "stale failure" })
-        secondRequest.result.complete(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L)))
+        secondRequest.result.complete(buildMockForecast(Svilajnac, Instant.fromEpochSeconds(2L)).copy(provider = WeatherProvider.MET_NO))
         advanceUntilIdle()
         observer.cancel()
         assertNull(viewModel.state.value.error)

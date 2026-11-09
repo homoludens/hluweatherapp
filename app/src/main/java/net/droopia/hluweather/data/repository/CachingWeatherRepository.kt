@@ -3,6 +3,12 @@ package net.droopia.hluweather.data.repository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -22,6 +28,11 @@ class CachingWeatherRepository(
 ) : WeatherRepository {
 
     internal val registeredProviders: Set<WeatherProvider> = sources.keys.toSet()
+    private val writeLock = Mutex()
+    private class InFlight(var latest: Any, var count: Int)
+    private val inFlight = mutableMapOf<ForecastCacheKey, InFlight>()
+
+    internal suspend fun inFlightKeyCount(): Int = writeLock.withLock { inFlight.size }
 
     init {
         validateSources()
@@ -83,19 +94,51 @@ class CachingWeatherRepository(
             ?: throw WeatherRepositoryException("Weather provider ${provider.title} is not supported")
         validateSource(provider, source)
         val key = ForecastCacheKey(provider, location.cacheLocationKey())
+        val token = Any()
+        writeLock.withLock {
+            val entry = inFlight[key]
+            if (entry == null) inFlight[key] = InFlight(token, 1)
+            else {
+                entry.latest = token
+                entry.count++
+            }
+        }
+        try {
+            return loadForecast(source, provider, location, key, token)
+        } finally {
+            withContext(NonCancellable) {
+                writeLock.withLock {
+                    val entry = checkNotNull(inFlight[key])
+                    entry.count--
+                    if (entry.count == 0) inFlight.remove(key)
+                }
+            }
+        }
+    }
+
+    private suspend fun loadForecast(
+        source: WeatherSource,
+        provider: WeatherProvider,
+        location: ActiveLocation,
+        key: ForecastCacheKey,
+        token: Any
+    ): ForecastLoad {
         val requestedLocation = location.toWeatherLocation()
         val forecast = try {
             source.getForecast(requestedLocation)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            currentCoroutineContext().ensureActive()
             val cached = try {
                 cache.get(key)
             } catch (cacheError: CancellationException) {
                 throw cacheError
             } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
                 throw error
             }
+            currentCoroutineContext().ensureActive()
             if (cached != null && cached.provider == key.provider &&
                 location.matchesCachedLocation(key, cached.location)
             ) {
@@ -103,18 +146,22 @@ class CachingWeatherRepository(
             }
             throw error
         }
-        if (forecast.provider != provider) {
+        currentCoroutineContext().ensureActive()
+        if (!location.matchesForecast(provider, forecast)) {
             throw WeatherRepositoryException(
-                "Weather provider ${provider.title} returned ${forecast.provider.title}"
+                "Weather provider ${provider.title} returned a mismatched forecast"
             )
         }
         try {
-            cache.put(key, forecast)
+            writeLock.withLock {
+                if (inFlight[key]?.latest === token) cache.put(key, forecast)
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             // A live result is still usable when persistence is unavailable.
         }
+        currentCoroutineContext().ensureActive()
         return ForecastLoad(forecast, isStale = false)
     }
 
@@ -150,6 +197,11 @@ private fun ActiveLocation.toWeatherLocation(): WeatherLocation = when (this) {
         altitude = altitude
     )
 }
+
+internal fun ActiveLocation.matchesForecast(provider: WeatherProvider, forecast: WeatherForecast): Boolean =
+    forecast.provider == provider && matchesCachedLocation(
+        ForecastCacheKey(provider, cacheLocationKey()), forecast.location
+    )
 
 private fun ActiveLocation.matchesCachedLocation(
     key: ForecastCacheKey,

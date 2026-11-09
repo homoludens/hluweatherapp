@@ -5,6 +5,8 @@ import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import net.droopia.hluweather.data.repository.ForecastLoad
 import net.droopia.hluweather.data.repository.WeatherRepository
 
@@ -116,7 +118,9 @@ class WeatherWidgetRefreshCoordinator(
             publish()
             if (widgets.resolveRequest()?.identity != request.identity) return WidgetRefreshResult.SELECTION_CHANGED
             synchronized(lock) { run.fetched = true }
-            result = weather.getForecast(request.provider, request.location)
+            val fetched = weather.getForecast(request.provider, request.location)
+            currentCoroutineContext().ensureActive()
+            result = fetched
             return when {
                 !request.matchesIdentity(result.forecast) -> WidgetRefreshResult.PERMANENT_FAILURE
                 result.isStale -> WidgetRefreshResult.FAILED

@@ -5,6 +5,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.TestListenableWorkerBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
@@ -38,6 +43,101 @@ class DailySummaryWorkerTest {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val location = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun location_switch_during_forecast_does_not_publish_or_schedule_old_summary() = runTest {
+        val active = MutableStateFlow<ActiveLocation?>(ActiveLocation.Saved(location))
+        val gate = CompletableDeferred<Unit>()
+        val publisher = SummaryPublisher()
+        val scheduler = SummaryScheduler()
+        val locations = object : LocationRepository by SummaryLocationRepository(listOf(location)) {
+            override val activeLocation = active
+        }
+        val weather = object : WeatherRepository {
+            override suspend fun getForecast(provider: WeatherProvider, location: ActiveLocation): ForecastLoad {
+                gate.await()
+                return ForecastLoad(summaryForecast())
+            }
+            override suspend fun clearCache() = Unit
+        }
+        val dependencies = NotificationWorkerDependencies(
+            settingsRepository = SummarySettingsRepository(PersistedSettings(dailySummary = true)),
+            locationRepository = locations,
+            weatherRepository = weather,
+            publisher = publisher,
+            stateRepository = SummaryStateRepository(),
+            scheduler = scheduler,
+            permissionChecker = NotificationPermissionChecker { true },
+            clock = FixedSummaryClock(Instant.parse("2026-09-10T07:00:00Z") )
+        )
+        val worker = TestListenableWorkerBuilder.from(context, DailySummaryWorker::class.java)
+            .setWorkerFactory(AppWorkerFactory(dependencies)).build()
+        val job = async { worker.doWork() }
+        runCurrent()
+        active.value = ActiveLocation.Saved(location.copy(latitude = location.latitude + 1))
+        gate.complete(Unit)
+        assertEquals(androidx.work.ListenableWorker.Result.success(), job.await())
+        assertTrue(publisher.summaries.isEmpty())
+        assertTrue(scheduler.successors.isEmpty())
+    }
+
+    @Test
+    fun permission_denied_does_not_schedule_captured_selection_after_provider_switch() = runBlocking {
+        val settings = MutableStateFlow(PersistedSettings(dailySummary = true))
+        val settingsRepository = object : SettingsRepository {
+            override val settings = settings
+            override suspend fun save(settings: PersistedSettings) { this.settings.value = settings }
+        }
+        val scheduler = SummaryScheduler()
+        val dependencies = NotificationWorkerDependencies(
+            settingsRepository = settingsRepository,
+            locationRepository = SummaryLocationRepository(listOf(location)),
+            weatherRepository = SummaryWeatherRepository(),
+            publisher = SummaryPublisher(),
+            stateRepository = SummaryStateRepository(),
+            scheduler = scheduler,
+            permissionChecker = NotificationPermissionChecker {
+                settings.value = settings.value.copy(provider = WeatherProvider.MET_NO)
+                false
+            },
+            clock = FixedSummaryClock(Instant.parse("2026-09-10T07:00:00Z"))
+        )
+        val worker = TestListenableWorkerBuilder.from(context, DailySummaryWorker::class.java)
+            .setWorkerFactory(AppWorkerFactory(dependencies)).build()
+        assertEquals(androidx.work.ListenableWorker.Result.success(), worker.doWork())
+        assertTrue(scheduler.successors.isEmpty())
+    }
+
+    @Test
+    fun missing_delivery_day_does_not_schedule_captured_selection_after_location_switch() = runBlocking {
+        val active = MutableStateFlow<ActiveLocation?>(ActiveLocation.Saved(location))
+        val locations = object : LocationRepository by SummaryLocationRepository(listOf(location)) {
+            override val activeLocation = active
+        }
+        val scheduler = SummaryScheduler()
+        val dependencies = NotificationWorkerDependencies(
+            settingsRepository = SummarySettingsRepository(PersistedSettings(dailySummary = true)),
+            locationRepository = locations,
+            weatherRepository = SummaryWeatherRepository(ForecastLoad(
+                summaryForecast().copy(daily = listOf(day(LocalDate(2026, 9, 11))))
+            )),
+            publisher = SummaryPublisher(),
+            stateRepository = SummaryStateRepository(),
+            scheduler = scheduler,
+            permissionChecker = NotificationPermissionChecker { true },
+            clock = object : Clock {
+                override fun now(): Instant {
+                    active.value = ActiveLocation.Saved(location.copy(longitude = location.longitude + 1))
+                    return Instant.parse("2026-09-10T07:00:00Z")
+                }
+            }
+        )
+        val worker = TestListenableWorkerBuilder.from(context, DailySummaryWorker::class.java)
+            .setWorkerFactory(AppWorkerFactory(dependencies)).build()
+        assertEquals(androidx.work.ListenableWorker.Result.success(), worker.doWork())
+        assertTrue(scheduler.successors.isEmpty())
+    }
 
     @Test
     fun summary_contains_current_conditions_and_daily_extremes() = runBlocking {

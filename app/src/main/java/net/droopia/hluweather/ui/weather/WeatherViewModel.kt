@@ -8,6 +8,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -29,6 +31,7 @@ import net.droopia.hluweather.data.device.DeviceLocationSource
 import net.droopia.hluweather.data.repository.LocationRepository
 import net.droopia.hluweather.data.repository.ReverseGeocoder
 import net.droopia.hluweather.data.repository.WeatherRepository
+import net.droopia.hluweather.data.repository.matchesForecast
 import net.droopia.hluweather.ui.map.shouldRefresh
 import net.droopia.hluweather.ui.settings.PersistedSettings
 import net.droopia.hluweather.ui.settings.SettingsRepository
@@ -223,7 +226,9 @@ class WeatherViewModel(
                 lastCurrentFetchAt,
                 now()
             ))
-        if (!refreshRequested && !providerChanged && !locationChanged && !currentNeedsRefresh) {
+        if (!refreshRequested && !providerChanged && !locationChanged && !currentNeedsRefresh &&
+            _state.value.forecast != null
+        ) {
             _state.update {
                 it.copy(
                     activeLocation = currentLocation,
@@ -237,10 +242,14 @@ class WeatherViewModel(
         }
 
         _state.update {
+            val matchingForecast = it.forecast?.takeIf { forecast ->
+                request.activeLocation!!.matchesForecast(request.provider, forecast)
+            }
             it.copy(
                 activeLocation = currentLocation,
                 locations = request.locations,
-                isLoading = it.forecast == null,
+                forecast = matchingForecast,
+                isLoading = matchingForecast == null,
                 isRefreshing = false,
                 isStale = false,
                 error = null,
@@ -250,8 +259,9 @@ class WeatherViewModel(
         try {
             if (!refreshRequested) {
                 val cached = repository.getCachedForecast(request.provider, request.activeLocation!!)
+                currentCoroutineContext().ensureActive()
                 if (requestGeneration != request.generation) return
-                if (cached != null) {
+                if (cached != null && request.activeLocation!!.matchesForecast(request.provider, cached.forecast)) {
                     _state.update {
                         it.copy(
                             isLoading = false,
@@ -272,6 +282,10 @@ class WeatherViewModel(
                 )
             }
             val forecast = repository.getForecast(request.provider, request.activeLocation!!)
+            currentCoroutineContext().ensureActive()
+            if (!request.activeLocation.matchesForecast(request.provider, forecast.forecast)) {
+                throw IllegalStateException("Weather request returned a mismatched forecast")
+            }
             if (requestGeneration == request.generation &&
                 _state.value.activeLocation == currentLocation
             ) {
@@ -296,6 +310,7 @@ class WeatherViewModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
+            currentCoroutineContext().ensureActive()
             if (requestGeneration != request.generation) return
             handledRefresh = request.refresh
             Log.e("WeatherViewModel", "Weather request failed", error)

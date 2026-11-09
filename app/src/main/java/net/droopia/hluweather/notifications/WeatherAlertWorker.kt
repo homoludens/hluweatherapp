@@ -11,6 +11,7 @@ import net.droopia.hluweather.HluWeatherApplication
 import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.WeatherCondition
 import net.droopia.hluweather.data.model.WeatherForecast
+import net.droopia.hluweather.data.repository.matchesForecast
 import kotlin.time.Duration.Companion.hours
 
 class WeatherAlertWorker(
@@ -45,13 +46,19 @@ class WeatherAlertWorker(
                 )
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
+                if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.weatherAlerts }) return Result.success()
                 Log.e(TAG, "Unable to load alert forecast for ${location.location.id}/${settings.provider}", error)
                 return if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
             }
 
+            if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.weatherAlerts } ||
+                !location.matchesForecast(settings.provider, forecast.forecast)
+            ) return Result.success()
+
             val now = dependencies.clock.now()
             forecast.forecast.thunderstormEvents(now).forEach { event ->
                 if (dependencies.stateRepository.wasDelivered(event.key)) return@forEach
+                if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.weatherAlerts }) return Result.success()
                 try {
                     dependencies.publisher.publishAlert(
                         event = event,

@@ -5,6 +5,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.TestListenableWorkerBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Instant
 import net.droopia.hluweather.data.model.ActiveLocation
@@ -41,6 +46,34 @@ class WeatherAlertWorkerTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val location = WeatherLocation("belgrade", "Belgrade", 44.8176, 20.4633)
     private val now = Instant.parse("2026-09-10T10:00:00Z")
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun provider_switch_during_forecast_does_not_publish_or_mark_old_alert() = runTest {
+        val settings = MutableStateFlow(PersistedSettings(weatherAlerts = true))
+        val gate = CompletableDeferred<Unit>()
+        val publisher = RecordingPublisher()
+        val state = RecordingStateRepository()
+        val base = dependencies(settings.value, weatherRepository = RecordingWeatherRepository(), publisher = publisher, state = state)
+        val weather = object : WeatherRepository {
+            override suspend fun getForecast(provider: WeatherProvider, location: ActiveLocation): ForecastLoad {
+                gate.await()
+                return ForecastLoad(forecast(listOf(hour(now + 1.hours, WeatherCondition.THUNDERSTORM))))
+            }
+            override suspend fun clearCache() = Unit
+        }
+        val mutableSettings = object : SettingsRepository {
+            override val settings = settings
+            override suspend fun save(settings: PersistedSettings) { this.settings.value = settings }
+        }
+        val job = async { build(base.copy(settingsRepository = mutableSettings, weatherRepository = weather)).doWork() }
+        runCurrent()
+        settings.value = settings.value.copy(provider = WeatherProvider.MET_NO)
+        gate.complete(Unit)
+        assertEquals(androidx.work.ListenableWorker.Result.success(), job.await())
+        assertTrue(publisher.alerts.isEmpty())
+        assertTrue(state.marked.isEmpty())
+    }
 
     @Test
     fun disabled_alerts_skip_without_loading_a_forecast() = runBlocking {

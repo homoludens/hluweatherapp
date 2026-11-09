@@ -206,6 +206,27 @@ class WeatherWidgetRefreshCoordinatorTest {
     }
 
     @Test
+    fun cancellation_swallowed_by_fetch_is_not_recorded_as_success() = runTest {
+        val f = Fixture()
+        val gate = CompletableDeferred<Unit>()
+        f.fetch = { provider, location ->
+            try { gate.await() } catch (_: CancellationException) { }
+            ForecastLoad(f.forecast(location, provider))
+        }
+        val owner = launch { f.coordinator.refresh(true) }
+        runCurrent()
+        owner.cancelAndJoin()
+        val snapshot = f.widgets.loadCachedState()
+        val refresh = when (snapshot) {
+            is WeatherWidgetSnapshot.Available -> snapshot.refresh
+            is WeatherWidgetSnapshot.NoWeather -> snapshot.refresh
+            is WeatherWidgetSnapshot.NoLocation -> error("Expected location")
+        }
+        assertFalse(refresh.isRefreshing)
+        assertTrue(refresh.lastAttemptFailed)
+    }
+
+    @Test
     fun cancelling_a_joiner_does_not_cancel_owner_and_manual_bypasses_fresh_cache() = runTest {
         val f = Fixture()
         f.cache[WeatherProvider.OPEN_METEO to first.id] = ForecastLoad(f.forecast(first))

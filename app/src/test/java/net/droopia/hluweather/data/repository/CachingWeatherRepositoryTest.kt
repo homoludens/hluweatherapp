@@ -2,6 +2,12 @@ package net.droopia.hluweather.data.repository
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -31,6 +37,148 @@ class CachingWeatherRepositoryTest {
 
     @get:Rule
     val temporaryFolder = TemporaryFolder()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun late_success_for_edited_location_cannot_replace_newer_cache_entry() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val edited = Svilajnac.copy(latitude = Svilajnac.latitude + 1)
+        val source = object : WeatherSource {
+            override val provider = WeatherProvider.OPEN_METEO
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
+                if (location == Svilajnac) gate.await()
+                return forecast(provider).copy(location = location)
+            }
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        val old = async { repository.getForecast(source.provider, ActiveLocation.Saved(Svilajnac)) }
+        runCurrent()
+        assertEquals(1, repository.inFlightKeyCount())
+        repository.getForecast(source.provider, ActiveLocation.Saved(edited))
+        assertEquals(1, repository.inFlightKeyCount())
+        gate.complete(Unit)
+        old.await()
+        assertEquals(0, repository.inFlightKeyCount())
+        assertEquals(edited, repository.getLastCachedForecast(source.provider, ActiveLocation.Saved(edited))?.forecast?.location)
+        assertEquals(null, repository.getLastCachedForecast(source.provider, ActiveLocation.Saved(Svilajnac)))
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun cancelled_source_that_returns_anyway_does_not_write_cache() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = object : WeatherSource {
+            override val provider = WeatherProvider.OPEN_METEO
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
+                try { gate.await() } catch (_: CancellationException) { }
+                return forecast(provider).copy(location = location)
+            }
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        val job = launch { repository.getForecast(source.provider, ActiveLocation.Saved(Svilajnac)) }
+        runCurrent()
+        job.cancelAndJoin()
+        assertTrue(cache.entries().isEmpty())
+        assertEquals(0, repository.inFlightKeyCount())
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun cancelled_newer_request_still_blocks_old_write_until_all_requests_finish_and_key_can_be_reused() = runTest {
+        val gates = List(2) { CompletableDeferred<Unit>() }
+        var calls = 0
+        val source = object : WeatherSource {
+            override val provider = WeatherProvider.OPEN_METEO
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
+                val call = calls++
+                if (call < gates.size) gates[call].await()
+                return forecast(provider, "2026-09-10T12:00:0${call}Z").copy(location = location)
+            }
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        val location = ActiveLocation.Saved(Svilajnac)
+        val old = async { repository.getForecast(source.provider, location) }
+        runCurrent()
+        val newer = launch { repository.getForecast(source.provider, location) }
+        runCurrent()
+        newer.cancelAndJoin()
+        assertEquals(1, repository.inFlightKeyCount())
+        gates[0].complete(Unit)
+        old.await()
+        assertTrue(cache.entries().isEmpty())
+        assertEquals(0, repository.inFlightKeyCount())
+        val reused = repository.getForecast(source.provider, location)
+        assertEquals(reused.forecast, cache.get(ForecastCacheKey(source.provider, "saved:${Svilajnac.id}")))
+        assertEquals(0, repository.inFlightKeyCount())
+    }
+
+    @Test
+    fun completed_current_location_cells_do_not_accumulate_in_flight_keys() = runTest {
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO))
+        val repository = repository(source, InMemoryCache())
+        repeat(100) { index ->
+            repository.getForecast(source.provider, ActiveLocation.Current(GeoPoint(40.0 + index * 0.01, 20.0)))
+            assertEquals(0, repository.inFlightKeyCount())
+        }
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun newer_completion_then_reuse_while_old_request_is_active_keeps_latest_token() = runTest {
+        val oldGate = CompletableDeferred<Unit>()
+        var calls = 0
+        val source = object : WeatherSource {
+            override val provider = WeatherProvider.OPEN_METEO
+            override suspend fun getForecast(location: WeatherLocation): WeatherForecast {
+                val call = calls++
+                if (call == 0) oldGate.await()
+                return forecast(provider, "2026-09-10T12:00:0${call}Z").copy(location = location)
+            }
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        val location = ActiveLocation.Saved(Svilajnac)
+        val old = async { repository.getForecast(source.provider, location) }
+        runCurrent()
+        repository.getForecast(source.provider, location)
+        assertEquals(1, repository.inFlightKeyCount())
+        val latest = repository.getForecast(source.provider, location)
+        oldGate.complete(Unit)
+        old.await()
+        assertEquals(latest.forecast, cache.get(ForecastCacheKey(source.provider, "saved:${Svilajnac.id}")))
+        assertEquals(0, repository.inFlightKeyCount())
+    }
+
+    @Test
+    fun failed_request_releases_its_in_flight_key() = runTest {
+        val source = FakeSource(WeatherProvider.OPEN_METEO, forecast(WeatherProvider.OPEN_METEO), WeatherRepositoryException("offline"))
+        val repository = repository(source, InMemoryCache())
+        try {
+            repository.getForecast(source.provider, ActiveLocation.Saved(Svilajnac))
+            org.junit.Assert.fail("Expected failure")
+        } catch (_: WeatherRepositoryException) { }
+        assertEquals(0, repository.inFlightKeyCount())
+    }
+
+    @Test
+    fun live_result_with_wrong_location_is_rejected_before_caching() = runTest {
+        val source = object : WeatherSource {
+            override val provider = WeatherProvider.OPEN_METEO
+            override suspend fun getForecast(location: WeatherLocation) = forecast(provider).copy(
+                location = location.copy(latitude = location.latitude + 1)
+            )
+        }
+        val cache = InMemoryCache()
+        val repository = CachingWeatherRepository(mapOf(source.provider to source), cache)
+        try {
+            repository.getForecast(source.provider, ActiveLocation.Saved(Svilajnac))
+            org.junit.Assert.fail("Expected identity mismatch")
+        } catch (_: WeatherRepositoryException) { }
+        assertTrue(cache.entries().isEmpty())
+    }
 
     @Test
     fun successful_live_result_is_cached_as_fresh() = runTest {

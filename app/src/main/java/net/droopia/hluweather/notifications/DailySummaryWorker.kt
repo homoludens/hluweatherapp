@@ -13,6 +13,7 @@ import net.droopia.hluweather.data.model.ActiveLocation
 import net.droopia.hluweather.data.model.DayForecast
 import net.droopia.hluweather.data.model.WeatherForecast
 import net.droopia.hluweather.data.model.label
+import net.droopia.hluweather.data.repository.matchesForecast
 import net.droopia.hluweather.ui.settings.PrecipitationUnit
 import net.droopia.hluweather.ui.settings.TemperatureUnit
 import java.util.Locale
@@ -41,7 +42,9 @@ class DailySummaryWorker(
             val location = dependencies.locationRepository.activeLocation.first() as? ActiveLocation.Saved
                 ?: return Result.success()
             if (!dependencies.permissionChecker.isGranted(applicationContext)) {
-                dependencies.scheduler.enqueueNextDailySummary(settings, location)
+                if (dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) {
+                    dependencies.scheduler.enqueueNextDailySummary(settings, location)
+                }
                 return Result.success()
             }
 
@@ -52,9 +55,14 @@ class DailySummaryWorker(
                 ).forecast
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
+                if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) return Result.success()
                 Log.e(TAG, "Unable to load summary forecast for ${location.location.id}/${settings.provider}", error)
                 return if (error.isRetryableNotificationFailure()) Result.retry() else Result.failure()
             }
+
+            if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary } ||
+                !location.matchesForecast(settings.provider, forecast)
+            ) return Result.success()
 
             val body = forecast.summaryBody(
                 deliveryTime = dependencies.clock.now(),
@@ -62,11 +70,14 @@ class DailySummaryWorker(
                 precipitationUnit = settings.precipitationUnit
             ) ?: run {
                 Log.w(TAG, "No forecast day for summary delivery in ${forecast.timezone}")
-                dependencies.scheduler.enqueueNextDailySummary(settings, location)
+                if (dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) {
+                    dependencies.scheduler.enqueueNextDailySummary(settings, location)
+                }
                 return Result.success()
             }
 
             try {
+                if (!dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) return Result.success()
                 dependencies.publisher.publishDailySummary(
                     title = "Daily weather summary",
                     body = body
@@ -76,7 +87,9 @@ class DailySummaryWorker(
                 Log.e(TAG, "Unable to post daily summary for ${location.location.id}", error)
                 return Result.failure()
             }
-            dependencies.scheduler.enqueueNextDailySummary(settings, location)
+            if (dependencies.isCurrentForecastSelection(settings.provider, location) { it.dailySummary }) {
+                dependencies.scheduler.enqueueNextDailySummary(settings, location)
+            }
             Result.success()
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
